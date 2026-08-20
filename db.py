@@ -1,9 +1,46 @@
-# db.py — conexión Postgres (mismo patrón que Bar-Invenario)
+# db.py — Postgres: una tabla real por negocio y tipo (ej. test01_inventario)
+# Railway es la única fuente de datos. Sin dependencia de Google Sheets.
 import os
-import json
+import re
+import unicodedata
 from urllib.parse import urlparse
 
-SCHEMA = """
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
+# Espejo de CABECERAS de main.py (claves en minúsculas)
+CABECERAS = {
+    "inventario": ["Id_Producto", "Codigo_Barras", "Nom_Producto", "Categoria",
+                   "Cantidad", "Costo", "Precio_Venta", "Precio_Minimo",
+                   "Alerta_Stock", "Estado", "Fecha_Creacion", "Ultima_Modificacion"],
+    "ventas": ["Id_Venta", "Fecha", "Hora", "Cliente", "Id_Producto", "Producto",
+               "Cantidad", "Precio_Unitario", "Subtotal", "Descuento",
+               "Transferencia", "Efectivo", "Total", "Usuario", "Estado",
+               "Fecha_Modificacion", "Hora_Modificacion", "Modificado_Por",
+               "Fecha_Anulacion", "Hora_Anulacion", "Anulado_Por"],
+    "deudores": ["Fecha_Registro", "Nom_Cliente", "Producto", "Cantidad",
+                 "Minimo", "Transferencia", "Efectivo", "Total_Pendiente"],
+    "gastos": ["Id_Gasto", "Fecha", "Hora", "Categoria", "Concepto",
+               "Descripcion", "Proveedor", "Monto", "Metodo_Pago",
+               "Referencia", "Usuario", "Estado", "Fecha_Modificacion", "Modificado_Por"],
+    "auditoria_gastos": ["Id_Evento", "Id_Empresa", "Id_Gasto", "Accion",
+                         "Usuario", "Fecha_Hora", "Detalles", "Estado"],
+    "usuarios": ["Id_Usuario", "Nombre", "Correo", "Contrasena", "Rol",
+                 "Estado", "Fecha_Creacion", "Ultimo_Acceso",
+                 "Fecha_Cambio_Estado", "Motivo_Cambio", "Cambiado_Por"],
+    "config_negocio": ["Parametro", "Valor", "Descripcion", "Fecha_Actualizacion",
+                       "Usuario", "Observaciones"],
+    "estadisticas": ["Ventas_Hoy", "Ventas_Mes", "Ventas_Año", "Total_Ingresos",
+                     "Total_Gastos", "Total_Deudores", "Productos", "Usuarios",
+                     "Ultima_Venta", "Ultima_Actualizacion"],
+    "ia": ["Fecha", "Tipo", "Pregunta", "Respuesta", "Usuario", "Tokens",
+           "Modelo", "Tiempo", "Costo", "Estado"],
+    "movimientos": ["Id_Movimiento", "Fecha", "Id_Producto", "Nom_Producto",
+                    "Tipo", "Cantidad", "Stock_Anterior", "Stock_Nuevo",
+                    "Usuario", "Observacion"],
+}
+
+SCHEMA_EMPRESAS = """
 CREATE TABLE IF NOT EXISTS empresas (
     id VARCHAR(32) PRIMARY KEY,
     nombre TEXT NOT NULL DEFAULT '',
@@ -26,23 +63,17 @@ CREATE TABLE IF NOT EXISTS empresas (
     tipo_sistema TEXT DEFAULT 'CLIENTE',
     tipo_plataforma TEXT DEFAULT 'POS'
 );
-
-CREATE TABLE IF NOT EXISTS filas (
-    id SERIAL PRIMARY KEY,
-    empresa TEXT NOT NULL,
-    tabla TEXT NOT NULL,
-    fila INT NOT NULL,
-    data JSONB NOT NULL DEFAULT '[]',
-    UNIQUE (empresa, tabla, fila)
-);
-
-CREATE INDEX IF NOT EXISTS idx_filas_empresa_tabla ON filas (empresa, tabla);
 """
 
 
+def _normalize(s):
+    return "".join(
+        c for c in unicodedata.normalize("NFD", str(s or "").lower())
+        if not unicodedata.combining(c)
+    ).replace("ñ", "n")
+
+
 def _connect():
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
     url = os.getenv('DATABASE_URL')
     if not url:
         raise RuntimeError('DATABASE_URL no está configurada')
@@ -58,25 +89,58 @@ def _connect():
     return conn
 
 
+def _col(nombre):
+    """Nombre de columna saneado a minúsculas sin acentos."""
+    s = _normalize(nombre)
+    s = re.sub(r"[^a-z0-9]+", "_", s).strip("_")
+    return s or "col"
+
+
+COLUMNS = {k: [_col(h) for h in v] for k, v in CABECERAS.items()}
+
+
+def _slug(s):
+    """Prefijo de negocio a partir del código de acceso."""
+    s = _normalize(s)
+    s = re.sub(r"[^a-z0-9]+", "_", s).strip("_")
+    return s or "empresa"
+
+
+def _tabname(codigo, tabla):
+    """Nombre físico de la tabla: {codigo}_{tipo} (ej. test01_inventario)."""
+    return f"{_slug(codigo)}_{_slug(tabla)}"
+
+
+def _crear_tabla(cur, codigo, tabla):
+    tbl = _tabname(codigo, tabla)
+    cols = COLUMNS[tabla]
+    defs = ", ".join(f'"{c}" TEXT DEFAULT \'\'' for c in cols)
+    cur.execute(f'CREATE TABLE IF NOT EXISTS "{tbl}" (fila INTEGER PRIMARY KEY, {defs})')
+    return tbl
+
+
 def init_db():
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(SCHEMA)
+            cur.execute(SCHEMA_EMPRESAS)
+            cur.execute("SELECT codigo FROM empresas WHERE codigo IS NOT NULL AND codigo <> ''")
+            for (codigo,) in cur.fetchall():
+                for tabla in CABECERAS:
+                    _crear_tabla(cur, codigo, tabla)
         conn.commit()
 
 
-def _normalize(s):
-    import unicodedata
-    return "".join(
-        c for c in unicodedata.normalize("NFD", str(s or "").lower())
-        if not unicodedata.combining(c)
-    ).replace("ñ", "n")
+def _slug_en_uso(slug):
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT codigo FROM empresas")
+            return [c for (c,) in cur.fetchall() if _slug(c) == slug]
 
 
 def listar_empresas_db():
     with _connect() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM empresas ORDER BY fecha_creacion")
+            cur.execute("SELECT * FROM empresas ORDER BY fecha_creacion, codigo")
             return [dict(r) for r in cur.fetchall()]
 
 
@@ -101,63 +165,78 @@ def buscar_empresa(clave):
     return None
 
 
-def hoja_existe(empresa_codigo):
+def hoja_existe(codigo):
+    tbl = _tabname(codigo, "inventario")
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM filas WHERE empresa=%s LIMIT 1", (empresa_codigo,))
+            cur.execute("SELECT 1 FROM information_schema.tables WHERE table_name=%s", (tbl,))
             return cur.fetchone() is not None
 
 
 def leer_tabla(empresa, tabla):
-    """Devuelve todas las filas (incluye headers en fila 2)."""
+    """Devuelve todas las filas (incluye headers en fila 2) como (fila, lista_valores)."""
+    tbl = _tabname(empresa, tabla)
+    cols = COLUMNS[tabla]
+    col_sql = ", ".join(f'"{c}"' for c in cols)
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                "SELECT fila, data FROM filas WHERE empresa=%s AND tabla=%s ORDER BY fila",
-                (empresa, tabla),
-            )
-            return [(fila, data) for fila, data in cur.fetchall()]
+            _crear_tabla(cur, empresa, tabla)
+            cur.execute(f'SELECT fila, {col_sql} FROM "{tbl}" ORDER BY fila')
+            return [
+                (row[0], [v if v is not None else "" for v in row[1:]])
+                for row in cur.fetchall()
+            ]
 
 
 def guardar_fila(empresa, tabla, fila, data):
+    tbl = _tabname(empresa, tabla)
+    cols = COLUMNS[tabla]
+    values = list(data)[:len(cols)]
+    values += [""] * (len(cols) - len(values))
+    col_sql = ", ".join(f'"{c}"' for c in cols)
+    set_sql = ", ".join(f'"{c}"=EXCLUDED."{c}"' for c in cols)
+    placeholders = ", ".join(["%s"] * (len(cols) + 1))
     with _connect() as conn:
         with conn.cursor() as cur:
+            _crear_tabla(cur, empresa, tabla)
             cur.execute(
-                "INSERT INTO filas (empresa, tabla, fila, data) VALUES (%s,%s,%s,%s::jsonb) "
-                "ON CONFLICT (empresa, tabla, fila) DO UPDATE SET data=EXCLUDED.data",
-                (empresa, tabla, fila, json.dumps(data)),
+                f'INSERT INTO "{tbl}" (fila, {col_sql}) VALUES ({placeholders}) '
+                f'ON CONFLICT (fila) DO UPDATE SET {set_sql}',
+                [fila, *values],
             )
         conn.commit()
 
 
 def borrar_fila(empresa, tabla, fila):
+    tbl = _tabname(empresa, tabla)
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM filas WHERE empresa=%s AND tabla=%s AND fila=%s",
-                        (empresa, tabla, fila))
+            _crear_tabla(cur, empresa, tabla)
+            cur.execute(f'DELETE FROM "{tbl}" WHERE fila=%s', (fila,))
         conn.commit()
 
 
 def siguiente_fila_libre(empresa, tabla, fila_inicio=3):
     """siguienteFilaLibre: primera fila >= fila_inicio sin datos."""
+    tbl = _tabname(empresa, tabla)
     with _connect() as conn:
         with conn.cursor() as cur:
+            _crear_tabla(cur, empresa, tabla)
             cur.execute(
-                "SELECT COALESCE(MAX(fila), %s) FROM filas "
-                "WHERE empresa=%s AND tabla=%s AND fila >= %s",
-                (fila_inicio - 1, empresa, tabla, fila_inicio),
+                f'SELECT COALESCE(MAX(fila), %s) FROM "{tbl}" WHERE fila >= %s',
+                (fila_inicio - 1, fila_inicio),
             )
             return int(cur.fetchone()[0]) + 1
 
 
 def siguiente_id(empresa, tabla, prefijo):
     """siguienteIdEmpresa: max número con prefijo en la col 0 + 1."""
+    tbl = _tabname(empresa, tabla)
+    col0 = COLUMNS[tabla][0]
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                "SELECT data->>0 FROM filas WHERE empresa=%s AND tabla=%s",
-                (empresa, tabla),
-            )
+            _crear_tabla(cur, empresa, tabla)
+            cur.execute(f'SELECT "{col0}" FROM "{tbl}"')
             maximo = 0
             for (valor,) in cur.fetchall():
                 texto = str(valor or "").strip()
@@ -166,10 +245,14 @@ def siguiente_id(empresa, tabla, prefijo):
                         maximo = max(maximo, int(texto[len(prefijo):]))
                     except ValueError:
                         pass
-        return f"{prefijo}{maximo + 1:05d}"
+    return f"{prefijo}{maximo + 1:05d}"
 
 
 def registrar_empresa_db(datos):
+    slug = _slug(datos["codigo"])
+    otros = [c for c in _slug_en_uso(slug) if c != datos["codigo"]]
+    if otros:
+        raise ValueError(f"El código {datos['codigo']} colisiona en tablas con {otros[0]}")
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -188,6 +271,8 @@ def registrar_empresa_db(datos):
                     "", datos["fecha_vencimiento"], "", "CLIENTE", "POS",
                 ),
             )
+            for tabla in CABECERAS:
+                _crear_tabla(cur, datos["codigo"], tabla)
         conn.commit()
 
 
@@ -199,17 +284,15 @@ def actualizar_estado_empresa(empresa_id, estado):
 
 
 def actualizar_ultimo_acceso(empresa_codigo, correo, fecha):
+    tbl = _tabname(empresa_codigo, "usuarios")
+    cols = COLUMNS["usuarios"]
+    col_correo = cols[2]
+    col_ultimo = cols[7]
     with _connect() as conn:
         with conn.cursor() as cur:
+            _crear_tabla(cur, empresa_codigo, "usuarios")
             cur.execute(
-                "SELECT fila FROM filas WHERE empresa=%s AND tabla='usuarios' AND data->>2 = %s",
-                (empresa_codigo, correo),
+                f'UPDATE "{tbl}" SET "{col_ultimo}"=%s WHERE LOWER("{col_correo}")=LOWER(%s)',
+                (fecha, correo),
             )
-            fila = cur.fetchone()
-            if fila:
-                cur.execute(
-                    """UPDATE filas SET data = jsonb_set(data, '{7}', to_jsonb(%s))
-                       WHERE empresa=%s AND tabla='usuarios' AND fila=%s""",
-                    (fecha, empresa_codigo, fila[0]),
-                )
         conn.commit()
