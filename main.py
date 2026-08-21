@@ -697,11 +697,6 @@ def action_listar_finanzas_kapta(params=None):
     })
 
 
-def action_db_stats(params=None):
-    """TEMPORAL: diagnóstico de migración. Solo nombres de tabla y conteos."""
-    return respuesta_success({"tablas": db.stats_tablas()})
-
-
 def action_listar_todos_usuarios(params=None):
     """Superadmin: todos los usuarios de TODAS las empresas (tabla global)."""
     filas = db.leer_tabla_global_todos("usuarios")
@@ -764,7 +759,6 @@ GET_ACTIONS = {
     "saludo": action_ping,
     "listar_finanzas_kapta": action_listar_finanzas_kapta,
     "listar_todos_usuarios": action_listar_todos_usuarios,
-    "db_stats": action_db_stats,
 }
 
 
