@@ -181,7 +181,7 @@ def _migrar_legacy(cur, codigo):
         cols_viejas = [_col(h) for h in LEGACY_CABECERAS[legacy]]
         cols_nuevas = COLUMNS_GLOBALES[glo]
         sel = ", ".join(f't."{c}"' for c in cols_viejas)
-        ins_cols = ", ".join(f'"{c}"' for c in cols_nuevas[1:])
+        ins_cols = ", ".join(f'"{c}"' for c in cols_nuevas)
         cur.execute(
             f'INSERT INTO "{glo}" (fila, {ins_cols}) '
             f'SELECT t.fila, %s, {sel} FROM "{vieja}" t WHERE NOT EXISTS '
