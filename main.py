@@ -201,6 +201,18 @@ def action_login(params):
     if not empresa:
         return respuesta_error("No existe empresa con ese código.")
 
+    # Bloqueo por membresía: suspendida o vencida no entra
+    emp = db.buscar_empresa(codigo) or {}
+    if str(emp.get("estado") or "").strip().lower() == "suspendido":
+        return respuesta_error("Empresa suspendida. Para reactivar contactanos.")
+    fv = str(emp.get("fecha_vencimiento") or "").strip()
+    if fv:
+        try:
+            if datetime.date.fromisoformat(fv[:10]) < datetime.date.today():
+                return respuesta_error("Membresía vencida. Para renovar contactanos.")
+        except ValueError:
+            pass
+
     usuario = None
     for (n, d) in db.leer_tabla(empresa, "usuarios"):
         if str(d[2] or "").lower().strip() == correo:
@@ -612,6 +624,88 @@ def action_ping(params=None):
     return respuesta_success({"mensaje": "KAPTA IA API funcionando", "fecha": fecha_actual()})
 
 
+DIAS_POR_TIEMPO = {
+    "mensual": 30, "1 mes": 30, "mes": 30,
+    "anual": 365, "ano": 365, "año": 365,
+    "prueba 15 dias": 15, "prueba 15 días": 15,
+}
+
+
+def action_comprar_plan(params):
+    codigo = str(params.get("codigo") or params.get("idEmpresa") or "").strip()
+    plan = str(params.get("plan") or "").strip()
+    tiempo = str(params.get("tiempo") or "Mensual").strip()
+    if not codigo:
+        return respuesta_error("Debe ingresar el código de la empresa.")
+    if not plan:
+        return respuesta_error("Debe ingresar el plan.")
+
+    import unicodedata
+    clave_tiempo = "".join(
+        c for c in unicodedata.normalize("NFD", tiempo.lower().strip())
+        if not unicodedata.combining(c)
+    )
+    dias = DIAS_POR_TIEMPO.get(clave_tiempo)
+    if dias is None:
+        return respuesta_error("Tiempo no válido. Use Mensual, Anual o Prueba 15 días.")
+
+    fecha_venc = (datetime.date.today() + datetime.timedelta(days=dias)).isoformat()
+    db.comprar_plan_db(
+        codigo, plan, tiempo,
+        monto=str(params.get("monto") or ""),
+        fecha_vencimiento=fecha_venc,
+        usuario=str(params.get("usuario") or ""),
+    )
+    return respuesta_success({
+        "codigo": codigo, "plan": plan, "tiempo": tiempo,
+        "fechaVencimiento": fecha_venc, "estado": "Activo",
+    })
+
+
+def action_registrar_finanza_kapta(params):
+    tipo = str(params.get("tipo") or "Egreso").strip().capitalize()
+    if tipo not in ("Ingreso", "Egreso"):
+        return respuesta_error("Tipo debe ser Ingreso o Egreso.")
+    concepto = str(params.get("concepto") or "").strip()
+    monto = params.get("monto")
+    if not concepto:
+        return respuesta_error("Debe ingresar el concepto.")
+    if monto in (None, ""):
+        return respuesta_error("Debe ingresar el monto.")
+    db.registrar_finanza_kapta(
+        tipo=tipo,
+        categoria=str(params.get("categoria") or ""),
+        concepto=concepto,
+        monto=monto,
+        metodo_pago=str(params.get("metodoPago") or params.get("metodo_pago") or ""),
+        referencia=str(params.get("referencia") or ""),
+        usuario=str(params.get("usuario") or ""),
+    )
+    return respuesta_success({"mensaje": "Registro financiero guardado", "tipo": tipo})
+
+
+def action_listar_finanzas_kapta(params=None):
+    registros = db.listar_finanzas_kapta()
+    ingresos = sum(float(r["monto"]) for r in registros
+                   if r["tipo"] == "Ingreso" and _es_numero(r["monto"]))
+    egresos = sum(float(r["monto"]) for r in registros
+                  if r["tipo"] == "Egreso" and _es_numero(r["monto"]))
+    return respuesta_success({
+        "registros": registros,
+        "totalIngresos": round(ingresos, 2),
+        "totalEgresos": round(egresos, 2),
+        "balance": round(ingresos - egresos, 2),
+    })
+
+
+def _es_numero(v):
+    try:
+        float(str(v).replace(",", "").strip())
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
 # ===================================================
 # ROUTING
 # ===================================================
@@ -624,6 +718,8 @@ POST_ACTIONS = {
     "pagar_deudor": action_pagar_deudor,
     "eliminar_empresa": action_eliminar_empresa,
     "eliminar_usuario": action_eliminar_usuario,
+    "comprar_plan": action_comprar_plan,
+    "registrar_finanza_kapta": action_registrar_finanza_kapta,
     "registrar_inventario": action_escribir_fila,
     "registrar_venta": action_escribir_fila,
     "registrar_deudor": action_escribir_fila,
@@ -640,6 +736,7 @@ GET_ACTIONS = {
     "read": action_read,
     "ping": action_ping,
     "saludo": action_ping,
+    "listar_finanzas_kapta": action_listar_finanzas_kapta,
 }
 
 

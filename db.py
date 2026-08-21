@@ -2,6 +2,7 @@
 # Railway es la única fuente de datos. Sin dependencia de Google Sheets.
 import os
 import re
+import datetime
 import unicodedata
 from urllib.parse import urlparse
 
@@ -66,6 +67,21 @@ CREATE TABLE IF NOT EXISTS empresas (
 """
 
 
+SCHEMA_FINANZAS_KAPTA = """
+CREATE TABLE IF NOT EXISTS finanzas_kapta (
+    id SERIAL PRIMARY KEY,
+    fecha TEXT DEFAULT '',
+    tipo TEXT DEFAULT '',
+    categoria TEXT DEFAULT '',
+    concepto TEXT DEFAULT '',
+    monto TEXT DEFAULT '',
+    metodo_pago TEXT DEFAULT '',
+    referencia TEXT DEFAULT '',
+    usuario TEXT DEFAULT ''
+);
+"""
+
+
 def _normalize(s):
     return "".join(
         c for c in unicodedata.normalize("NFD", str(s or "").lower())
@@ -123,6 +139,7 @@ def init_db():
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(SCHEMA_EMPRESAS)
+            cur.execute(SCHEMA_FINANZAS_KAPTA)
             cur.execute("SELECT codigo FROM empresas WHERE codigo IS NOT NULL AND codigo <> ''")
             for (codigo,) in cur.fetchall():
                 for tabla in CABECERAS:
@@ -296,3 +313,46 @@ def actualizar_ultimo_acceso(empresa_codigo, correo, fecha):
                 (fecha, correo),
             )
         conn.commit()
+
+
+def comprar_plan_db(codigo, plan, tiempo, monto, fecha_vencimiento, usuario=""):
+    """Compra/renovación de plan: actualiza la empresa y registra el ingreso."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE empresas
+                   SET plan=%s, tiempo=%s, fecha_vencimiento=%s, estado='Activo'
+                   WHERE codigo=%s""",
+                (plan, tiempo, fecha_vencimiento, codigo),
+            )
+            if cur.rowcount == 0:
+                raise ValueError("No existe empresa con código " + codigo)
+            cur.execute(
+                """INSERT INTO finanzas_kapta (fecha, tipo, categoria, concepto, monto, metodo_pago, referencia, usuario)
+                   VALUES (%s,'Ingreso',%s,%s,%s,%s,%s,%s)""",
+                (
+                    datetime.date.today().isoformat(), f"Plan {plan}",
+                    f"Plan {plan} {tiempo} - {codigo}", str(monto),
+                    "", "", usuario,
+                ),
+            )
+        conn.commit()
+
+
+def registrar_finanza_kapta(tipo, categoria, concepto, monto, metodo_pago="", referencia="", usuario=""):
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO finanzas_kapta (fecha, tipo, categoria, concepto, monto, metodo_pago, referencia, usuario)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (datetime.date.today().isoformat(), tipo, categoria, concepto,
+                 str(monto), metodo_pago, referencia, usuario),
+            )
+        conn.commit()
+
+
+def listar_finanzas_kapta():
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM finanzas_kapta ORDER BY id DESC")
+            return [dict(r) for r in cur.fetchall()]

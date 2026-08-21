@@ -102,6 +102,32 @@ def fake_actualizar_ultimo_acceso(codigo, correo, fecha):
             data[7] = fecha
 
 
+FINANZAS = []
+
+
+def fake_comprar_plan_db(codigo, plan, tiempo, monto, fecha_vencimiento, usuario=""):
+    emp = EMPRESAS.get(codigo)
+    if not emp:
+        raise ValueError("No existe empresa con código " + codigo)
+    emp["plan"] = plan
+    emp["tiempo"] = tiempo
+    emp["fecha_vencimiento"] = fecha_vencimiento
+    emp["estado"] = "Activo"
+    FINANZAS.append({"fecha": "", "tipo": "Ingreso", "categoria": f"Plan {plan}",
+                     "concepto": f"Plan {plan} {tiempo} - {codigo}", "monto": str(monto),
+                     "metodo_pago": "", "referencia": "", "usuario": usuario})
+
+
+def fake_registrar_finanza_kapta(tipo, categoria, concepto, monto, metodo_pago="", referencia="", usuario=""):
+    FINANZAS.append({"fecha": "", "tipo": tipo, "categoria": categoria, "concepto": concepto,
+                     "monto": str(monto), "metodo_pago": metodo_pago, "referencia": referencia,
+                     "usuario": usuario})
+
+
+def fake_listar_finanzas_kapta():
+    return list(FINANZAS)
+
+
 def install_fake():
     db_real.init_db = fake_init_db
     db_real.listar_empresas_db = fake_listar_empresas_db
@@ -115,6 +141,9 @@ def install_fake():
     db_real.registrar_empresa_db = fake_registrar_empresa_db
     db_real.actualizar_estado_empresa = fake_actualizar_estado_empresa
     db_real.actualizar_ultimo_acceso = fake_actualizar_ultimo_acceso
+    db_real.comprar_plan_db = fake_comprar_plan_db
+    db_real.registrar_finanza_kapta = fake_registrar_finanza_kapta
+    db_real.listar_finanzas_kapta = fake_listar_finanzas_kapta
 
 
 def json_body(resp):
@@ -251,6 +280,42 @@ def main():
                                                    "empresaNombre": "TEST01"}))
     check("eliminar_empresa", r["status"] == "success" and r["data"]["eliminada"] is True)
     check("empresa Suspendida", EMPRESAS["TEST01"]["estado"] == "Suspendido")
+
+    # 16. COMPRAR PLAN mensual -> reactiva, vence ~30 días y registra ingreso
+    r = json_body(backend.action_comprar_plan({"codigo": "TEST01", "plan": "MAX IA",
+                                               "tiempo": "Mensual", "monto": "339900"}))
+    check("comprar_plan mensual", r["status"] == "success" and r["data"]["estado"] == "Activo"
+          and r["data"]["fechaVencimiento"] != "", json.dumps(r))
+    emp01 = fake_buscar_empresa("TEST01")
+    check("comprar_plan actualiza empresa", emp01["plan"] == "MAX IA"
+          and emp01["tiempo"] == "Mensual"
+          and emp01["fecha_vencimiento"] == r["data"]["fechaVencimiento"])
+
+    # 17. COMPRAR PLAN anual -> vence ~365 días
+    r = json_body(backend.action_comprar_plan({"codigo": "TEST01", "plan": "Premium",
+                                               "tiempo": "Anual", "monto": "2499000"}))
+    check("comprar_plan anual", r["status"] == "success")
+
+    # 18. TIEMPO inválido rechazado
+    r = json_body(backend.action_comprar_plan({"codigo": "TEST01", "plan": "MAX IA",
+                                               "tiempo": "Semanal"}))
+    check("comprar_plan tiempo inválido", r["status"] == "error")
+
+    # 19. GASTO KAPTA + LISTAR finanzas con balance
+    r = json_body(backend.action_registrar_finanza_kapta({"tipo": "Egreso",
+                                                          "concepto": "Publicidad", "monto": "50000"}))
+    check("registrar_finanza_kapta egreso", r["status"] == "success")
+    r = json_body(backend.action_listar_finanzas_kapta())
+    check("listar_finanzas_kapta balance", r["status"] == "success"
+          and r["data"]["totalIngresos"] == 339900.0 + 2499000.0
+          and r["data"]["totalEgresos"] == 50000.0
+          and len(r["data"]["registros"]) == 3, json.dumps(r["data"]))
+
+    # 20. LOGIN bloqueado por membresía vencida (aunque usuario esté bien)
+    fake_buscar_empresa("TEST01")["fecha_vencimiento"] = "2020-01-01"
+    r = json_body(backend.action_login({"action": "login", "codigo": "TEST01",
+                                        "correo": "admin@test.com", "password": "1234"}))
+    check("login bloquea membresía vencida", r["status"] == "error", json.dumps(r))
 
     print("TODOS LOS CHECKS PASARON")
 
