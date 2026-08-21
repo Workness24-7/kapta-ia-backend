@@ -1,4 +1,3 @@
-# railway.json — configuración de despliegue Railway
 {
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
