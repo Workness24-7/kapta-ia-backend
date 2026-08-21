@@ -1,4 +1,4 @@
-# main.py — KAPTA IA Backend FastAPI (contrato idéntico a api.gs)
+﻿# main.py â€” KAPTA IA Backend FastAPI (contrato idÃ©ntico a api.gs)
 # Reemplaza Google Apps Script. La app Android solo cambia APPS_SCRIPT_WEB_APP_URL.
 import datetime
 import json
@@ -40,17 +40,17 @@ CABECERAS = {
                "Fecha_Anulacion", "Hora_Anulacion", "Anulado_Por"],
     "DEUDORES": ["Fecha_Registro", "Nom_Cliente", "Producto", "Cantidad",
                  "Minimo", "Transferencia", "Efectivo", "Total_Pendiente"],
-    "GASTOS": ["Id_Gasto", "Fecha", "Hora", "Categoría", "Concepto",
-               "Descripción", "Proveedor", "Monto", "Método_Pago",
-               "Referencia", "Usuario", "Estado", "Fecha_Modificación", "Modificado_Por"],
+    "GASTOS": ["Id_Gasto", "Fecha", "Hora", "CategorÃ­a", "Concepto",
+               "DescripciÃ³n", "Proveedor", "Monto", "MÃ©todo_Pago",
+               "Referencia", "Usuario", "Estado", "Fecha_ModificaciÃ³n", "Modificado_Por"],
     "AUDITORIA_GASTOS": ["Id_Evento", "Id_Empresa", "Id_Gasto", "Accion",
                          "Usuario", "Fecha_Hora", "Detalles", "Estado"],
-    "USUARIOS": ["Id_Usuario", "Nombre", "Correo", "Contraseña", "Rol",
+    "USUARIOS": ["Id_Usuario", "Nombre", "Correo", "ContraseÃ±a", "Rol",
                  "Estado", "Fecha_Creacion", "Ultimo_Acceso",
                  "Fecha_Cambio_Estado", "Motivo_Cambio", "Cambiado_Por"],
     "CONFIG_NEGOCIO": ["Parametro", "Valor", "Descripcion", "Fecha_Actualizacion",
                        "Usuario", "Observaciones"],
-    "ESTADISTICAS": ["Ventas_Hoy", "Ventas_Mes", "Ventas_Año", "Total_Ingresos",
+    "ESTADISTICAS": ["Ventas_Hoy", "Ventas_Mes", "Ventas_AÃ±o", "Total_Ingresos",
                      "Total_Gastos", "Total_Deudores", "Productos", "Usuarios",
                      "Ultima_Venta", "Ultima_Actualizacion"],
     "IA": ["Fecha", "Tipo", "Pregunta", "Respuesta", "Usuario", "Tokens",
@@ -76,7 +76,7 @@ def fecha_actual():
 
 
 def _normalize_key(key):
-    return db._normalize(key).strip().replace("ñ", "n")
+    return db._normalize(key).strip().replace("Ã±", "n")
 
 
 def identificar_tabla(nombre):
@@ -139,7 +139,7 @@ def leer_hoja_rows(empresa, tabla_key, fila_inicio=2):
 # ===================================================
 # ACCIONES
 # ===================================================
-def action_listar_empresas():
+def action_listar_empresas(params=None):
     empresas = db.listar_empresas_db()
     lista = []
     for e in empresas:
@@ -164,7 +164,7 @@ def action_read(params):
     clave = str(params.get("sheetName") or params.get("idEmpresa") or "").strip()
     table_name = str(params.get("tableName") or params.get("targetTable") or "").strip()
     if not clave:
-        return respuesta_error("No se recibió sheetName.")
+        return respuesta_error("No se recibiÃ³ sheetName.")
     empresa = resolver_hoja(clave)
     if not empresa:
         return respuesta_error("No existe la hoja: " + clave)
@@ -178,7 +178,7 @@ def action_read(params):
             "rows": rows,
         })
 
-    # Sin tabla específica -> todas las tablas concatenadas por fila
+    # Sin tabla especÃ­fica -> todas las tablas concatenadas por fila
     todas = []
     for nombre, t in TABLAS.items():
         todas.extend(leer_hoja_rows(empresa, nombre))
@@ -188,18 +188,18 @@ def action_read(params):
 def action_login(params):
     codigo = str(params.get("codigo") or "").strip().upper()
     correo = str(params.get("correo") or params.get("Correo_Admin") or "").lower().strip()
-    password = str(params.get("password") or params.get("Contraseña_Admin")
+    password = str(params.get("password") or params.get("ContraseÃ±a_Admin")
                    or params.get("Contrasena_Admin") or "")
     if not codigo:
-        return respuesta_error("Debe ingresar el código de acceso.")
+        return respuesta_error("Debe ingresar el cÃ³digo de acceso.")
     if not correo:
         return respuesta_error("Debe ingresar el correo.")
     if not password:
-        return respuesta_error("Debe ingresar la contraseña.")
+        return respuesta_error("Debe ingresar la contraseÃ±a.")
 
     empresa = resolver_hoja(codigo)
     if not empresa:
-        return respuesta_error("No existe empresa con ese código.")
+        return respuesta_error("No existe empresa con ese cÃ³digo.")
 
     usuario = None
     for (n, d) in db.leer_tabla(empresa, "usuarios"):
@@ -211,7 +211,7 @@ def action_login(params):
     if str(usuario[5] or "") in ("Suspendido", "Bloqueado"):
         return respuesta_error("Usuario " + str(usuario[5]).lower() + ".")
     if str(usuario[3] or "") != password:
-        return respuesta_error("Contraseña incorrecta.")
+        return respuesta_error("ContraseÃ±a incorrecta.")
 
     db.actualizar_ultimo_acceso(empresa, correo, fecha_actual())
 
@@ -240,21 +240,21 @@ def action_registrar_empresa(params):
         try:
             datos = json.loads(datos)
         except json.JSONDecodeError:
-            return respuesta_error("datos JSON inválidos.")
+            return respuesta_error("datos JSON invÃ¡lidos.")
 
     nombre = str(datos.get("nombre") or "").strip()
     codigo = str(datos.get("codigo") or "").strip().upper()
     if not nombre:
         return respuesta_error("Debe indicar el nombre del negocio.")
     if not codigo:
-        return respuesta_error("Debe indicar el código de acceso.")
+        return respuesta_error("Debe indicar el cÃ³digo de acceso.")
 
     if db.buscar_empresa(codigo):
-        return respuesta_error("El código de acceso ya existe.")
+        return respuesta_error("El cÃ³digo de acceso ya existe.")
 
     id_empresa = "KIA-" + uuid.uuid4().hex[:8].upper()
     es_prueba = str(datos.get("estado") or "") in ("PRUEBA", "Prueba") \
-        or str(datos.get("tiempo") or "") in ("15 días", "1 mes")
+        or str(datos.get("tiempo") or "") in ("15 dÃ­as", "1 mes")
     estado_final = "PRUEBA" if es_prueba else (str(datos.get("estado") or "") or "Activo")
     fecha_hoy = fecha_actual()
     fecha_vencimiento = calcular_vencimiento(str(datos.get("tiempo") or "1 Mes"), fecha_hoy)
@@ -267,7 +267,7 @@ def action_registrar_empresa(params):
         "correo": str(datos.get("correo") or ""),
         "celular1": str(datos.get("celular1") or ""),
         "celular2": str(datos.get("celular2") or ""),
-        "estado": estado_final, "plan": str(datos.get("plan") or "") or "Básico",
+        "estado": estado_final, "plan": str(datos.get("plan") or "") or "BÃ¡sico",
         "tiempo": str(datos.get("tiempo") or "") or "1 Mes",
         "fecha_creacion": fecha_hoy, "fecha_vencimiento": fecha_vencimiento,
     })
@@ -277,8 +277,8 @@ def action_registrar_empresa(params):
         db.guardar_fila(codigo, nombre_tabla.lower(), 2, list(cab))
 
     configs = [
-        ["PLAN", str(datos.get("plan") or "") or "Básico", "Plan contratado", fecha_hoy, "Sistema", ""],
-        ["PAIS", str(datos.get("pais") or ""), "País del negocio", fecha_hoy, "Sistema", ""],
+        ["PLAN", str(datos.get("plan") or "") or "BÃ¡sico", "Plan contratado", fecha_hoy, "Sistema", ""],
+        ["PAIS", str(datos.get("pais") or ""), "PaÃ­s del negocio", fecha_hoy, "Sistema", ""],
         ["CIUDAD", str(datos.get("ciudad") or ""), "Ciudad del negocio", fecha_hoy, "Sistema", ""],
     ]
     for i, cfg in enumerate(configs):
@@ -304,7 +304,7 @@ def calcular_vencimiento(tiempo, desde):
         t = tiempo.lower()
         if "15" in t:
             fecha += datetime.timedelta(days=15)
-        elif "año" in t:
+        elif "aÃ±o" in t:
             fecha += datetime.timedelta(days=365)
         elif "1 mes" == t:
             fecha += datetime.timedelta(days=30)
@@ -322,7 +322,7 @@ def calcular_vencimiento(tiempo, desde):
 def action_obtener_todo(params):
     clave = str(params.get("sheetName") or params.get("idEmpresa") or "").strip()
     if not clave:
-        return respuesta_error("No se recibió sheetName.")
+        return respuesta_error("No se recibiÃ³ sheetName.")
     empresa = resolver_hoja(clave)
     if not empresa:
         return respuesta_error("No existe la hoja: " + clave)
@@ -336,9 +336,9 @@ def action_escribir_fila(params):
     clave = str(params.get("sheetName") or params.get("idEmpresa") or "").strip()
     table_name = str(params.get("tableName") or params.get("targetTable") or "").strip()
     if not clave:
-        return respuesta_error("No se recibió sheetName.")
+        return respuesta_error("No se recibiÃ³ sheetName.")
     if not table_name:
-        return respuesta_error("No se recibió tableName.")
+        return respuesta_error("No se recibiÃ³ tableName.")
     tabla_key = identificar_tabla(table_name)
     if not tabla_key:
         return respuesta_error("Tabla no reconocida: " + table_name)
@@ -354,7 +354,7 @@ def action_escribir_fila(params):
         try:
             datos = json.loads(datos)
         except json.JSONDecodeError:
-            return respuesta_error("data inválido.")
+            return respuesta_error("data invÃ¡lido.")
     if not datos or not isinstance(datos, list):
         return respuesta_error("No se recibieron datos (data).")
 
@@ -391,9 +391,9 @@ def action_pagar_deudor(params):
     monto_pagado = transferencia + efectivo
 
     if not clave:
-        return respuesta_error("No se recibió sheetName.")
+        return respuesta_error("No se recibiÃ³ sheetName.")
     if not cliente:
-        return respuesta_error("No se recibió el nombre del cliente.")
+        return respuesta_error("No se recibiÃ³ el nombre del cliente.")
     empresa = resolver_hoja(clave)
     if not empresa:
         return respuesta_error("No existe la hoja: " + clave)
@@ -408,7 +408,7 @@ def action_pagar_deudor(params):
             fila_datos = d
             break
     if fila_deudor is None:
-        return respuesta_error("No se encontró el deudor: " + cliente)
+        return respuesta_error("No se encontrÃ³ el deudor: " + cliente)
 
     total_pendiente = _to_float(fila_datos[7])
     transf_previa = _to_float(fila_datos[5])
@@ -467,7 +467,7 @@ def action_eliminar_empresa(params):
     clave = str(params.get("empresaNombre") or params.get("sheetName")
                 or params.get("idEmpresa") or "").strip()
     if not clave:
-        return respuesta_error("No se recibió el nombre de la empresa.")
+        return respuesta_error("No se recibiÃ³ el nombre de la empresa.")
     emp = db.buscar_empresa(clave)
     if not emp:
         return respuesta_error("Empresa no encontrada en la Base Maestra.")
@@ -482,7 +482,7 @@ def action_eliminar_usuario(params):
     if not clave:
         return respuesta_error("No existe la hoja: " + clave)
     if not correo:
-        return respuesta_error("No se recibió el correo del usuario.")
+        return respuesta_error("No se recibiÃ³ el correo del usuario.")
     empresa = resolver_hoja(clave)
     if not empresa:
         return respuesta_error("No existe la hoja: " + clave)
@@ -505,7 +505,7 @@ def action_reportes(params):
     periodo = str(params.get("periodo") or "mes").strip().lower()
 
     if not id_empresa:
-        return respuesta_error("No se recibió idEmpresa.")
+        return respuesta_error("No se recibiÃ³ idEmpresa.")
     if tipo not in ("ventas",):
         return respuesta_error("Tipo de reporte no soportado: " + tipo)
 
@@ -515,7 +515,7 @@ def action_reportes(params):
 
     fechas = obtener_fechas_periodo(periodo)
     if not fechas:
-        return respuesta_error("No se pudo determinar el período: " + periodo)
+        return respuesta_error("No se pudo determinar el perÃ­odo: " + periodo)
 
     ventas = leer_hoja_rows(empresa, "VENTAS")
     objetos = []
@@ -608,7 +608,7 @@ def generar_reporte_ventas(registros, total):
     }
 
 
-def action_ping():
+def action_ping(params=None):
     return respuesta_success({"mensaje": "KAPTA IA API funcionando", "fecha": fecha_actual()})
 
 
@@ -669,15 +669,15 @@ async def endpoint(request: Request):
                              "pagar_deudor", "obtener_todo", "eliminar_empresa",
                              "eliminar_usuario", "reportes", "ping"],
             })
-        return respuesta_error("Acción GET no válida: " + action)
+        return respuesta_error("AcciÃ³n GET no vÃ¡lida: " + action)
 
     # POST
     try:
         body = await request.json()
     except Exception:
-        return respuesta_error("El JSON recibido no es válido.")
+        return respuesta_error("El JSON recibido no es vÃ¡lido.")
     if not isinstance(body, dict):
-        return respuesta_error("El JSON recibido no es válido.")
+        return respuesta_error("El JSON recibido no es vÃ¡lido.")
 
     action = str(body.get("action") or "").lower().strip()
     if action in POST_ACTIONS:
@@ -690,4 +690,4 @@ async def endpoint(request: Request):
             return GET_ACTIONS[action](body)
         except Exception as e:
             return respuesta_error("Error interno en " + action + ": " + str(e))
-    return respuesta_error("Acción no válida: " + action)
+    return respuesta_error("AcciÃ³n no vÃ¡lida: " + action)
