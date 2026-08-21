@@ -15,6 +15,10 @@ VERSION_API = "KAPTA-1.0.0"
 
 # ===================================================
 # TABLAS INTERNAS DE CADA EMPRESA (ESPEJO DE config.gs)
+# Por negocio: ventas, inventario, deudores, movimientos.
+# Globales (una sola tabla física con Código_Empresa al inicio):
+# gastos, auditoria_gastos, usuarios, config_negocio.
+# Eliminadas: estadisticas, ia.
 # ===================================================
 TABLAS = {
     "INVENTARIO": {"INICIO": 1, "FILA_INICIO": 3, "COLUMNAS": 12},
@@ -24,8 +28,6 @@ TABLAS = {
     "AUDITORIA_GASTOS": {"INICIO": 60, "FILA_INICIO": 3, "COLUMNAS": 8},
     "USUARIOS": {"INICIO": 69, "FILA_INICIO": 3, "COLUMNAS": 11},
     "CONFIG_NEGOCIO": {"INICIO": 81, "FILA_INICIO": 3, "COLUMNAS": 6},
-    "ESTADISTICAS": {"INICIO": 88, "FILA_INICIO": 3, "COLUMNAS": 10},
-    "IA": {"INICIO": 99, "FILA_INICIO": 3, "COLUMNAS": 10},
     "MOVIMIENTOS": {"INICIO": 110, "FILA_INICIO": 3, "COLUMNAS": 10},
 }
 
@@ -40,6 +42,14 @@ CABECERAS = {
                "Fecha_Anulacion", "Hora_Anulacion", "Anulado_Por"],
     "DEUDORES": ["Fecha_Registro", "Nom_Cliente", "Producto", "Cantidad",
                  "Minimo", "Transferencia", "Efectivo", "Total_Pendiente"],
+    "MOVIMIENTOS": ["Id_Movimiento", "Fecha", "Id_Producto", "Nom_Producto",
+                    "Tipo", "Cantidad", "Stock_Anterior", "Stock_Nuevo",
+                    "Usuario", "Observacion"],
+}
+
+# Vista tenant de las tablas globales (sin la columna Código_Empresa,
+# que el backend agrega/quita automáticamente al guardar/leer).
+CABECERAS_GLOBALES = {
     "GASTOS": ["Id_Gasto", "Fecha", "Hora", "Categoría", "Concepto",
                "Descripción", "Proveedor", "Monto", "Método_Pago",
                "Referencia", "Usuario", "Estado", "Fecha_Modificación", "Modificado_Por"],
@@ -50,14 +60,6 @@ CABECERAS = {
                  "Fecha_Cambio_Estado", "Motivo_Cambio", "Cambiado_Por"],
     "CONFIG_NEGOCIO": ["Parametro", "Valor", "Descripcion", "Fecha_Actualizacion",
                        "Usuario", "Observaciones"],
-    "ESTADISTICAS": ["Ventas_Hoy", "Ventas_Mes", "Ventas_Año", "Total_Ingresos",
-                     "Total_Gastos", "Total_Deudores", "Productos", "Usuarios",
-                     "Ultima_Venta", "Ultima_Actualizacion"],
-    "IA": ["Fecha", "Tipo", "Pregunta", "Respuesta", "Usuario", "Tokens",
-           "Modelo", "Tiempo", "Costo", "Estado"],
-    "MOVIMIENTOS": ["Id_Movimiento", "Fecha", "Id_Producto", "Nom_Producto",
-                    "Tipo", "Cantidad", "Stock_Anterior", "Stock_Nuevo",
-                    "Usuario", "Observacion"],
 }
 
 # ===================================================
@@ -94,9 +96,6 @@ def identificar_tabla(nombre):
         "usuario": "USUARIOS",
         "config_negocio": "CONFIG_NEGOCIO",
         "config": "CONFIG_NEGOCIO",
-        "estadisticas": "ESTADISTICAS",
-        "estadistica": "ESTADISTICAS",
-        "ia": "IA",
         "movimientos": "MOVIMIENTOS",
         "movimiento": "MOVIMIENTOS",
         "kardex": "MOVIMIENTOS",
@@ -284,8 +283,8 @@ def action_registrar_empresa(params):
         "fecha_creacion": fecha_hoy, "fecha_vencimiento": fecha_vencimiento,
     })
 
-    # Crear hoja: headers (fila 2) + config inicial + admin
-    for nombre_tabla, cab in CABECERAS.items():
+    # Crear hoja: headers (fila 2) en tablas por negocio Y globales
+    for nombre_tabla, cab in {**CABECERAS, **CABECERAS_GLOBALES}.items():
         db.guardar_fila(codigo, nombre_tabla.lower(), 2, list(cab))
 
     configs = [
@@ -698,6 +697,28 @@ def action_listar_finanzas_kapta(params=None):
     })
 
 
+def action_listar_todos_usuarios(params=None):
+    """Superadmin: todos los usuarios de TODAS las empresas (tabla global)."""
+    filas = db.leer_tabla_global_todos("usuarios")
+    usuarios = []
+    for f in filas:
+        usuarios.append({
+            "codigoEmpresa": f.get("Codigo_Empresa", ""),
+            "idUsuario": f.get("Id_Usuario", ""),
+            "nombre": f.get("Nombre", ""),
+            "correo": f.get("Correo", ""),
+            "contrasena": f.get("Contrasena", ""),
+            "rol": f.get("Rol", ""),
+            "estado": f.get("Estado", ""),
+            "fechaCreacion": f.get("Fecha_Creacion", ""),
+            "ultimoAcceso": f.get("Ultimo_Acceso", ""),
+            "fechaCambioEstado": f.get("Fecha_Cambio_Estado", ""),
+            "motivoCambio": f.get("Motivo_Cambio", ""),
+            "cambiadoPor": f.get("Cambiado_Por", ""),
+        })
+    return respuesta_success({"usuarios": usuarios, "total": len(usuarios)})
+
+
 def _es_numero(v):
     try:
         float(str(v).replace(",", "").strip())
@@ -737,6 +758,7 @@ GET_ACTIONS = {
     "ping": action_ping,
     "saludo": action_ping,
     "listar_finanzas_kapta": action_listar_finanzas_kapta,
+    "listar_todos_usuarios": action_listar_todos_usuarios,
 }
 
 

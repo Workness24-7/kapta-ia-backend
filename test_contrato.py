@@ -128,6 +128,16 @@ def fake_listar_finanzas_kapta():
     return list(FINANZAS)
 
 
+def fake_leer_tabla_global_todos(tabla):
+    """Replica db.leer_tabla_global_todos sobre el STORE por-negocio."""
+    headers = db_real.CABECERAS_GLOBALES[db_real._slug(tabla)]
+    out = []
+    for (emp, tab, fila), data in sorted(STORE.items()):
+        if tab == tabla.lower() and fila >= 3:
+            out.append(dict(zip(headers, [emp] + list(data))))
+    return out
+
+
 def install_fake():
     db_real.init_db = fake_init_db
     db_real.listar_empresas_db = fake_listar_empresas_db
@@ -144,6 +154,7 @@ def install_fake():
     db_real.comprar_plan_db = fake_comprar_plan_db
     db_real.registrar_finanza_kapta = fake_registrar_finanza_kapta
     db_real.listar_finanzas_kapta = fake_listar_finanzas_kapta
+    db_real.leer_tabla_global_todos = fake_leer_tabla_global_todos
 
 
 def json_body(resp):
@@ -316,6 +327,38 @@ def main():
     r = json_body(backend.action_login({"action": "login", "codigo": "TEST01",
                                         "correo": "admin@test.com", "password": "1234"}))
     check("login bloquea membresía vencida", r["status"] == "error", json.dumps(r))
+
+    # 21. REESTRUCTURA: estadisticas/ia eliminadas del backend
+    check("estadisticas/ia eliminadas de TABLAS",
+          "ESTADISTICAS" not in backend.TABLAS and "IA" not in backend.TABLAS)
+    check("identificar_tabla ignora estadisticas/ia",
+          backend.identificar_tabla("estadisticas") is None
+          and backend.identificar_tabla("ia") is None)
+
+    # 22. Tablas globales: registrar_empresa escribió headers y datos van con codigo
+    check("headers globales escritos",
+          ("TEST01", "usuarios", 2) in STORE and ("TEST01", "gastos", 2) in STORE)
+    gasto = ["G-00001", "03/03/2026", "10:00", "Servicios", "Internet", "", "",
+             50000, "Efectivo", "", "Admin", "Activo", "", ""]
+    r = json_body(backend.action_escribir_fila({"action": "registrar_gasto",
+                                                "sheetName": "TEST01", "tableName": "Gastos",
+                                                "data": gasto}))
+    check("gasto en tabla global (layout tenant)", r["status"] == "success"
+          and len(STORE[("TEST01", "gastos", 3)]) == 14, json.dumps(r))
+
+    # 23. SUPERADMIN: todos los usuarios de todas las empresas con codigo incluido
+    STORE[("OTRA99", "usuarios", 2)] = list(backend.CABECERAS_GLOBALES["USUARIOS"])
+    STORE[("OTRA99", "usuarios", 3)] = ["USR-9999", "Otro Admin", "otro@x.com",
+                                        "pw", "Administrador", "Activo", "", "", "", "", ""]
+    r = json_body(backend.action_listar_todos_usuarios())
+    usrs = r["data"]["usuarios"]
+    check("listar_todos_usuarios", r["status"] == "success" and len(usrs) == 2, json.dumps(r))
+    admin_test = next(u for u in usrs if u["correo"] == "admin@test.com")
+    check("usuario con codigoEmpresa + campos completos",
+          admin_test["codigoEmpresa"] == "TEST01" and admin_test["nombre"] == "Admin"
+          and admin_test["contrasena"] == "1234" and admin_test["rol"] == "Administrador"
+          and admin_test["estado"] == "Suspendido"
+          and "motivoCambio" in admin_test and "cambiadoPor" in admin_test, str(admin_test))
 
     print("TODOS LOS CHECKS PASARON")
 
