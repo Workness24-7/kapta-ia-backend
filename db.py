@@ -218,6 +218,21 @@ def _slug_en_uso(slug):
             return [c for (c,) in cur.fetchall() if _slug(c) == slug]
 
 
+def stats_tablas():
+    """TEMPORAL: {tabla: n_filas} para diagnosticar la migración."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema='public' ORDER BY 1"
+            )
+            out = {}
+            for (t,) in cur.fetchall():
+                cur.execute(f'SELECT COUNT(*) FROM "{t}"')
+                out[t] = cur.fetchone()[0]
+            return out
+
+
 def listar_empresas_db():
     with _connect() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
