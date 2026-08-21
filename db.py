@@ -298,6 +298,7 @@ def guardar_fila(empresa, tabla, fila, data):
     key = _slug(tabla)
     es_global = key in CABECERAS_GLOBALES
     cols = COLUMNS_GLOBALES[key] if es_global else COLUMNS[key]
+    tbl = key if es_global else _tabname(empresa, tabla)
     values = list(data)[:len(cols) - (1 if es_global else 0)]
     if es_global:
         values = [empresa] + values
@@ -316,7 +317,7 @@ def guardar_fila(empresa, tabla, fila, data):
                 _crear_tabla(cur, empresa, tabla)
             cur.execute(
                 f'INSERT INTO "{tbl}" (fila, {col_sql}) VALUES ({placeholders}) '
-                f'ON CONFLICT ({conflict_cols}) DO UPDATE SET {set_sql}=EXCLUDED.{set_sql}',
+                f'ON CONFLICT ({conflict_cols}) DO UPDATE SET {set_sql}',
                 [fila, *values],
             )
         conn.commit()
