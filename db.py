@@ -246,6 +246,16 @@ def buscar_empresa(clave):
     return None
 
 
+def buscar_empresa_por_nit(nit):
+    """True si ya existe otra empresa con el mismo NIT (no vacío)."""
+    nit = str(nit or "").strip()
+    if not nit:
+        return False
+    return any(
+        str(e.get("nit") or "").strip() == nit for e in listar_empresas_db()
+    )
+
+
 def hoja_existe(codigo):
     tbl = _tabname(codigo, "inventario")
     with _connect() as conn:
@@ -414,7 +424,7 @@ def registrar_empresa_db(datos):
                     datos.get("correo", ""), datos.get("celular1", ""),
                     datos.get("celular2", ""), datos["estado"], datos.get("plan", "Básico"),
                     datos.get("tiempo", "1 Mes"), datos["fecha_creacion"],
-                    "", datos["fecha_vencimiento"], "", "CLIENTE", "POS",
+                    "", datos["fecha_vencimiento"], str(datos.get("observaciones") or ""), "CLIENTE", "POS",
                 ),
             )
             for tabla in CABECERAS:

@@ -263,6 +263,10 @@ def action_registrar_empresa(params):
     if db.buscar_empresa(codigo):
         return respuesta_error("El código de acceso ya existe.")
 
+    nit = str(datos.get("nit") or "").strip()
+    if db.buscar_empresa_por_nit(nit):
+        return respuesta_error(f"El NIT {nit} ya está registrado para otra empresa.")
+
     id_empresa = "KIA-" + uuid.uuid4().hex[:8].upper()
     es_prueba = str(datos.get("estado") or "") in ("PRUEBA", "Prueba") \
         or str(datos.get("tiempo") or "") in ("15 días", "1 mes")
@@ -271,7 +275,7 @@ def action_registrar_empresa(params):
     fecha_vencimiento = calcular_vencimiento(str(datos.get("tiempo") or "1 Mes"), fecha_hoy)
 
     db.registrar_empresa_db({
-        "id": id_empresa, "nombre": nombre, "nit": str(datos.get("nit") or ""),
+        "id": id_empresa, "nombre": nombre, "nit": nit,
         "codigo": codigo, "tipo": str(datos.get("tipo") or ""),
         "pais": str(datos.get("pais") or ""), "ciudad": str(datos.get("ciudad") or ""),
         "direccion": str(datos.get("direccion") or ""),
@@ -281,6 +285,7 @@ def action_registrar_empresa(params):
         "estado": estado_final, "plan": str(datos.get("plan") or "") or "Básico",
         "tiempo": str(datos.get("tiempo") or "") or "1 Mes",
         "fecha_creacion": fecha_hoy, "fecha_vencimiento": fecha_vencimiento,
+        "observaciones": str(datos.get("observaciones") or ""),
     })
 
     # Crear hoja: headers (fila 2) en tablas por negocio Y globales
