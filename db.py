@@ -439,6 +439,44 @@ def actualizar_estado_empresa(empresa_id, estado):
         conn.commit()
 
 
+def marcar_empresa_eliminada(empresa_id, fecha):
+    """Borrado suave: sale de la vista superadmin; la purga real ocurre a los 2 días."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("ALTER TABLE empresas ADD COLUMN IF NOT EXISTS fecha_eliminacion TEXT DEFAULT ''")
+            cur.execute(
+                "UPDATE empresas SET estado='ELIMINADO', fecha_eliminacion=%s WHERE id=%s",
+                (fecha, empresa_id),
+            )
+        conn.commit()
+
+
+def purgar_empresas_eliminadas(dias=2):
+    """Eliminación definitiva: tablas por negocio, filas globales y registro maestro."""
+    limite = (datetime.date.today() - datetime.timedelta(days=dias)).isoformat()
+    borradas = 0
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("ALTER TABLE empresas ADD COLUMN IF NOT EXISTS fecha_eliminacion TEXT DEFAULT ''")
+            cur.execute(
+                "SELECT id, codigo FROM empresas "
+                "WHERE estado='ELIMINADO' AND COALESCE(fecha_eliminacion,'') <> '' "
+                "AND LEFT(fecha_eliminacion,10) <= %s",
+                (limite,),
+            )
+            for emp_id, codigo in cur.fetchall():
+                slug = _slug(codigo or "")
+                for tabla in CABECERAS:
+                    cur.execute(f'DROP TABLE IF EXISTS "{slug}_{_slug(tabla)}"')
+                for glo in CABECERAS_GLOBALES:
+                    col0 = COLUMNS_GLOBALES[glo][0]
+                    cur.execute(f'DELETE FROM "{glo}" WHERE "{col0}"=%s', (codigo,))
+                cur.execute("DELETE FROM empresas WHERE id=%s", (emp_id,))
+                borradas += 1
+        conn.commit()
+    return borradas
+
+
 def actualizar_ultimo_acceso(empresa_codigo, correo, fecha):
     """Tabla global de usuarios: un UPDATE indexado por codigo+correo."""
     cols = COLUMNS_GLOBALES["usuarios"]

@@ -140,6 +140,10 @@ def leer_hoja_rows(empresa, tabla_key, fila_inicio=2):
 # ===================================================
 def action_listar_empresas(params=None):
     empresas = db.listar_empresas_db()
+    try:
+        db.purgar_empresas_eliminadas()
+    except Exception:
+        pass  # la purga diferida nunca debe romper el listado
     lista = []
     for e in empresas:
         lista.append({
@@ -487,7 +491,7 @@ def action_eliminar_empresa(params):
     emp = db.buscar_empresa(clave)
     if not emp:
         return respuesta_error("Empresa no encontrada en la Base Maestra.")
-    db.actualizar_estado_empresa(emp["id"], "Suspendido")
+    db.marcar_empresa_eliminada(emp["id"], fecha_actual())
     return respuesta_success({"empresa": clave, "eliminada": True})
 
 

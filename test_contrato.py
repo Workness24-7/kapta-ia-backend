@@ -96,6 +96,17 @@ def fake_actualizar_estado_empresa(empresa_id, estado):
             e["estado"] = estado
 
 
+def fake_marcar_empresa_eliminada(empresa_id, fecha):
+    for e in EMPRESAS.values():
+        if e["id"] == empresa_id:
+            e["estado"] = "ELIMINADO"
+            e["fecha_eliminacion"] = fecha
+
+
+def fake_purgar_empresas_eliminadas(dias=2):
+    return 0
+
+
 def fake_actualizar_ultimo_acceso(codigo, correo, fecha):
     for (emp, tab, _), data in STORE.items():
         if emp == codigo and tab == "usuarios" and str(data[2] or "").lower() == correo:
@@ -150,6 +161,8 @@ def install_fake():
     db_real.siguiente_id = fake_siguiente_id
     db_real.registrar_empresa_db = fake_registrar_empresa_db
     db_real.actualizar_estado_empresa = fake_actualizar_estado_empresa
+    db_real.marcar_empresa_eliminada = fake_marcar_empresa_eliminada
+    db_real.purgar_empresas_eliminadas = fake_purgar_empresas_eliminadas
     db_real.actualizar_ultimo_acceso = fake_actualizar_ultimo_acceso
     db_real.comprar_plan_db = fake_comprar_plan_db
     db_real.registrar_finanza_kapta = fake_registrar_finanza_kapta
@@ -290,7 +303,7 @@ def main():
     r = json_body(backend.action_eliminar_empresa({"action": "eliminar_empresa",
                                                    "empresaNombre": "TEST01"}))
     check("eliminar_empresa", r["status"] == "success" and r["data"]["eliminada"] is True)
-    check("empresa Suspendida", EMPRESAS["TEST01"]["estado"] == "Suspendido")
+    check("empresa Suspendida", EMPRESAS["TEST01"]["estado"] == "ELIMINADO")
 
     # 16. COMPRAR PLAN mensual -> reactiva, vence ~30 días y registra ingreso
     r = json_body(backend.action_comprar_plan({"codigo": "TEST01", "plan": "MAX IA",
