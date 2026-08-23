@@ -9,6 +9,12 @@ import androidx.compose.foundation.background
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +40,7 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.heightIn
@@ -49,6 +56,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -2447,6 +2455,15 @@ private fun MembershipBannerRow(
 // -------------------------------------------------------------------------------------
 // BOTON 1: ðŸ  INICIO (Dashboard Principal, Resumen General & Alertas)
 // -------------------------------------------------------------------------------------
+// Acción rápida del dashboard de inicio (tarjeta degradada premium)
+private data class AccionRapida(
+    val titulo: String,
+    val icono: ImageVector,
+    val desde: Color,
+    val hasta: Color,
+    val accion: () -> Unit
+)
+
 @Composable
 private fun InicioDashboardView(
     salesToday: Double,
@@ -2516,39 +2533,49 @@ private fun InicioDashboardView(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // ACCIONES RÃPIDAS EN INICIO
-        iOSSectionHeader(text = "Acciones RÃ¡pidas")
+        // ACCIONES RÁPIDAS EN INICIO (tarjetas premium degradadas)
+        iOSSectionHeader(text = "Acciones Rápidas")
         Spacer(modifier = Modifier.height(10.dp))
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            QuickActionButton(
-                title = "Venta",
-                icon = Icons.Default.ShoppingCart,
-                color = MaterialTheme.colorScheme.primary,
-                onClick = onQuickActionVenta,
-                modifier = Modifier.weight(1f)
-            )
-            QuickActionButton(
-                title = "Gasto",
-                icon = Icons.Default.AccountBalanceWallet,
-                color = MaterialTheme.colorScheme.primary,
-                onClick = onQuickActionGasto,
-                modifier = Modifier.weight(1f)
-            )
-            QuickActionButton(
-                title = "Stock",
-                icon = Icons.Default.Add,
-                color = Color(0xFF34C759),
-                onClick = onQuickActionAddStock,
-                modifier = Modifier.weight(1f)
-            )
-            QuickActionButton(
-                title = "Deudores",
-                icon = Icons.Default.Person,
-                color = Color(0xFFFF9F0A),
-                onClick = onQuickActionDeudores,
-                modifier = Modifier.weight(1f)
-            )
+        val accionesRapidas = listOf(
+            AccionRapida("Compras", Icons.Default.ShoppingCart, Color(0xFF315AA8), Color(0xFF416FC2), onQuickActionVenta),
+            AccionRapida("Billetera", Icons.Default.AccountBalanceWallet, Color(0xFF5428B8), Color(0xFF7046D4), onQuickActionGasto),
+            AccionRapida("Agregar", Icons.Default.Add, Color(0xFF18A94F), Color(0xFF32C96A), onQuickActionAddStock),
+            AccionRapida("Perfil", Icons.Default.Person, Color(0xFFE58A05), Color(0xFFF2A01A), onQuickActionDeudores)
+        )
+
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            if (maxWidth >= 600.dp) {
+                // Desktop/tablet ancha: las 4 en una fila
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    accionesRapidas.forEach { accion ->
+                        QuickActionCard(
+                            title = accion.titulo,
+                            icon = accion.icono,
+                            gradient = listOf(accion.desde, accion.hasta),
+                            onClick = accion.accion,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            } else {
+                // Móvil: 2x2 sin aplastar
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    accionesRapidas.chunked(2).forEach { fila ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            fila.forEach { accion ->
+                                QuickActionCard(
+                                    title = accion.titulo,
+                                    icon = accion.icono,
+                                    gradient = listOf(accion.desde, accion.hasta),
+                                    onClick = accion.accion,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(22.dp))
@@ -3555,43 +3582,61 @@ private fun DashboardKpiCard(
 }
 
 @Composable
-private fun QuickActionButton(
+private fun QuickActionCard(
     title: String,
     icon: ImageVector,
-    color: Color,
+    gradient: List<Color>,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
-        color = color.copy(alpha = 0.10f),
-        border = BorderStroke(1.dp, color.copy(alpha = 0.25f)),
-        modifier = modifier.aspectRatio(1.1f)
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(color),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(imageVector = icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val pressed by interaction.collectIsPressedAsState()
+    val liftPx by animateFloatAsState(
+        targetValue = if (hovered || pressed) -8f else 0f,
+        animationSpec = tween(220),
+        label = "liftQuickAction"
+    )
+    val scale = if (pressed) 0.98f else 1f
+
+    Box(
+        modifier = modifier
+            .aspectRatio(1.35f)
+            .graphicsLayer {
+                translationY = liftPx
+                scaleX = scale
+                scaleY = scale
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = title,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center
+            .shadow(
+                elevation = if (hovered) 14.dp else 10.dp,
+                shape = RoundedCornerShape(20.dp),
+                ambientColor = Color.Black.copy(alpha = 0.10f),
+                spotColor = Color.Black.copy(alpha = 0.12f)
             )
-        }
+            .clip(RoundedCornerShape(20.dp))
+            .background(Brush.linearGradient(gradient))
+            .clickable(interactionSource = interaction, indication = LocalIndication.current) { onClick() }
+            .padding(16.dp)
+    ) {
+        // Icono blanco arriba a la izquierda
+        Icon(
+            imageVector = icon,
+            contentDescription = title,
+            tint = Color.White,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .size(44.dp)
+        )
+        // Nombre de la acción abajo a la izquierda
+        Text(
+            text = title,
+            color = Color.White,
+            fontSize = 19.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.align(Alignment.BottomStart)
+        )
     }
 }
 
