@@ -10,17 +10,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.LocalIndication
-import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.tween              
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -145,7 +139,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -163,6 +156,7 @@ import com.example.ui.components.iOSPill
 import com.example.ui.components.iOSSectionHeader
 import com.example.ui.components.iOSSegmented
 import com.example.ui.components.UserProfileModal
+import com.example.ui.theme.LocalIsDarkMode
 
 // Dynamic Stock Row model for the +Stock Bottom Sheet
 private data class StockRowItem(
@@ -2588,9 +2582,14 @@ private fun InicioDashboardView(
 
         Spacer(modifier = Modifier.height(22.dp))
 
-        // ALERTAS EN INICIO (Stock Bajo Cards con Imagen, Nombre & Barra de Progreso)
-        iOSSectionHeader(text = "Alertas de Stock Bajo")
-        Text(text = "Productos cerca del lÃ­mite de reabastecimiento", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // ALERTAS EN INICIO: tarjetas de producto en grid responsive
+        iOSSectionHeader(text = "Alertas de Stock")
+        Text(
+            text = "Productos con inventario bajo o que requieren atenciÃ³n",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 18.dp)
+        )
         Spacer(modifier = Modifier.height(10.dp))
 
         if (lowStockProducts.isEmpty()) {
@@ -2607,224 +2606,141 @@ private fun InicioDashboardView(
                 }
             }
         } else {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                lowStockProducts.forEach { prod ->
-                    StockAlertCard(product = prod, onRestockClick = onQuickActionAddStock)
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val columns = when {
+                    maxWidth >= 900.dp -> 4
+                    maxWidth >= 600.dp -> 3
+                    else -> 2
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StockAlertCard(product: PosProductEntity, onRestockClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    val hovered by interaction.collectIsHoveredAsState()
-    val liftPx by animateFloatAsState(if (hovered) -4f else 0f, animationSpec = tween(240), label = "lift")
-    val cardElev by animateDpAsState(if (hovered) 15.dp else 11.dp, animationSpec = tween(240), label = "elev")
-
-    // Destellos decorativos: alpha lenta y escalonada, no capturan clics
-    val inf = rememberInfiniteTransition(label = "sparkles")
-    val sp1 by inf.animateFloat(0.25f, 0.9f, infiniteRepeatable(tween(3000, easing = LinearEasing)), label = "sp1")
-    val sp2 by inf.animateFloat(0.2f, 0.65f, infiniteRepeatable(tween(2400, delayMillis = 600, easing = LinearEasing)), label = "sp2")
-    val sp3 by inf.animateFloat(0.15f, 0.55f, infiniteRepeatable(tween(3600, delayMillis = 1200, easing = LinearEasing)), label = "sp3")
-
-    val fraction = (product.stock.toFloat() / maxOf(1, product.minStockAlert)).coerceIn(0f, 1f)
-    val critical = fraction <= 0.35f
-    val barColors = if (critical) listOf(Color(0xFFFF453A), Color(0xFFFF7A45)) else listOf(Color(0xFFFF8A00), Color(0xFFFFC247))
-    val barGlow = if (critical) Color(0x66FF453A) else Color(0x66FF8A00)
-
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        val wide = maxWidth >= 560.dp
-
-        // Tarjeta glassmorphism translúcida con iluminación suave
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .graphicsLayer { translationY = liftPx }
-                .shadow(
-                    elevation = cardElev,
-                    shape = RoundedCornerShape(22.dp),
-                    ambientColor = Color(0x140F172A),
-                    spotColor = Color(0x1A0F172A)
-                )
-                .clip(RoundedCornerShape(22.dp))
-                .background(Color.White.copy(alpha = 0.68f))
-                .border(1.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(22.dp))
-                .hoverable(interaction)
-        ) {
-            // Iluminación superior suave (sheen)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .background(
-                        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.45f), Color.Transparent)),
-                        RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
-                    )
-            )
-
-            if (wide) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp).fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    StockAlertThumb(product = product, size = 76.dp)
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = product.name,
-                            fontSize = 19.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF0F172A),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Stock: ${product.stock} C/U â¢ LÃ­mite Alerta: ${product.minStockAlert}",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = Color(0xFF475569),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        StockLevelBar(fraction = fraction, barColors = barColors, glow = barGlow, fillFraction = 0.72f)
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-                    StockAlertButton(onClick = onRestockClick)
-                }
-            } else {
-                // Móvil/tablet angosta: botón pasa debajo de la información
-                Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        StockAlertThumb(product = product, size = 64.dp)
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = product.name,
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF0F172A),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = "Stock: ${product.stock} C/U â¢ LÃ­mite Alerta: ${product.minStockAlert}",
-                                fontSize = 12.sp,
-                                color = Color(0xFF475569),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    lowStockProducts.chunked(columns).forEach { rowItems ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            rowItems.forEach { prod ->
+                                Box(modifier = Modifier.weight(1f)) {
+                                    ProductAlertCard(product = prod, onViewInventory = onQuickActionAddStock)
+                                }
+                            }
+                            repeat(columns - rowItems.size) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
                         }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    StockLevelBar(fraction = fraction, barColors = barColors, glow = barGlow, fillFraction = 1f)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row {
-                        StockAlertButton(onClick = onRestockClick)
-                    }
                 }
             }
         }
-
-        // Destellos alrededor de bordes y cerca del botón
-        Icon(
-            imageVector = Icons.Default.AutoAwesome,
-            contentDescription = null,
-            tint = Color.White.copy(alpha = sp1),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .offset(x = (-30).dp, y = (-8).dp)
-                .size(12.dp)
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .offset(x = 24.dp, y = 10.dp)
-                .size(5.dp)
-                .background(Color(0xFFFDE68A).copy(alpha = sp2), CircleShape)
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .offset(x = (-8).dp, y = (-34).dp)
-                .size(4.dp)
-                .background(Color.White.copy(alpha = sp3), CircleShape)
-        )
     }
 }
 
 @Composable
-private fun StockAlertThumb(product: PosProductEntity, size: Dp) {
+private fun ProductAlertCard(product: PosProductEntity, onViewInventory: () -> Unit) {
+    val isDark = LocalIsDarkMode.current
+    val cardBg = if (isDark) Color(0xFF1C1C1E) else Color.White
+    val cardBorder = if (isDark) Color(0xFFF59E0B).copy(alpha = 0.28f) else Color(0xFFE5E7EB)
+    val nameColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
+    val secondaryColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val thumbBg = if (isDark) Color(0xFF26262B) else Color(0xFFEEF0FA)
+
+    // Estados derivados de los mismos datos de siempre (sin cambiar lÃ³gica)
+    val sinStock = product.stock <= 0
+    val critico = !sinStock && product.stock <= (product.minStockAlert / 2)
+
+    data class Estado(val texto: String, val detalle: String, val chipBg: Color, val chipFg: Color, val icono: ImageVector?)
+    val estado = when {
+        sinStock -> Estado("Sin stock", "Producto agotado", if (isDark) Color(0xFF3A3A3C) else Color(0xFFE5E7EB), if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A), Icons.Default.Inventory2)
+        critico -> Estado("Stock crÃ­tico", "Quedan ${product.stock} unidades", if (isDark) Color(0xFF3B1D1D) else Color(0xFFFEECEC), if (isDark) Color(0xFFFCA5A5) else Color(0xFFB91C1C), Icons.Default.Warning)
+        else -> Estado("Stock bajo", "Quedan ${product.stock} unidades", if (isDark) Color(0xFF3A2E10) else Color(0xFFFEF3C7), if (isDark) Color(0xFFFCD34D) else Color(0xFF92400E), Icons.Default.Warning)
+    }
+
     Box(
         modifier = Modifier
-            .size(size)
-            .shadow(3.dp, RoundedCornerShape(16.dp), spotColor = Color(0x220F172A))
-            .background(Color.White.copy(alpha = 0.85f), RoundedCornerShape(16.dp))
-            .border(1.dp, Color.White, RoundedCornerShape(16.dp)),
-        contentAlignment = Alignment.Center
+            .fillMaxWidth()
+            .shadow(
+                elevation = 4.dp,
+                shape = RoundedCornerShape(20.dp),
+                ambientColor = Color(0x120F172A),
+                spotColor = Color(0x120F172A)
+            )
+            .clip(RoundedCornerShape(20.dp))
+            .background(cardBg)
+            .border(1.dp, cardBorder, RoundedCornerShape(20.dp))
     ) {
-        if (product.imageUrl.isNotBlank()) {
-            AsyncImage(
-                model = product.imageUrl,
-                contentDescription = product.name,
-                modifier = Modifier.fillMaxSize().padding(6.dp),
-                contentScale = ContentScale.Fit
+        Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
+            // Imagen del producto arriba
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1.15f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(thumbBg),
+                contentAlignment = Alignment.Center
+            ) {
+                if (product.imageUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = product.imageUrl,
+                        contentDescription = product.name,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize().padding(8.dp)
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Inventory2,
+                        contentDescription = null,
+                        tint = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8),
+                        modifier = Modifier.size(34.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = product.name,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = nameColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-        } else {
-            Icon(
-                imageVector = Icons.Default.Image,
-                contentDescription = null,
-                tint = Color(0xFF94A3B8),
-                modifier = Modifier.size(size / 3)
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Surface(shape = RoundedCornerShape(50), color = estado.chipBg) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    estado.icono?.let {
+                        Icon(imageVector = it, contentDescription = null, tint = estado.chipFg, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+                    Text(text = estado.texto, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = estado.chipFg)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(5.dp))
+
+            Text(
+                text = "${estado.detalle} â¢ LÃ­mite: ${product.minStockAlert}",
+                fontSize = 12.sp,
+                color = secondaryColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Button(
+                onClick = onViewInventory,
+                shape = RoundedCornerShape(50),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 7.dp),
+                modifier = Modifier.fillMaxWidth().height(34.dp)
+            ) {
+                Icon(imageVector = Icons.Default.Inventory2, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Ver inventario", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            }
         }
-    }
-}
-
-@Composable
-private fun StockLevelBar(fraction: Float, barColors: List<Color>, glow: Color, fillFraction: Float) {
-    // ponytail: sin clip en el track para que el glow del fill no se corte
-    val visibleFill = if (fraction > 0f && fraction < 0.03f) 0.03f else fraction
-    Box(
-        modifier = Modifier
-            .fillMaxWidth(fillFraction)
-            .height(11.dp)
-            .background(Color(0xFFEDF1F7), RoundedCornerShape(50))
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(visibleFill)
-                .shadow(5.dp, RoundedCornerShape(50), spotColor = glow, ambientColor = glow)
-                .background(Brush.horizontalGradient(barColors), RoundedCornerShape(50))
-        )
-    }
-}
-
-@Composable
-private fun StockAlertButton(onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        shape = RoundedCornerShape(18.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-        contentPadding = PaddingValues(horizontal = 26.dp, vertical = 13.dp),
-        modifier = Modifier
-            .defaultMinSize(minWidth = 132.dp)
-            .shadow(9.dp, RoundedCornerShape(18.dp), spotColor = Color(0x5931D978), ambientColor = Color(0x3316B95A))
-            .background(
-                Brush.horizontalGradient(listOf(Color(0xFF16B95A), Color(0xFF31D978))),
-                RoundedCornerShape(18.dp)
-            )
-    ) {
-        Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
-        Spacer(modifier = Modifier.width(6.dp))
-        Text("Stock", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
