@@ -2546,37 +2546,16 @@ private fun InicioDashboardView(
             AccionRapida("Perfil", Icons.Default.Person, Color(0xFFE58A05), Color(0xFFF2A01A), onQuickActionDeudores)
         )
 
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            if (maxWidth >= 600.dp) {
-                // Desktop/tablet ancha: las 4 en una fila
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    accionesRapidas.forEach { accion ->
-                        QuickActionCard(
-                            title = accion.titulo,
-                            icon = accion.icono,
-                            gradient = listOf(accion.desde, accion.hasta),
-                            onClick = accion.accion,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            } else {
-                // Móvil: 2x2 sin aplastar
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    accionesRapidas.chunked(2).forEach { fila ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            fila.forEach { accion ->
-                                QuickActionCard(
-                                    title = accion.titulo,
-                                    icon = accion.icono,
-                                    gradient = listOf(accion.desde, accion.hasta),
-                                    onClick = accion.accion,
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                    }
-                }
+        // Fila única 1x4 en cualquier ancho
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            accionesRapidas.forEach { accion ->
+                QuickActionCard(
+                    title = accion.titulo,
+                    icon = accion.icono,
+                    gradient = listOf(accion.desde, accion.hasta),
+                    onClick = accion.accion,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
 
