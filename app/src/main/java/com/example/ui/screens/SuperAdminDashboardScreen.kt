@@ -260,8 +260,9 @@ fun SuperAdminDashboardScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .graphicsLayer {
-                                translationY = -headerCollapsePx
-                                alpha = if (headerCollapsePx > 0f) 0.9f else 1f
+                                // headerCollapsePx es negativo al colapsar -> el grupo sube y el saludo se oculta
+                                translationY = headerCollapsePx
+                                alpha = if (headerCollapsePx < 0f) 0.9f else 1f
                             }
                     ) {
                         // Greeting ("Buenos días, Brayam 👋" & "Panel de Administración")
