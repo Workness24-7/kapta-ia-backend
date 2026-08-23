@@ -1256,6 +1256,10 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
         return dbComp != null
     }
 
+    // Nombre real desde Room (el StateFlow puede aún no estar cargado al abrir el login)
+    suspend fun empresaPorCodigo(code: String): CompanyEntity? =
+        repository.getCompanyByCode(code.trim().lowercase())
+
     fun selectCompany(company: CompanyEntity?) {
         _selectedCompany.value = company
         if (company != null) {

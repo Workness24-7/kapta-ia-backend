@@ -35,7 +35,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -93,29 +95,37 @@ fun CompanyLoginScreen(
     )
 
     var selectedCountry by remember { mutableStateOf(countriesList[0]) }
-    var countryDropdownExpanded by remember { mutableStateOf(false) }
     var companyCodeInput by remember { mutableStateOf(companyCode) }
     var company by remember { mutableStateOf<CompanyEntity?>(null) }
     var userInput by remember { mutableStateOf("") }
     var passwordInput by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var recordarme by remember { mutableStateOf(false) }
     var loginErrorMsg by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember { context.getSharedPreferences("kapta_login", android.content.Context.MODE_PRIVATE) }
+
+    LaunchedEffect(Unit) {
+        userInput = prefs.getString("usuario", "") ?: ""
+        passwordInput = prefs.getString("clave", "") ?: ""
+        recordarme = prefs.getBoolean("recordarme", false)
+    }
 
     LaunchedEffect(companyCodeInput) {
-        val list = viewModel.companies.value
-        val found = list.find { it.code.equals(companyCodeInput.trim(), ignoreCase = true) }
+        val codeTrim = companyCodeInput.trim()
+        // Busca la empresa real (nombre correcto) en caché y Room antes de usar placeholder
+        val found = viewModel.companies.value.find { it.code.equals(codeTrim, ignoreCase = true) }
+            ?: viewModel.empresaPorCodigo(codeTrim)
         company = found ?: CompanyEntity(
-            code = companyCodeInput.trim(),
-            name = companyCodeInput.trim().replaceFirstChar { it.uppercase() },
+            code = codeTrim,
+            name = codeTrim.replaceFirstChar { it.uppercase() },
             status = "Activo",
             plan = "Premium"
         )
-        viewModel.ensureDefaultUsersForCompany(companyCodeInput.trim(), found?.id ?: 0)
+        viewModel.ensureDefaultUsersForCompany(codeTrim, found?.id ?: 0)
     }
-
     val comp = company ?: return
-    val context = androidx.compose.ui.platform.LocalContext.current
 
     val primaryBrandColor = try {
         Color(android.graphics.Color.parseColor(comp.primaryColorHex))
@@ -177,8 +187,15 @@ fun CompanyLoginScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Top Official Business Logo (Fallback to KAPTA IA)
-            if (comp.logoUrl.isNotBlank()) {
+            // Top Official Business Logo (el subido en el form; fallback a KAPTA IA)
+            val logoValido = remember(comp.logoUrl) {
+                when {
+                    comp.logoUrl.isBlank() -> false
+                    comp.logoUrl.startsWith("file://") -> java.io.File(comp.logoUrl.removePrefix("file://")).exists()
+                    else -> true
+                }
+            }
+            if (logoValido) {
                 AsyncImage(
                     model = comp.logoUrl,
                     contentDescription = comp.name,
@@ -220,63 +237,22 @@ fun CompanyLoginScreen(
                     modifier = Modifier.padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Central Card Business Logo / Compact Icon
-                    Box(
-                        modifier = Modifier
-                            .size(68.dp)
-                            .clip(CircleShape)
-                            .background(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(
-                                        primaryBrandColor.copy(alpha = 0.25f),
-                                        tertiaryBrandColor.copy(alpha = 0.15f)
-                                    )
-                                )
-                            )
-                            .border(1.5.dp, primaryBrandColor, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        val displayIconUrl = comp.listIconUrl.ifBlank { comp.logoUrl }
-                        if (displayIconUrl.isNotBlank()) {
-                            AsyncImage(
-                                model = displayIconUrl,
-                                contentDescription = comp.name,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape)
-                            )
-                        } else {
-                            val logoVectorIcon = when {
-                                comp.name.contains("Supermercado", ignoreCase = true) || comp.name.contains("14", ignoreCase = true) -> Icons.Outlined.Storefront
-                                comp.name.contains("Ferretería", ignoreCase = true) || comp.name.contains("López", ignoreCase = true) -> Icons.Outlined.Build
-                                comp.name.contains("prueba", ignoreCase = true) -> Icons.Outlined.Science
-                                else -> Icons.Outlined.Storefront
-                            }
-                            Icon(
-                                imageVector = logoVectorIcon,
-                                contentDescription = null,
-                                tint = primaryBrandColor,
-                                modifier = Modifier.size(34.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
+                    // Nombre del negocio en la parte superior del dock
                     Text(
                         text = comp.name,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = customFontFamily,
-                        color = neutralBrandColor
+                        color = neutralBrandColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
 
                     Surface(
                         shape = RoundedCornerShape(50),
                         color = secondaryBrandColor.copy(alpha = 0.12f),
                         border = BorderStroke(1.dp, secondaryBrandColor.copy(alpha = 0.35f)),
-                        modifier = Modifier.padding(top = 4.dp)
+                        modifier = Modifier.padding(top = 6.dp)
                     ) {
                         Text(
                             text = "${comp.code}.kaptaia.com",
@@ -290,99 +266,7 @@ fun CompanyLoginScreen(
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    // 1. Country Selector Field
-                    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
-                        Text(
-                            text = "País del negocio",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF475569)
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Box {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(18.dp))
-                                    .background(Color.White.copy(alpha = 0.90f))
-                                    .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(18.dp))
-                                    .clickable { countryDropdownExpanded = true }
-                                    .padding(horizontal = 16.dp, vertical = 14.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(text = selectedCountry.flag, fontSize = 20.sp)
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Text(
-                                            text = "${selectedCountry.name} (${selectedCountry.code})",
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = neutralBrandColor
-                                        )
-                                    }
-                                    Icon(
-                                        imageVector = Icons.Default.KeyboardArrowDown,
-                                        contentDescription = "Desplegar países",
-                                        tint = Color(0xFF64748B)
-                                    )
-                                }
-                            }
-
-                            DropdownMenu(
-                                expanded = countryDropdownExpanded,
-                                onDismissRequest = { countryDropdownExpanded = false }
-                            ) {
-                                countriesList.forEach { cItem ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(text = cItem.flag, fontSize = 18.sp)
-                                                Spacer(modifier = Modifier.width(10.dp))
-                                                Text(
-                                                    text = "${cItem.name} (${cItem.code})",
-                                                    fontWeight = if (cItem.code == selectedCountry.code) FontWeight.Bold else FontWeight.Normal
-                                                )
-                                            }
-                                        },
-                                        onClick = {
-                                            selectedCountry = cItem
-                                            countryDropdownExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // 2. Business Code Field
-                    OutlinedTextField(
-                        value = companyCodeInput,
-                        onValueChange = { companyCodeInput = it },
-                        label = { Text("Código de Negocio (ej. 1001)", fontFamily = customFontFamily) },
-                        leadingIcon = { Icon(imageVector = Icons.Default.Business, contentDescription = null, tint = primaryBrandColor) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(18.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = neutralBrandColor,
-                            unfocusedTextColor = neutralBrandColor,
-                            focusedBorderColor = primaryBrandColor,
-                            unfocusedBorderColor = Color(0xFFCBD5E1),
-                            focusedContainerColor = Color.White.copy(alpha = 0.90f),
-                            unfocusedContainerColor = Color.White.copy(alpha = 0.80f),
-                            cursorColor = primaryBrandColor
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // 3. Email / User Field
+                    // 1. Email / User Field
                     OutlinedTextField(
                         value = userInput,
                         onValueChange = { userInput = it },
@@ -434,6 +318,28 @@ fun CompanyLoginScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Recuérdame: guarda usuario y clave en este dispositivo
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { recordarme = !recordarme }
+                    ) {
+                        Checkbox(
+                            checked = recordarme,
+                            onCheckedChange = { recordarme = it }
+                        )
+                        Text(
+                            text = "Recuérdame en este dispositivo",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = customFontFamily,
+                            color = Color(0xFF475569)
+                        )
+                    }
+
                     if (loginErrorMsg != null) {
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
@@ -448,11 +354,11 @@ fun CompanyLoginScreen(
 
                     Button(
                         onClick = {
-                            val cCode = companyCodeInput.trim()
+                            val cCode = comp.code.trim()
                             val uVal = userInput.trim()
                             val pVal = passwordInput.trim()
-                            if (cCode.isBlank() || uVal.isBlank() || pVal.isBlank()) {
-                                loginErrorMsg = "Por favor completa País, Código, Correo y Contraseña"
+                            if (uVal.isBlank() || pVal.isBlank()) {
+                                loginErrorMsg = "Por favor completa Correo y Contraseña"
                             } else {
                                 loginErrorMsg = null
                                 scope.launch {
@@ -493,6 +399,16 @@ fun CompanyLoginScreen(
                                             password = pVal,
                                             role = "Administrador"
                                         )
+                                    }
+
+                                    if (recordarme) {
+                                        prefs.edit()
+                                            .putString("usuario", uVal)
+                                            .putString("clave", pVal)
+                                            .putBoolean("recordarme", true)
+                                            .apply()
+                                    } else {
+                                        prefs.edit().clear().apply()
                                     }
 
                                     viewModel.setCurrentUser(user)
