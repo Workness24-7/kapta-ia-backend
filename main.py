@@ -1,7 +1,10 @@
 # main.py — KAPTA IA Backend FastAPI (contrato idéntico a api.gs)
 # Reemplaza Google Apps Script. La app Android solo cambia APPS_SCRIPT_WEB_APP_URL.
 import datetime
+import hashlib
+import hmac
 import json
+import re
 import uuid
 
 from fastapi import FastAPI, Request
@@ -188,17 +191,58 @@ def action_read(params):
     return respuesta_success({"sheetName": empresa, "rows": todas})
 
 
+# ===================================================
+# SEGURIDAD: hash PBKDF2 de contraseñas + bloqueo por intentos
+# ===================================================
+MSG_CREDENCIALES = "Usuario o Contraseña incorrecta."
+
+
+def _hash_password(password):
+    salt = uuid.uuid4().hex
+    iteraciones = 100_000
+    hash_hex = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), bytes.fromhex(salt), iteraciones
+    ).hex()
+    return f"pbkdf2${iteraciones}${salt}${hash_hex}"
+
+
+def _verificar_password(password, almacenado):
+    """Compara contra hash pbkdf2 o contraseña legada en texto plano (migrable)."""
+    almacenado = str(almacenado or "")
+    try:
+        if almacenado.startswith("pbkdf2$"):
+            _, iteraciones, salt, hash_hex = almacenado.split("$", 3)
+            calc = hashlib.pbkdf2_hmac(
+                "sha256", password.encode("utf-8"), bytes.fromhex(salt), int(iteraciones)
+            ).hex()
+            return hmac.compare_digest(calc, hash_hex)
+        return hmac.compare_digest(almacenado, password)
+    except (ValueError, TypeError):
+        return False
+
+
+def _limpiar(valor, max_len):
+    """Sanitiza entradas: sin caracteres de control y longitud acotada."""
+    limpio = "".join(c for c in str(valor or "") if c.isprintable()).strip()
+    return limpio[:max_len]
+
+
+def _mensaje_bloqueo(minutos):
+    return ("Cuenta bloqueada temporalmente por múltiples intentos fallidos. "
+            f"Intenta de nuevo en {minutos} minuto(s).")
+
+
 def action_login(params):
-    codigo = str(params.get("codigo") or "").strip().upper()
-    correo = str(params.get("correo") or params.get("Correo_Admin") or "").lower().strip()
-    password = str(params.get("password") or params.get("Contraseña_Admin")
-                   or params.get("Contrasena_Admin") or "")
+    codigo = _limpiar(params.get("codigo"), 20).upper()
+    correo = _limpiar(params.get("correo") or params.get("Correo_Admin"), 120).lower()
+    password = _limpiar(params.get("password") or params.get("Contraseña_Admin")
+                        or params.get("Contrasena_Admin"), 128)
     if not codigo:
-        return respuesta_error("Debe ingresar el código de acceso.")
-    if not correo:
-        return respuesta_error("Debe ingresar el correo.")
+        return respuesta_error(MSG_CREDENCIALES)
+    if not correo or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", correo):
+        return respuesta_error(MSG_CREDENCIALES)
     if not password:
-        return respuesta_error("Debe ingresar la contraseña.")
+        return respuesta_error(MSG_CREDENCIALES)
 
     empresa = resolver_hoja(codigo)
     if not empresa:
@@ -216,18 +260,35 @@ def action_login(params):
         except ValueError:
             pass
 
+    # Bloqueo temporal por intentos fallidos previos
+    restantes = db.minutos_bloqueo_restantes(codigo, correo)
+    if restantes > 0:
+        return respuesta_error(_mensaje_bloqueo(restantes))
+
     usuario = None
     for (n, d) in db.leer_tabla(empresa, "usuarios"):
         if str(d[2] or "").lower().strip() == correo:
             usuario = d
             break
     if not usuario:
-        return respuesta_error("Usuario no encontrado.")
+        db.registrar_fallo_login(codigo, correo)
+        return respuesta_error(MSG_CREDENCIALES)
     if str(usuario[5] or "") in ("Suspendido", "Bloqueado"):
         return respuesta_error("Usuario " + str(usuario[5]).lower() + ".")
-    if str(usuario[3] or "") != password:
-        return respuesta_error("Contraseña incorrecta.")
+    if not _verificar_password(password, usuario[3]):
+        minutos = db.registrar_fallo_login(codigo, correo)
+        if minutos > 0:
+            return respuesta_error(_mensaje_bloqueo(minutos))
+        return respuesta_error(MSG_CREDENCIALES)
 
+    # Migración transparente: texto plano -> hash PBKDF2
+    if not str(usuario[3] or "").startswith("pbkdf2$"):
+        try:
+            db.actualizar_contrasena(codigo, correo, _hash_password(password))
+        except Exception:
+            pass
+
+    db.reset_fallos_login(codigo, correo)
     db.actualizar_ultimo_acceso(empresa, correo, fecha_actual())
 
     admin_datos = {
@@ -307,7 +368,7 @@ def action_registrar_empresa(params):
     admin = {
         "nombre": str(datos.get("adminNombre") or ""),
         "correo": str(datos.get("adminCorreo") or "").lower(),
-        "password": str(datos.get("adminPassword") or ""),
+        "password": _hash_password(str(datos.get("adminPassword") or "")[:128]),
     }
     fila_admin = ["USR-" + uuid.uuid4().hex[:8].upper(), admin["nombre"],
                   admin["correo"], admin["password"], "Administrador", "Activo",
@@ -379,6 +440,13 @@ def action_escribir_fila(params):
         return respuesta_error("No se recibieron datos (data).")
 
     datos = [str(x) if x is not None else "" for x in datos]
+
+    # Nunca guardar contraseñas en texto plano: hashear al crear/actualizar usuarios
+    if tabla_key == "USUARIOS" and len(datos) > 3:
+        pwd = datos[3]
+        if pwd and not pwd.startswith("pbkdf2$"):
+            datos = list(datos)
+            datos[3] = _hash_password(pwd[:128])
 
     prefijo = prefijo_id_tabla(table_name)
     if prefijo and str(datos[0] or "").strip() == "":

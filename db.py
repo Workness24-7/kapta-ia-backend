@@ -500,6 +500,101 @@ def obtener_foto(foto_id):
             return row[0] if row else None
 
 
+# ===================================================
+# SEGURIDAD LOGIN: límite de intentos por empresa+correo
+# ===================================================
+MAX_INTENTOS_LOGIN = 5
+MINUTOS_BLOQUEO = 15
+
+
+def _tabla_bloqueos(cur):
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS bloqueos_login ("
+        "clave TEXT PRIMARY KEY, intentos INT DEFAULT 0, bloqueado_hasta TEXT DEFAULT '')"
+    )
+
+
+def _clave_bloqueo(empresa, correo):
+    return f"{str(empresa or '').upper()}|{str(correo or '').lower().strip()}"
+
+
+def minutos_bloqueo_restantes(empresa, correo):
+    """Minutos restantes de bloqueo; 0 si no está bloqueado."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            _tabla_bloqueos(cur)
+            cur.execute(
+                "SELECT bloqueado_hasta FROM bloqueos_login WHERE clave=%s",
+                (_clave_bloqueo(empresa, correo),),
+            )
+            row = cur.fetchone()
+    hasta = str(row[0] or "") if row else ""
+    if not hasta:
+        return 0
+    try:
+        diff = datetime.datetime.strptime(hasta, "%Y-%m-%d %H:%M") - datetime.datetime.now()
+    except ValueError:
+        return 0
+    if diff.total_seconds() <= 0:
+        return 0
+    return int(diff.total_seconds() // 60) + 1
+
+
+def registrar_fallo_login(empresa, correo):
+    """Suma un intento fallido. Devuelve los minutos de bloqueo si acaba de activarse."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            _tabla_bloqueos(cur)
+            cur.execute(
+                "INSERT INTO bloqueos_login (clave, intentos) VALUES (%s, 1) "
+                "ON CONFLICT (clave) DO UPDATE SET intentos = bloqueos_login.intentos + 1",
+                (_clave_bloqueo(empresa, correo),),
+            )
+            cur.execute(
+                "SELECT intentos FROM bloqueos_login WHERE clave=%s",
+                (_clave_bloqueo(empresa, correo),),
+            )
+            intentos = int(cur.fetchone()[0])
+            if intentos >= MAX_INTENTOS_LOGIN:
+                hasta = (datetime.datetime.now()
+                         + datetime.timedelta(minutes=MINUTOS_BLOQUEO)).strftime("%Y-%m-%d %H:%M")
+                cur.execute(
+                    "UPDATE bloqueos_login SET bloqueado_hasta=%s, intentos=0 WHERE clave=%s",
+                    (hasta, _clave_bloqueo(empresa, correo)),
+                )
+                conn.commit()
+                return MINUTOS_BLOQUEO
+        conn.commit()
+    return 0
+
+
+def reset_fallos_login(empresa, correo):
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            _tabla_bloqueos(cur)
+            cur.execute(
+                "DELETE FROM bloqueos_login WHERE clave=%s",
+                (_clave_bloqueo(empresa, correo),),
+            )
+        conn.commit()
+
+
+def actualizar_contrasena(empresa_codigo, correo, hash_nuevo):
+    """Migra contraseñas legadas en texto plano a hash."""
+    cols = COLUMNS_GLOBALES["usuarios"]
+    col_correo = cols[3]   # Correo
+    col_clave = cols[4]    # Contrasena
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            _crear_tabla_global(cur, "usuarios")
+            cur.execute(
+                f'UPDATE "usuarios" SET "{col_clave}"=%s '
+                f'WHERE "{cols[0]}"=%s AND LOWER("{col_correo}")=LOWER(%s)',
+                (hash_nuevo, empresa_codigo, correo),
+            )
+        conn.commit()
+
+
 def actualizar_ultimo_acceso(empresa_codigo, correo, fecha):
     """Tabla global de usuarios: un UPDATE indexado por codigo+correo."""
     cols = COLUMNS_GLOBALES["usuarios"]

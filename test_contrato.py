@@ -168,6 +168,40 @@ def install_fake():
     db_real.registrar_finanza_kapta = fake_registrar_finanza_kapta
     db_real.listar_finanzas_kapta = fake_listar_finanzas_kapta
     db_real.leer_tabla_global_todos = fake_leer_tabla_global_todos
+    db_real.minutos_bloqueo_restantes = fake_minutos_bloqueo_restantes
+    db_real.registrar_fallo_login = fake_registrar_fallo_login
+    db_real.reset_fallos_login = fake_reset_fallos_login
+    db_real.actualizar_contrasena = fake_actualizar_contrasena
+
+
+BLOQUEOS = {}
+MAX_INTENTOS_FAKE = 5
+
+
+def fake_minutos_bloqueo_restantes(empresa, correo):
+    estado = BLOQUEOS.get(f"{empresa}|{correo}".lower())
+    return estado[1] if estado else 0
+
+
+def fake_registrar_fallo_login(empresa, correo):
+    clave = f"{empresa}|{correo}".lower()
+    estado = BLOQUEOS.setdefault(clave, [0, 0])
+    estado[0] += 1
+    if estado[0] >= MAX_INTENTOS_FAKE:
+        estado[1] = 15
+        return 15
+    return 0
+
+
+def fake_reset_fallos_login(empresa, correo):
+    BLOQUEOS.pop(f"{empresa}|{correo}".lower(), None)
+
+
+def fake_actualizar_contrasena(empresa_codigo, correo, hash_nuevo):
+    for (emp, tab, fila), data in list(STORE.items()):
+        if emp == empresa_codigo.upper() and tab == "usuarios" and fila >= 3 \
+                and str(data[2] or "").lower() == correo.lower():
+            data[3] = hash_nuevo
 
 
 def json_body(resp):
@@ -218,6 +252,29 @@ def main():
     r = json_body(backend.action_login({"action": "login", "codigo": "TEST01",
                                         "correo": "admin@test.com", "password": "mala"}))
     check("login password errónea", r["status"] == "error")
+
+    # 4b. Mensaje genérico (no revela si falló el usuario o la contraseña)
+    r = json_body(backend.action_login({"action": "login", "codigo": "TEST01",
+                                        "correo": "admin@test.com", "password": "mala"}))
+    check("mensaje genérico credenciales", r["status"] == "error"
+          and "incorrecta" in str(r.get("message") or ""), json.dumps(r))
+
+    # 4c. Contraseña migrada a hash pbkdf2 tras el login exitoso
+    check("password hasheada pbkdf2$",
+          str(STORE[("TEST01", "usuarios", 3)][3]).startswith("pbkdf2$"),
+          str(STORE[("TEST01", "usuarios", 3)][3])[:30])
+
+    # 4d. Bloqueo de cuenta tras MAX intentos fallidos
+    for i in range(3):
+        r = json_body(backend.action_login({"action": "login", "codigo": "TEST01",
+                                            "correo": "admin@test.com", "password": "otra"}))
+    check("bloqueo por intentos activo", r["status"] == "error"
+          and "bloqueada" in str(r.get("message") or ""), json.dumps(r))
+    r = json_body(backend.action_login({"action": "login", "codigo": "TEST01",
+                                        "correo": "admin@test.com", "password": "1234"}))
+    check("contraseña correcta también bloqueada", r["status"] == "error"
+          and "bloqueada" in str(r.get("message") or ""), json.dumps(r))
+    fake_reset_fallos_login("TEST01", "admin@test.com")
 
     # 5. ESCRIBIR INVENTARIO (IDS auto-generados Ky_00001)
     inv = ["", "770000001", "Producto A", "General", 10, 1000, 2000, 1500, 5, "Activo", "", ""]
@@ -369,7 +426,8 @@ def main():
     admin_test = next(u for u in usrs if u["correo"] == "admin@test.com")
     check("usuario con codigoEmpresa + campos completos",
           admin_test["codigoEmpresa"] == "TEST01" and admin_test["nombre"] == "Admin"
-          and admin_test["contrasena"] == "1234" and admin_test["rol"] == "Administrador"
+          and str(admin_test["contrasena"]).startswith("pbkdf2$")
+          and admin_test["rol"] == "Administrador"
           and admin_test["estado"] == "Suspendido"
           and "motivoCambio" in admin_test and "cambiadoPor" in admin_test, str(admin_test))
 
