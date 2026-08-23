@@ -10,10 +10,16 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,7 +28,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.height               
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -138,6 +145,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -2599,7 +2607,7 @@ private fun InicioDashboardView(
                 }
             }
         } else {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 lowStockProducts.forEach { prod ->
                     StockAlertCard(product = prod, onRestockClick = onQuickActionAddStock)
                 }
@@ -2610,78 +2618,213 @@ private fun InicioDashboardView(
 
 @Composable
 private fun StockAlertCard(product: PosProductEntity, onRestockClick: () -> Unit) {
-    GlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Row(
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val liftPx by animateFloatAsState(if (hovered) -4f else 0f, animationSpec = tween(240), label = "lift")
+    val cardElev by animateDpAsState(if (hovered) 15.dp else 11.dp, animationSpec = tween(240), label = "elev")
+
+    // Destellos decorativos: alpha lenta y escalonada, no capturan clics
+    val inf = rememberInfiniteTransition(label = "sparkles")
+    val sp1 by inf.animateFloat(0.25f, 0.9f, infiniteRepeatable(tween(3000, easing = LinearEasing)), label = "sp1")
+    val sp2 by inf.animateFloat(0.2f, 0.65f, infiniteRepeatable(tween(2400, delayMillis = 600, easing = LinearEasing)), label = "sp2")
+    val sp3 by inf.animateFloat(0.15f, 0.55f, infiniteRepeatable(tween(3600, delayMillis = 1200, easing = LinearEasing)), label = "sp3")
+
+    val fraction = (product.stock.toFloat() / maxOf(1, product.minStockAlert)).coerceIn(0f, 1f)
+    val critical = fraction <= 0.35f
+    val barColors = if (critical) listOf(Color(0xFFFF453A), Color(0xFFFF7A45)) else listOf(Color(0xFFFF8A00), Color(0xFFFFC247))
+    val barGlow = if (critical) Color(0x66FF453A) else Color(0x66FF8A00)
+
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val wide = maxWidth >= 560.dp
+
+        // Tarjeta glassmorphism translúcida con iluminación suave
+        Box(
             modifier = Modifier
-                .padding(10.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxWidth()
+                .graphicsLayer { translationY = liftPx }
+                .shadow(
+                    elevation = cardElev,
+                    shape = RoundedCornerShape(22.dp),
+                    ambientColor = Color(0x140F172A),
+                    spotColor = Color(0x1A0F172A)
+                )
+                .clip(RoundedCornerShape(22.dp))
+                .background(Color.White.copy(alpha = 0.68f))
+                .border(1.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(22.dp))
+                .hoverable(interaction)
         ) {
+            // Iluminación superior suave (sheen)
             Box(
                 modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                if (product.imageUrl.isNotBlank()) {
-                    AsyncImage(
-                        model = product.imageUrl,
-                        contentDescription = product.name,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .background(
+                        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.45f), Color.Transparent)),
+                        RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
                     )
-                } else {
-                    Icon(imageVector = Icons.Default.Image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            )
+
+            if (wide) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    StockAlertThumb(product = product, size = 76.dp)
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = product.name,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF0F172A),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Stock: ${product.stock} C/U â¢ LÃ­mite Alerta: ${product.minStockAlert}",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = Color(0xFF475569),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        StockLevelBar(fraction = fraction, barColors = barColors, glow = barGlow, fillFraction = 0.72f)
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+                    StockAlertButton(onClick = onRestockClick)
+                }
+            } else {
+                // Móvil/tablet angosta: botón pasa debajo de la información
+                Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        StockAlertThumb(product = product, size = 64.dp)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = product.name,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF0F172A),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = "Stock: ${product.stock} C/U â¢ LÃ­mite Alerta: ${product.minStockAlert}",
+                                fontSize = 12.sp,
+                                color = Color(0xFF475569),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    StockLevelBar(fraction = fraction, barColors = barColors, glow = barGlow, fillFraction = 1f)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row {
+                        StockAlertButton(onClick = onRestockClick)
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = product.name,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                iOSPill(
-                    text = "Stock: ${product.stock} C/U â€¢ LÃ­mite Alerta: ${product.minStockAlert}",
-                    color = if (product.stock <= (product.minStockAlert / 2)) Color(0xFFFF453A) else Color(0xFFFF9F0A)
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                val maxThreshold = maxOf(1, product.minStockAlert * 2)
-                val progress = (product.stock.toFloat() / maxThreshold).coerceIn(0f, 1f)
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp)),
-                    color = if (product.stock <= (product.minStockAlert / 2)) Color(0xFFFF453A) else Color(0xFFFF9F0A),
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Button(
-                onClick = onRestockClick,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
-                shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                modifier = Modifier.height(32.dp)
-            ) {
-                Text("+ Stock", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
-            }
         }
+
+        // Destellos alrededor de bordes y cerca del botón
+        Icon(
+            imageVector = Icons.Default.AutoAwesome,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = sp1),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .offset(x = (-30).dp, y = (-8).dp)
+                .size(12.dp)
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .offset(x = 24.dp, y = 10.dp)
+                .size(5.dp)
+                .background(Color(0xFFFDE68A).copy(alpha = sp2), CircleShape)
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .offset(x = (-8).dp, y = (-34).dp)
+                .size(4.dp)
+                .background(Color.White.copy(alpha = sp3), CircleShape)
+        )
+    }
+}
+
+@Composable
+private fun StockAlertThumb(product: PosProductEntity, size: Dp) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .shadow(3.dp, RoundedCornerShape(16.dp), spotColor = Color(0x220F172A))
+            .background(Color.White.copy(alpha = 0.85f), RoundedCornerShape(16.dp))
+            .border(1.dp, Color.White, RoundedCornerShape(16.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        if (product.imageUrl.isNotBlank()) {
+            AsyncImage(
+                model = product.imageUrl,
+                contentDescription = product.name,
+                modifier = Modifier.fillMaxSize().padding(6.dp),
+                contentScale = ContentScale.Fit
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Default.Image,
+                contentDescription = null,
+                tint = Color(0xFF94A3B8),
+                modifier = Modifier.size(size / 3)
+            )
+        }
+    }
+}
+
+@Composable
+private fun StockLevelBar(fraction: Float, barColors: List<Color>, glow: Color, fillFraction: Float) {
+    // ponytail: sin clip en el track para que el glow del fill no se corte
+    val visibleFill = if (fraction > 0f && fraction < 0.03f) 0.03f else fraction
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(fillFraction)
+            .height(11.dp)
+            .background(Color(0xFFEDF1F7), RoundedCornerShape(50))
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(visibleFill)
+                .shadow(5.dp, RoundedCornerShape(50), spotColor = glow, ambientColor = glow)
+                .background(Brush.horizontalGradient(barColors), RoundedCornerShape(50))
+        )
+    }
+}
+
+@Composable
+private fun StockAlertButton(onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        shape = RoundedCornerShape(18.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+        contentPadding = PaddingValues(horizontal = 26.dp, vertical = 13.dp),
+        modifier = Modifier
+            .defaultMinSize(minWidth = 132.dp)
+            .shadow(9.dp, RoundedCornerShape(18.dp), spotColor = Color(0x5931D978), ambientColor = Color(0x3316B95A))
+            .background(
+                Brush.horizontalGradient(listOf(Color(0xFF16B95A), Color(0xFF31D978))),
+                RoundedCornerShape(18.dp)
+            )
+    ) {
+        Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text("Stock", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
