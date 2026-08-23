@@ -4,6 +4,7 @@ import os
 import re
 import datetime
 import unicodedata
+import uuid
 from urllib.parse import urlparse
 
 import psycopg2
@@ -475,6 +476,28 @@ def purgar_empresas_eliminadas(dias=2):
                 borradas += 1
         conn.commit()
     return borradas
+
+
+def guardar_foto(datos_b64):
+    """Logos de empresa: se guardan en Postgres para acceso multi-dispositivo."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS fotos ("
+                "id TEXT PRIMARY KEY, contenido TEXT, creado TIMESTAMP DEFAULT NOW())"
+            )
+            foto_id = uuid.uuid4().hex[:12]
+            cur.execute("INSERT INTO fotos (id, contenido) VALUES (%s, %s)", (foto_id, datos_b64))
+        conn.commit()
+    return foto_id
+
+
+def obtener_foto(foto_id):
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT contenido FROM fotos WHERE id = %s", (foto_id,))
+            row = cur.fetchone()
+            return row[0] if row else None
 
 
 def actualizar_ultimo_acceso(empresa_codigo, correo, fecha):

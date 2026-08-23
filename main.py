@@ -739,6 +739,14 @@ def _es_numero(v):
 # ===================================================
 # ROUTING
 # ===================================================
+def action_subir_foto(params):
+    datos = str(params.get("datos") or "")
+    if len(datos) < 100:
+        return respuesta_error("Imagen no válida.")
+    foto_id = db.guardar_foto(datos)
+    return respuesta_success({"id": foto_id, "url": "/foto/" + foto_id})
+
+
 POST_ACTIONS = {
     "reportes": action_reportes,
     "login": action_login,
@@ -750,6 +758,7 @@ POST_ACTIONS = {
     "eliminar_usuario": action_eliminar_usuario,
     "comprar_plan": action_comprar_plan,
     "registrar_finanza_kapta": action_registrar_finanza_kapta,
+    "subir_foto": action_subir_foto,
     "registrar_inventario": action_escribir_fila,
     "registrar_venta": action_escribir_fila,
     "registrar_deudor": action_escribir_fila,
@@ -774,6 +783,22 @@ GET_ACTIONS = {
 @app.on_event("startup")
 def _startup():
     db.init_db()
+
+
+import base64 as _b64
+from fastapi.responses import Response as _Response
+
+
+@app.get("/foto/{foto_id}")
+def servir_foto(foto_id: str):
+    data = db.obtener_foto(foto_id)
+    if not data:
+        return JSONResponse({"status": "error", "message": "Foto no encontrada"}, status_code=404)
+    try:
+        raw = _b64.b64decode(data)
+    except Exception:
+        raw = str(data).encode()
+    return _Response(content=raw, media_type="image/jpeg")
 
 
 @app.api_route("/exec", methods=["GET", "POST"])
