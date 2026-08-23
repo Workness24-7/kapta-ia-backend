@@ -2819,93 +2819,160 @@ private fun VentasSectionView(
 
         // Ranking de Productos mÃ¡s Vendidos por CategorÃ­a
         iOSSectionHeader(text = "Ranking de Productos MÃ¡s Vendidos")
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(15.dp))
 
-        // Category Filter Chips
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // Category Filter Pills (activo morado intenso, inactivo gris claro)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(categories) { cat ->
                 val isSelected = selectedCategory == cat
                 Surface(
                     onClick = { onCategorySelect(cat) },
-                    shape = RoundedCornerShape(20.dp),
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                    shape = RoundedCornerShape(50),
+                    color = if (isSelected) Color(0xFF4F46E5) else Color(0xFFF1F4F9)
                 ) {
                     Text(
                         text = cat,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isSelected) Color.White else Color(0xFF334155),
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(22.dp))
 
         val filteredForRanking = remember(products, selectedCategory) {
             if (selectedCategory == "Todos") products else products.filter { it.category.equals(selectedCategory, ignoreCase = true) }
         }
 
         val rankingList = remember(filteredForRanking, salesFlow) {
-            val ranked = filteredForRanking.map { prod ->
-                val unitsFromSales = salesFlow.filter {
+            filteredForRanking.map { prod ->
+                val matches = salesFlow.filter {
                     it.productName.equals(prod.name, ignoreCase = true) || it.productName.contains(prod.name, ignoreCase = true)
-                }.sumOf { if (it.quantity > 0) it.quantity else it.itemCount }
-
-                val totalRevenueFromSales = salesFlow.filter {
-                    it.productName.equals(prod.name, ignoreCase = true) || it.productName.contains(prod.name, ignoreCase = true)
-                }.sumOf { it.totalAmount }
-
-                Triple(prod, unitsFromSales, totalRevenueFromSales)
+                }
+                Triple(
+                    prod,
+                    matches.sumOf { if (it.quantity > 0) it.quantity else it.itemCount },
+                    matches.sumOf { it.totalAmount }
+                )
             }.sortedByDescending { it.second }
-
-            ranked.mapIndexed { index, (prod, units, rev) ->
-                val badge = "${index + 1}."
-                val name = prod.name
-                val details = "$units Unidades â€¢ ${formatCurrency(rev)}"
-                Triple(badge, name, details)
-            }
         }
 
-        rankingList.forEach { (badge, name, details) ->
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            rankingList.forEachIndexed { index, (prod, units, revenue) ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(
+                            elevation = 3.dp,
+                            shape = RoundedCornerShape(16.dp),
+                            ambientColor = Color(0x0F0F172A),
+                            spotColor = Color(0x0F0F172A)
+                        ),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, Color(0xFFE5E7EB))
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(badge, fontSize = 16.sp, fontWeight = FontWeight.Black)
+                    Row(
+                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // NÃºmero del ranking
+                        Text(
+                            text = "${rankingList.indexOfFirst { it.first.id == prod.id } + 1}",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A)
+                        )
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        // Imagen real del producto (o placeholder elegante)
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFFF8FAFC))
+                                .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (prod.imageUrl.isNotBlank()) {
+                                AsyncImage(
+                                    model = prod.imageUrl,
+                                    contentDescription = prod.name,
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier.fillMaxSize().padding(5.dp)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Inventory2,
+                                    contentDescription = null,
+                                    tint = Color(0xFF94A3B8),
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        // Nombre + informaciÃ³n de ventas
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = prod.name,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0F172A),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = "$units Unidades â¢ ${formatCurrency(revenue)}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF64748B),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
                         Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
-                            Text(details, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                        // Indicador de tendencia (cÃ­rculo verde claro)
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFECFDF5)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.TrendingUp,
+                                contentDescription = null,
+                                tint = Color(0xFF10B981),
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
-                    Icon(imageVector = Icons.Default.TrendingUp, contentDescription = null, tint = Color(0xFF34C759))
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // BotÃ³n Inferior: "Ver Inventario"
+        // BotÃ³n Inferior: "Ver Inventario" (navy oscuro premium)
         Button(
             onClick = onGoToInventory,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A)),
+            shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth().height(48.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(imageVector = Icons.Default.Inventory2, contentDescription = null, tint = Color.White)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Ver Inventario Completo", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text("Ver Inventario Completo", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
             }
         }
     }
