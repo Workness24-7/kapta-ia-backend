@@ -59,6 +59,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -1202,12 +1203,14 @@ fun TenantPosScreen(
         android.util.Log.d("KAPTA_ISOLATION", "[KAPTA_ISOLATION] TenantPosScreen state: role=$logRole, companyCode=${company.code}, salesCount=${cashSalesFlow.size}, salesTotal=$totalSalesAmount")
         android.util.Log.d("KAPTA_UI_TOTAL", "[KAPTA_UI_TOTAL] role=$logRole, screen=TenantPosDashboard, salesCount=${cashSalesFlow.size}, salesTotal=$todaySalesAmount, displayedTotal=$todaySalesAmount")
 
-    // Neutral de la paleta de la empresa = tono del fondo del sistema (modo claro)
-    val neutralBgTint = try {
+    // Neutral de la paleta de la empresa = tono del fondo del sistema (solo si es claro)
+    val parsedNeutral = try {
         Color(android.graphics.Color.parseColor(company.neutralColorHex))
     } catch (e: Exception) {
         null
     }
+    // ponytail: umbral de luminancia fijo; un neutral oscuro de la paleta cae al gris claro por defecto
+    val neutralBgTint = parsedNeutral?.takeIf { it.luminance() > 0.5f }
     EtherealBackground(tintColor = neutralBgTint) {
         Column(modifier = Modifier.fillMaxSize()) {
             MembershipAlertBanner(company = company)
@@ -3706,7 +3709,7 @@ private fun QuickActionCard(
 
     Box(
         modifier = modifier
-            .aspectRatio(1.35f)
+            .aspectRatio(1f)
             .graphicsLayer {
                 translationY = liftPx
                 scaleX = scale
@@ -3714,14 +3717,14 @@ private fun QuickActionCard(
             }
             .shadow(
                 elevation = if (hovered) 14.dp else 10.dp,
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(18.dp),
                 ambientColor = Color.Black.copy(alpha = 0.10f),
                 spotColor = Color.Black.copy(alpha = 0.12f)
             )
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(Brush.linearGradient(gradient))
             .clickable(interactionSource = interaction, indication = LocalIndication.current) { onClick() }
-            .padding(16.dp)
+            .padding(12.dp)
     ) {
         // Icono blanco arriba a la izquierda
         Icon(
@@ -3730,13 +3733,13 @@ private fun QuickActionCard(
             tint = Color.White,
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .size(44.dp)
+                .size(26.dp)
         )
         // Nombre de la acción abajo a la izquierda
         Text(
             text = title,
             color = Color.White,
-            fontSize = 19.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
