@@ -101,6 +101,8 @@ fun SuperAdminDashboardScreen(
     val density = LocalDensity.current
     // Solo colapsa el saludo (58dp): el dock sube bajo el logo pero NUNCA sale de la vista
     var maxCollapsePx by remember { mutableFloatStateOf(with(density) { 58.dp.toPx() }) }
+    // Altura real del saludo (58dp -> 0dp): layout de verdad, el contenido sube con el dock sin huecos
+    val saludoAltura = with(density) { (maxCollapsePx + headerCollapsePx).coerceAtLeast(0f).toDp() }
 
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
@@ -186,7 +188,7 @@ fun SuperAdminDashboardScreen(
                 .nestedScroll(nestedScrollConnection)
         ) {
             // 1. Scrollable Tab Content Layer (scrolls smoothly below fixed app header)
-            val contentPaddingTop = 64.dp + 58.dp + 70.dp
+            val contentPaddingTop = 64.dp + saludoAltura + 70.dp
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -250,48 +252,41 @@ fun SuperAdminDashboardScreen(
                     )
                 }
 
-                // Collapsing group: el saludo se desliza tras el logo y el dock queda fijo arriba
+                // Saludo colapsable: su ALTURA REAL se encoge con el scroll, asi el dock sube
+                // pegado al logo y el contenido de abajo lo sigue sin dejar huecos vacios
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clipToBounds()
+                        .height(saludoAltura)
+                        .clipToBounds(),
+                    contentAlignment = Alignment.BottomStart
                 ) {
-                    Column(
+                    // Greeting ("Buenos días, Brayam 👋" & "Panel de Administración")
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .graphicsLayer {
-                                // headerCollapsePx es negativo al colapsar -> el grupo sube y el saludo se oculta
-                                translationY = headerCollapsePx
-                                alpha = if (headerCollapsePx < 0f) 0.9f else 1f
-                            }
+                            .height(58.dp)
+                            .background(MaterialTheme.colorScheme.background)
+                            .padding(horizontal = 20.dp),
+                        contentAlignment = Alignment.CenterStart
                     ) {
-                        // Greeting ("Buenos días, Brayam 👋" & "Panel de Administración")
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(58.dp)
-                                .background(MaterialTheme.colorScheme.background)
-                                .padding(horizontal = 20.dp),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            GreetingHeaderWidget(
-                                userName = "Brayam"
-                            )
-                        }
-
-                        // Floating Dock Bar (Inicio, Empresas, Finanzas, Usuarios + Lupa)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp)
-                        ) {
-                            FloatingDockBar(
-                                selectedTab = selectedTab,
-                                onTabSelected = { selectedTab = it },
-                                onSearchClick = { showGlobalSearchModal = true }
-                            )
-                        }
+                        GreetingHeaderWidget(
+                            userName = "Brayam"
+                        )
                     }
+                }
+
+                // Floating Dock Bar (Inicio, Empresas, Finanzas, Usuarios + Lupa)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                ) {
+                    FloatingDockBar(
+                        selectedTab = selectedTab,
+                        onTabSelected = { selectedTab = it },
+                        onSearchClick = { showGlobalSearchModal = true }
+                    )
                 }
             }
         }
