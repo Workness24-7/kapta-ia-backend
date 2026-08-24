@@ -70,6 +70,7 @@ import com.example.data.local.entity.CompanyEntity
 import com.example.ui.KaptaViewModel
 import com.example.ui.components.GlobalSearchModal
 import com.example.ui.components.KaptaLogoHeader
+import com.example.ui.components.SuperAdminScaffold
 import com.example.ui.components.UserProfileModal
 
 @Composable
@@ -182,8 +183,15 @@ fun SuperAdminDashboardScreen(
         )
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background
+    SuperAdminScaffold(
+        dock = {
+            FloatingDockBar(
+                selectedTab = selectedTab,
+                onTabSelected = { selectedTab = it },
+                onSearchClick = { showGlobalSearchModal = true },
+                isDarkMode = isDarkMode
+            )
+        }
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -192,7 +200,7 @@ fun SuperAdminDashboardScreen(
                 .nestedScroll(nestedScrollConnection)
         ) {
             // 1. Scrollable Tab Content Layer (scrolls smoothly below fixed app header)
-            val contentPaddingTop = 64.dp + saludoAltura + 70.dp
+            val contentPaddingTop = 64.dp + saludoAltura + 8.dp
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -280,19 +288,6 @@ fun SuperAdminDashboardScreen(
                     }
                 }
 
-                // Floating Dock Bar (Inicio, Empresas, Finanzas, Usuarios + Lupa)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                ) {
-                    FloatingDockBar(
-                        selectedTab = selectedTab,
-                        onTabSelected = { selectedTab = it },
-                        onSearchClick = { showGlobalSearchModal = true },
-                        isDarkMode = isDarkMode
-                    )
-                }
             }
         }
     }
