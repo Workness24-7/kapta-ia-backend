@@ -219,7 +219,7 @@ def _backfill_ultimo_acceso(cur):
     """Garantiza Ultimo_Acceso poblado para todos los usuarios globales."""
     cols = COLUMNS_GLOBALES["usuarios"]
     col_acc = cols[8]    # Ultimo_Acceso
-    col_cre = cols[6]    # Fecha_Creacion
+    col_cre = cols[7]    # Fecha_Creacion
     hoy = datetime.date.today().isoformat()
     cur.execute(
         f'UPDATE "usuarios" SET "{col_acc}" = COALESCE(NULLIF("{col_cre}", \'\'), %s) '

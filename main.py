@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import re
+import os
 import uuid
 
 from fastapi import FastAPI, Request
@@ -124,6 +125,32 @@ def prefijo_inventario(empresa):
     nombre = _normalize_key(str(emp.get("nombre") or "").strip())
     letras = "".join(ch for ch in nombre if ch.isalpha())[:2].upper()
     return (letras or "PR") + "-"
+
+
+def asegurar_admin():
+    """Bootstrap env-driven: garantiza un usuario admin en la tabla unificada.
+    ADMIN_COMPANY (def KAPT), ADMIN_EMAIL (def AdminMauricio@kaptaia.com),
+    ADMIN_PASSWORD (obligatoria; si falta no se crea nada)."""
+    empresa = (os.getenv("ADMIN_COMPANY") or "KAPT").strip().upper()
+    correo = (os.getenv("ADMIN_EMAIL") or "AdminMauricio@kaptaia.com").strip().lower()
+    clave = (os.getenv("ADMIN_PASSWORD") or "").strip()
+    if not clave or not db.buscar_empresa(empresa):
+        return
+    existente = any(
+        str(d[2] or "").lower() == correo
+        for (_, d) in db.leer_tabla(empresa, "usuarios")
+    )
+    if existente:
+        db.actualizar_contrasena(empresa, correo, _hash_password(clave))
+        return
+    hoy = fecha_actual()
+    fila = db.siguiente_fila_libre(empresa, "usuarios", 3)
+    valores = [
+        "USR-" + uuid.uuid4().hex[:8].upper(), "Administrador KAPTA",
+        correo, _hash_password(clave), "Administrador", "Activo",
+        hoy, hoy, "", "", "",
+    ]
+    db.guardar_fila(empresa, "usuarios", fila, valores)
 
 
 def resolver_hoja(clave):
@@ -864,6 +891,7 @@ GET_ACTIONS = {
 @app.on_event("startup")
 def _startup():
     db.init_db()
+    asegurar_admin()
 
 
 import base64 as _b64
