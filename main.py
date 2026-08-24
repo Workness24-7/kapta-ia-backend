@@ -118,6 +118,14 @@ def prefijo_id_tabla(nombre):
     return mapa.get(_normalize_key(nombre).replace(" ", "_"))
 
 
+def prefijo_inventario(empresa):
+    """Código de producto: 2 primeras letras del nombre del negocio + '-' (ej. CO-)."""
+    emp = db.buscar_empresa(empresa) or {}
+    nombre = _normalize_key(str(emp.get("nombre") or "").strip())
+    letras = "".join(ch for ch in nombre if ch.isalpha())[:2].upper()
+    return (letras or "PR") + "-"
+
+
 def resolver_hoja(clave):
     """Replica buscarHojaEmpresa: devuelve el codigo de la empresa o None."""
     if not clave:
@@ -448,10 +456,15 @@ def action_escribir_fila(params):
             datos = list(datos)
             datos[3] = _hash_password(pwd[:128])
 
-    prefijo = prefijo_id_tabla(table_name)
+    if tabla_key == "INVENTARIO":
+        prefijo = prefijo_inventario(empresa)
+        ancho = 4
+    else:
+        prefijo = prefijo_id_tabla(table_name)
+        ancho = 5
     if prefijo and str(datos[0] or "").strip() == "":
         datos = list(datos)
-        datos[0] = db.siguiente_id(empresa, tabla_key.lower(), prefijo)
+        datos[0] = db.siguiente_id(empresa, tabla_key.lower(), prefijo, ancho)
 
     fila = db.siguiente_fila_libre(empresa, tabla_key.lower(), TABLAS[tabla_key]["FILA_INICIO"])
     columnas = TABLAS[tabla_key]["COLUMNAS"]

@@ -196,6 +196,38 @@ def _migrar_legacy(cur, codigo):
         cur.execute(f'DROP TABLE IF EXISTS "{slug}_{obsoleta}"')
 
 
+def _limpiar_tablas_backup(cur):
+    """Elimina las tablas *_backup_2026_08 de la migración legacy.
+    Solo si la tabla global unificada ya contiene filas (dato migrado)."""
+    cur.execute(
+        "SELECT table_name FROM information_schema.tables "
+        "WHERE table_name LIKE '%_backup_2026_08'"
+    )
+    for (b,) in cur.fetchall():
+        tipo = b[: -len("_backup_2026_08")]
+        if "_" not in tipo:
+            continue
+        nombre_global = tipo.split("_", 1)[1]
+        if nombre_global not in CABECERAS_GLOBALES:
+            continue
+        cur.execute(f'SELECT 1 FROM "{nombre_global}" LIMIT 1')
+        if cur.fetchone() is not None:
+            cur.execute(f'DROP TABLE IF EXISTS "{b}"')
+
+
+def _backfill_ultimo_acceso(cur):
+    """Garantiza Ultimo_Acceso poblado para todos los usuarios globales."""
+    cols = COLUMNS_GLOBALES["usuarios"]
+    col_acc = cols[8]    # Ultimo_Acceso
+    col_cre = cols[6]    # Fecha_Creacion
+    hoy = datetime.date.today().isoformat()
+    cur.execute(
+        f'UPDATE "usuarios" SET "{col_acc}" = COALESCE(NULLIF("{col_cre}", \'\'), %s) '
+        f'WHERE "{col_acc}" IS NULL OR "{col_acc}" = \'\'',
+        (hoy,),
+    )
+
+
 def init_db():
     with _connect() as conn:
         with conn.cursor() as cur:
@@ -209,6 +241,8 @@ def init_db():
                 _migrar_legacy(cur, codigo)
                 for tabla in CABECERAS:
                     _crear_tabla(cur, codigo, tabla)
+            _limpiar_tablas_backup(cur)
+            _backfill_ultimo_acceso(cur)
         conn.commit()
 
 
@@ -360,7 +394,7 @@ def siguiente_fila_libre(empresa, tabla, fila_inicio=3):
             return int(cur.fetchone()[0]) + 1
 
 
-def siguiente_id(empresa, tabla, prefijo):
+def siguiente_id(empresa, tabla, prefijo, ancho=5):
     """siguienteIdEmpresa: max número con prefijo en la col 0 + 1."""
     key = _slug(tabla)
     es_global = key in CABECERAS_GLOBALES
@@ -385,7 +419,7 @@ def siguiente_id(empresa, tabla, prefijo):
                         maximo = max(maximo, int(texto[len(prefijo):]))
                     except ValueError:
                         pass
-    return f"{prefijo}{maximo + 1:05d}"
+    return f"{prefijo}{maximo + 1:0{ancho}d}"
 
 
 def leer_tabla_global_todos(tabla):
