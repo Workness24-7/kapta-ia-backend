@@ -1271,17 +1271,15 @@ fun TenantPosScreen(
                                 AsyncImage(
                                     model = logoUrlToUse,
                                     contentDescription = company.name,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .clip(RoundedCornerShape(10.dp))
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier.size(32.dp)
                                 )
                             } else {
                                 Icon(
                                     imageVector = Icons.Default.Business,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(30.dp)
                                 )
                             }
                         }
