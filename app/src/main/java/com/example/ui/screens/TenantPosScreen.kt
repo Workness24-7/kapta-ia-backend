@@ -1502,7 +1502,7 @@ fun TenantPosScreen(
                 shape = RoundedCornerShape(50),
                 color = dockBg,
                 border = BorderStroke(1.dp, dockBorder),
-                shadowElevation = 10.dp
+                shadowElevation = 6.dp
             ) {
                 Row(
                     modifier = Modifier
@@ -1579,7 +1579,7 @@ fun TenantPosScreen(
                 shape = CircleShape,
                 color = dockBg,
                 border = BorderStroke(1.dp, dockBorder),
-                shadowElevation = 10.dp,
+                shadowElevation = 6.dp,
                 modifier = Modifier.size(56.dp)
             ) {
                 Box(

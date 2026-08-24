@@ -2,6 +2,8 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.shadow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
@@ -60,6 +63,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.data.local.entity.CompanyEntity
@@ -285,7 +289,8 @@ fun SuperAdminDashboardScreen(
                     FloatingDockBar(
                         selectedTab = selectedTab,
                         onTabSelected = { selectedTab = it },
-                        onSearchClick = { showGlobalSearchModal = true }
+                        onSearchClick = { showGlobalSearchModal = true },
+                        isDarkMode = isDarkMode
                     )
                 }
             }
@@ -297,138 +302,96 @@ fun SuperAdminDashboardScreen(
 private fun FloatingDockBar(
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
-    onSearchClick: () -> Unit
+    onSearchClick: () -> Unit,
+    isDarkMode: Boolean
 ) {
+    val dockBg = if (isDarkMode) Color(0xFF1C1C1E) else Color.White
+    val dockBorder = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)
+    val selectedBg = if (isDarkMode) Color(0xFF2A2A2E) else Color(0xFFF1F4F9)
+    val inactiveFg = if (isDarkMode) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val selectedFg = MaterialTheme.colorScheme.primary
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 10.dp, end = 10.dp, top = 2.dp, bottom = 8.dp),
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 16.dp, top = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Main High-Contrast Floating Glass Capsule Dock with Crisp Contour Border
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .shadow(
-                    elevation = 8.dp,
-                    shape = CircleShape,
-                    ambientColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.12f),
-                    spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                )
-                .clip(CircleShape)
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.98f),
-                            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.96f)
-                        )
-                    )
-                )
-                .border(
-                    width = 1.5.dp,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.outlineVariant,
-                            MaterialTheme.colorScheme.outline.copy(alpha = 0.85f)
-                        )
-                    ),
-                    shape = CircleShape
-                )
+        Surface(
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(50),
+            color = dockBg,
+            border = BorderStroke(1.dp, dockBorder),
+            shadowElevation = 6.dp
         ) {
-            Box {
-                // Specular Light Flare Line at the top edge
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.6f)
-                        .height(1.dp)
-                        .align(Alignment.TopCenter)
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.White,
-                                    Color.Transparent
-                                )
-                            )
-                        )
-                )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 6.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
                     DockItem(
                         selected = selectedTab == 0,
                         onClick = { onTabSelected(0) },
                         icon = Icons.Default.Home,
-                        label = "Inicio"
+                        label = "Inicio",
+                        isDarkMode = isDarkMode
                     )
+                }
+                Box(modifier = Modifier.weight(1f)) {
                     DockItem(
                         selected = selectedTab == 1,
                         onClick = { onTabSelected(1) },
                         icon = Icons.Default.Business,
-                        label = "Empresas"
+                        label = "Empresas",
+                        isDarkMode = isDarkMode
                     )
+                }
+                Box(modifier = Modifier.weight(1f)) {
                     DockItem(
                         selected = selectedTab == 2,
                         onClick = { onTabSelected(2) },
                         icon = Icons.Default.AccountBalanceWallet,
-                        label = "Finanzas"
+                        label = "Finanzas",
+                        isDarkMode = isDarkMode
                     )
+                }
+                Box(modifier = Modifier.weight(1f)) {
                     DockItem(
                         selected = selectedTab == 3,
                         onClick = { onTabSelected(3) },
                         icon = Icons.Default.People,
-                        label = "Usuarios"
+                        label = "Usuarios",
+                        isDarkMode = isDarkMode
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.width(8.dp))
-
-        // Quick Floating Circle Search Glass Button with Contour Border
-        Box(
-            modifier = Modifier
-                .size(46.dp)
-                .shadow(
-                    elevation = 8.dp,
-                    shape = CircleShape,
-                    ambientColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.12f),
-                    spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                )
-                .clip(CircleShape)
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.98f),
-                            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.96f)
-                        )
-                    )
-                )
-                .border(
-                    width = 1.5.dp,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.outlineVariant,
-                            MaterialTheme.colorScheme.outline.copy(alpha = 0.85f)
-                        )
-                    ),
-                    shape = CircleShape
-                )
-                .clickable { onSearchClick() },
-            contentAlignment = Alignment.Center
+        // Botón de búsqueda circular independiente
+        Surface(
+            onClick = { onSearchClick() },
+            shape = CircleShape,
+            color = dockBg,
+            border = BorderStroke(1.dp, dockBorder),
+            shadowElevation = 6.dp,
+            modifier = Modifier.size(56.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = "Buscar",
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(20.dp)
-            )
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "Buscar",
+                    tint = inactiveFg,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
     }
 }
@@ -438,71 +401,44 @@ private fun DockItem(
     selected: Boolean,
     onClick: () -> Unit,
     icon: ImageVector,
-    label: String
+    label: String,
+    isDarkMode: Boolean
 ) {
-    val activeColor = MaterialTheme.colorScheme.primary
-    val inactiveColor = MaterialTheme.colorScheme.onSurfaceVariant
-
-    if (selected) {
-        // Active item: High-contrast light blue capsule button
-        Box(
-            modifier = Modifier
-                .shadow(
-                    elevation = 2.dp,
-                    shape = CircleShape,
-                    ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
-                )
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.secondaryContainer)
-                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), CircleShape)
-                .clickable { onClick() }
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = activeColor,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = label,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = activeColor,
-                    maxLines = 1,
-                    softWrap = false
-                )
-            }
-        }
-    } else {
-        // Inactive item: Clean transparent item
+    val selectedBg = if (isDarkMode) Color(0xFF2A2A2E) else Color(0xFFF1F4F9)
+    val inactiveFg = if (isDarkMode) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val selectedFg = MaterialTheme.colorScheme.primary
+    val bg by animateColorAsState(
+        if (selected) selectedBg else Color.Transparent,
+        animationSpec = tween(250)
+    )
+    val fg by animateColorAsState(
+        if (selected) selectedFg else inactiveFg,
+        animationSpec = tween(250)
+    )
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        color = bg,
+        modifier = Modifier.fillMaxWidth()
+    ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier
-                .clip(CircleShape)
-                .clickable { onClick() }
-                .padding(horizontal = 8.dp, vertical = 6.dp)
+            modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = inactiveColor,
-                modifier = Modifier.size(20.dp)
+                tint = fg,
+                modifier = Modifier.size(26.dp)
             )
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = label,
                 fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = inactiveColor,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                color = fg,
                 maxLines = 1,
-                softWrap = false
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

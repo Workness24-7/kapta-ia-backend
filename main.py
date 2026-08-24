@@ -177,11 +177,13 @@ def leer_hoja_rows(empresa, tabla_key, fila_inicio=2):
 # ACCIONES
 # ===================================================
 def action_listar_empresas(params=None):
-    empresas = db.listar_empresas_db()
     try:
         db.purgar_empresas_eliminadas()
     except Exception:
         pass  # la purga diferida nunca debe romper el listado
+    empresas = db.listar_empresas_db()
+    # Excluir las eliminadas (soft-delete) para que conteo y vista coincidan
+    empresas = [e for e in empresas if str(e.get("estado") or "").strip().upper() != "ELIMINADO"]
     lista = []
     for e in empresas:
         lista.append({

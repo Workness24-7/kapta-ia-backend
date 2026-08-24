@@ -228,6 +228,20 @@ def _backfill_ultimo_acceso(cur):
     )
 
 
+def _limpiar_todas_empresas(cur):
+    """Modo prueba: borra TODAS las empresas y su datos asociado."""
+    cur.execute("SELECT codigo FROM empresas")
+    codigos = [c for (c,) in cur.fetchall()]
+    for codigo in codigos:
+        slug = _slug(codigo or "")
+        for tabla in CABECERAS:
+            cur.execute(f'DROP TABLE IF EXISTS "{slug}_{_slug(tabla)}"')
+        for glo in CABECERAS_GLOBALES:
+            col0 = COLUMNS_GLOBALES[glo][0]
+            cur.execute(f'DELETE FROM "{glo}" WHERE "{col0}"=%s', (codigo,))
+    cur.execute("DELETE FROM empresas")
+
+
 def init_db():
     with _connect() as conn:
         with conn.cursor() as cur:
@@ -243,6 +257,8 @@ def init_db():
                     _crear_tabla(cur, codigo, tabla)
             _limpiar_tablas_backup(cur)
             _backfill_ultimo_acceso(cur)
+            if (os.getenv("LIMPIAR_EMPRESAS") or "").strip() == "1":
+                _limpiar_todas_empresas(cur)
         conn.commit()
 
 
