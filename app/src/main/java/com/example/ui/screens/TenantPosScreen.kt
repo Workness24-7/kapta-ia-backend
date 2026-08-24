@@ -1546,26 +1546,17 @@ fun TenantPosScreen(
                             color = bg,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = item.icon,
-                                    contentDescription = item.label,
-                                    tint = fg,
-                                    modifier = Modifier.size(26.dp)
-                                )
-                                Spacer(modifier = Modifier.height(3.dp))
-                                Text(
-                                    text = item.label,
-                                    color = fg,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(vertical = 10.dp)
+                        ) {
+                            Icon(
+                                imageVector = item.icon,
+                                contentDescription = item.label,
+                                tint = fg,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
                         }
                     }
                 }

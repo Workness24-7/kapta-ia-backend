@@ -412,22 +412,13 @@ private fun DockItem(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp)
+            modifier = Modifier.padding(vertical = 10.dp)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
                 tint = fg,
                 modifier = Modifier.size(26.dp)
-            )
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(
-                text = label,
-                fontSize = 11.sp,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                color = fg,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
             )
         }
     }

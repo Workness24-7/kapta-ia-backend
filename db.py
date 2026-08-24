@@ -121,6 +121,7 @@ def _connect():
         password=result.password,
         host=result.hostname,
         port=result.port,
+        client_encoding='UTF8',
     )
     conn.autocommit = False
     return conn
