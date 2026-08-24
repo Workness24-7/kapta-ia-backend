@@ -1,49 +1,72 @@
 package com.example.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 
 /**
  * Layout centralizado del Super Admin.
  *
- * - [dock]: barra de navegación global. Se ancla al fondo mediante el bottomBar del
- *   Scaffold, de modo que su altura real (incluido margen inferior y SafeArea) se
- *   descuenta automáticamente del padding inferior del [content]. Así el contenido
- *   nunca queda oculto detrás del dock, sin importar la pantalla ni la orientación.
- * - [content]: recibe [PaddingValues] con el bottom inset correcto. El header fijo
- *   (logo + saludo) se renderiza como overlay dentro de este content, igual que antes.
+ * - [topBar]: bloque flotante superior (logo + saludo + dock). Se renderiza como overlay
+ *   arriba y se MIDE su altura real; el contenido recibe un top-padding igual a esa altura
+ *   (+ margen), de modo que el dock flotante nunca tape títulos, tarjetas ni listas, sin
+ *   importar la pantalla ni la orientación. Al colapsar el saludo, la altura cambia y el
+ *   padding se ajusta solo.
+ * - [content]: recibe [PaddingValues] (top = altura del topBar medida, bottom = SafeArea).
  *
  * El dock mantiene su estilo flotante; solo se corrige el sistema de layout.
  */
 @Composable
 fun SuperAdminScaffold(
     modifier: Modifier = Modifier,
-    dock: @Composable () -> Unit,
+    topBar: @Composable () -> Unit,
     content: @Composable (PaddingValues) -> Unit
 ) {
+    val density = LocalDensity.current
+    var topBarHeight by remember { mutableStateOf(0.dp) }
+
     Scaffold(
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = {
+        containerColor = MaterialTheme.colorScheme.background
+    ) { innerPadding ->
+        Box(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding(),
-                contentAlignment = Alignment.Center
+                    .fillMaxSize()
+                    .padding(
+                        top = topBarHeight + 8.dp,
+                        bottom = innerPadding.calculateBottomPadding()
+                    )
             ) {
-                dock()
+                content(innerPadding)
+            }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .zIndex(10f)
+                    .statusBarsPadding()
+                    .onSizeChanged { size ->
+                        topBarHeight = with(density) { size.height.toDp() }
+                    }
+            ) {
+                topBar()
             }
         }
-    ) { innerPadding ->
-        content(innerPadding)
     }
 }

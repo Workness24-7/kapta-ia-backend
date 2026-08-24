@@ -184,28 +184,73 @@ fun SuperAdminDashboardScreen(
     }
 
     SuperAdminScaffold(
-        dock = {
-            FloatingDockBar(
-                selectedTab = selectedTab,
-                onTabSelected = { selectedTab = it },
-                onSearchClick = { showGlobalSearchModal = true },
-                isDarkMode = isDarkMode
-            )
+        topBar = {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // Fixed App Logo Header Container (KAPTA IA + Notification Bell + Profile Avatar)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .zIndex(2f)
+                        .background(MaterialTheme.colorScheme.background)
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                ) {
+                    AppLogoHeaderWidget(
+                        userName = "Brayam",
+                        userRole = "AI",
+                        notificationCount = notificationCount,
+                        onNotificationClick = { showNotificationsModal = true },
+                        onProfileClick = { showUserProfileModal = true }
+                    )
+                }
+
+                // Saludo colapsable: su ALTURA REAL se encoge con el scroll
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(saludoAltura)
+                        .clipToBounds(),
+                    contentAlignment = Alignment.BottomStart
+                ) {
+                    // Greeting ("Buenos días, Brayam 👋" & "Panel de Administración")
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(58.dp)
+                            .background(MaterialTheme.colorScheme.background)
+                            .padding(horizontal = 20.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        GreetingHeaderWidget(
+                            userName = "Brayam"
+                        )
+                    }
+                }
+
+                // Floating Dock Bar (Inicio, Empresas, Finanzas, Usuarios + Lupa)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                ) {
+                    FloatingDockBar(
+                        selectedTab = selectedTab,
+                        onTabSelected = { selectedTab = it },
+                        onSearchClick = { showGlobalSearchModal = true },
+                        isDarkMode = isDarkMode
+                    )
+                }
+            }
         }
     ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = innerPadding.calculateBottomPadding())
                 .nestedScroll(nestedScrollConnection)
         ) {
-            // 1. Scrollable Tab Content Layer (scrolls smoothly below fixed app header)
-            val contentPaddingTop = 64.dp + saludoAltura + 8.dp
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .padding(top = contentPaddingTop)
+                modifier = Modifier.fillMaxSize()
             ) {
                 when (selectedTab) {
                     0 -> TabInicio(
@@ -237,57 +282,6 @@ fun SuperAdminDashboardScreen(
 
                     3 -> TabUsuarios(viewModel = viewModel)
                 }
-            }
-
-            // 2. Fixed App Header (logo) + Collapsing Group (greeting + floating dock)
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .zIndex(10f)
-            ) {
-                // Fixed App Logo Header Container (KAPTA IA + Notification Bell + Profile Avatar)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .zIndex(2f)
-                        .background(MaterialTheme.colorScheme.background)
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                ) {
-                    AppLogoHeaderWidget(
-                        userName = "Brayam",
-                        userRole = "AI",
-                        notificationCount = notificationCount,
-                        onNotificationClick = { showNotificationsModal = true },
-                        onProfileClick = { showUserProfileModal = true }
-                    )
-                }
-
-                // Saludo colapsable: su ALTURA REAL se encoge con el scroll, asi el dock sube
-                // pegado al logo y el contenido de abajo lo sigue sin dejar huecos vacios
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(saludoAltura)
-                        .clipToBounds(),
-                    contentAlignment = Alignment.BottomStart
-                ) {
-                    // Greeting ("Buenos días, Brayam 👋" & "Panel de Administración")
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(58.dp)
-                            .background(MaterialTheme.colorScheme.background)
-                            .padding(horizontal = 20.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        GreetingHeaderWidget(
-                            userName = "Brayam"
-                        )
-                    }
-                }
-
             }
         }
     }
