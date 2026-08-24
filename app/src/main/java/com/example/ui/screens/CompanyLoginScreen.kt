@@ -44,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -105,6 +106,20 @@ fun CompanyLoginScreen(
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember { context.getSharedPreferences("kapta_login", android.content.Context.MODE_PRIVATE) }
+
+    // Volver al login de redirección solo con 5 pulsaciones de atrás consecutivas.
+    var backPressCount by remember { mutableStateOf(0) }
+    var lastBackPress by remember { mutableStateOf(0L) }
+    BackHandler(enabled = true) {
+        val now = System.currentTimeMillis()
+        if (now - lastBackPress > 2000L) backPressCount = 0
+        lastBackPress = now
+        backPressCount++
+        if (backPressCount >= 5) {
+            backPressCount = 0
+            onBackToRedirection()
+        }
+    }
 
     LaunchedEffect(Unit) {
         userInput = prefs.getString("usuario", "") ?: ""

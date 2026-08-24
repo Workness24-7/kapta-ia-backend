@@ -10,6 +10,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -56,6 +57,15 @@ fun KaptaApp() {
 
     val effectiveDarkMode = isDarkMode && !forceLightScreen
 
+    // Inicio predeterminado: si hay un negocio usado recientemente, abrir su login directo.
+    // Volver al login de redirección solo es posible pulsando atrás 5 veces desde el login del negocio.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val ultimoCodigo = remember {
+        context.getSharedPreferences("kapta_session", android.content.Context.MODE_PRIVATE)
+            .getString("ultimo_codigo_negocio", null)
+    }
+    val startDestination = if (!ultimoCodigo.isNullOrBlank()) "company_login/$ultimoCodigo" else "redirection"
+
     MyApplicationTheme(darkTheme = effectiveDarkMode) {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -63,7 +73,7 @@ fun KaptaApp() {
         ) {
             NavHost(
                 navController = navController,
-                startDestination = "redirection"
+                startDestination = startDestination
             ) {
         // Screen 1: Redirection Login (Country + Code input)
         composable("redirection") {
@@ -122,7 +132,7 @@ fun KaptaApp() {
                     navController.navigate("tenant_pos")
                 },
                 onBackToRedirection = {
-                    navController.popBackStack()
+                    navController.navigate("redirection")
                 }
             )
         }
