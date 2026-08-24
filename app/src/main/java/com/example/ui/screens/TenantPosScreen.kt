@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.material3.CircularProgressIndicator
@@ -1477,76 +1478,120 @@ fun TenantPosScreen(
         }
 
         // -------------------------------------------------------------------------------------
-        // DOCK DE NAVEGACIÃ“N FLOTANTE (OPACIDAD 80%, EXCLUSIVAMENTE ICONOS VECTORIALES SIN TEXTO)
+        // DOCK DE NAVEGACIÃ“N FLOTANTE PREMIUM (cÃ¡psula blanca, icono + texto, bÃºsqueda separada)
         // -------------------------------------------------------------------------------------
-        val dockBg = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.86f)
-        val dockBorder = if (isDarkMode) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.80f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.90f)
+        val dockBg = if (isDarkMode) Color(0xFF1C1C1E) else Color.White
+        val dockBorder = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)
+        val selectedBg = if (isDarkMode) Color(0xFF2A2A2E) else Color(0xFFF1F4F9)
+        val inactiveFg = if (isDarkMode) Color(0xFF94A3B8) else Color(0xFF64748B)
+        val selectedFg = MaterialTheme.colorScheme.primary
 
-        Surface(
+        Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
+                .fillMaxWidth()
                 .padding(horizontal = 16.dp)
-                .padding(bottom = 16.dp)
-                .wrapContentSize(),
-            shape = RoundedCornerShape(32.dp),
-            color = dockBg,
-            border = BorderStroke(1.dp, dockBorder),
-            shadowElevation = 8.dp
+                .padding(bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically
+            // Dock principal: cÃ¡psula flotante con las opciones
+            Surface(
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(50),
+                color = dockBg,
+                border = BorderStroke(1.dp, dockBorder),
+                shadowElevation = 10.dp
             ) {
-                val topDockItems = if (isCajero) {
-                    listOf(
-                        TopDockItem(1, "Ventas", Icons.Default.TrendingUp),
-                        TopDockItem(3, "Inventario", Icons.Default.Inventory2)
-                    )
-                } else {
-                    listOf(
-                        TopDockItem(0, "Inicio", Icons.Default.Home),
-                        TopDockItem(1, "Ventas", Icons.Default.TrendingUp),
-                        TopDockItem(2, "Finanzas", Icons.Default.AccountBalanceWallet),
-                        TopDockItem(3, "Inventario", Icons.Default.Inventory2),
-                        TopDockItem(4, "MenÃº", Icons.Default.MoreHoriz)
-                    )
-                }
-
-                topDockItems.forEach { item ->
-                    val isSelected = selectedDockTab == item.index && item.index != 4
-                    val iconColor = if (isSelected) {
-                        Color.White
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val topDockItems = if (isCajero) {
+                        listOf(
+                            TopDockItem(1, "Ventas", Icons.Default.TrendingUp),
+                            TopDockItem(3, "Inventario", Icons.Default.Inventory2)
+                        )
                     } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
+                        listOf(
+                            TopDockItem(0, "Inicio", Icons.Default.Home),
+                            TopDockItem(1, "Ventas", Icons.Default.TrendingUp),
+                            TopDockItem(2, "Finanzas", Icons.Default.AccountBalanceWallet),
+                            TopDockItem(3, "Inventario", Icons.Default.Inventory2),
+                            TopDockItem(4, "MenÃº", Icons.Default.MoreHoriz)
+                        )
                     }
 
-                    Surface(
-                        onClick = {
-                            if (item.index == 4) {
-                                showAdditionalMenuSheet = true
-                            } else {
-                                selectedDockTab = item.index
-                            }
-                        },
-                        shape = CircleShape,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                        modifier = Modifier.size(42.dp)
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxSize()
+                    topDockItems.forEach { item ->
+                        val isSelected = selectedDockTab == item.index && item.index != 4
+                        val bg by animateColorAsState(
+                            if (isSelected) selectedBg else Color.Transparent,
+                            animationSpec = tween(250)
+                        )
+                        val fg by animateColorAsState(
+                            if (isSelected) selectedFg else inactiveFg,
+                            animationSpec = tween(250)
+                        )
+                        Surface(
+                            onClick = {
+                                if (item.index == 4) {
+                                    showAdditionalMenuSheet = true
+                                } else {
+                                    selectedDockTab = item.index
+                                }
+                            },
+                            shape = RoundedCornerShape(50),
+                            color = bg,
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Icon(
-                                imageVector = item.icon,
-                                contentDescription = item.label,
-                                tint = iconColor,
-                                modifier = Modifier.size(22.dp)
-                            )
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = item.icon,
+                                    contentDescription = item.label,
+                                    tint = fg,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    text = item.label,
+                                    color = fg,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
+                }
+            }
+
+            // BotÃ³n de bÃºsqueda circular independiente (lleva a Inicio, donde estÃ¡ el buscador)
+            Surface(
+                onClick = { selectedDockTab = 0 },
+                shape = CircleShape,
+                color = dockBg,
+                border = BorderStroke(1.dp, dockBorder),
+                shadowElevation = 10.dp,
+                modifier = Modifier.size(56.dp)
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Buscar",
+                        tint = inactiveFg,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
         }
