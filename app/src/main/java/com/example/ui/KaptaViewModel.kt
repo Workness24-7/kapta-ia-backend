@@ -1761,8 +1761,20 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteProduct(productId: Int) {
         viewModelScope.launch {
+            val product = repository.getProductById(productId) ?: return@launch
+            val nombre = product.name.trim()
+            val ok = try {
+                sheetsService.eliminarProducto(product.companyCode, nombre)
+            } catch (e: Exception) {
+                android.util.Log.e("KaptaViewModel", "Error eliminando producto en servidor: ${e.message}")
+                false
+            }
+            if (!ok) {
+                showToast("No se pudo eliminar en el servidor. Intente de nuevo.")
+                return@launch
+            }
             repository.deleteProduct(productId)
-            showToast("Producto eliminado del inventario")
+            showToast("Producto '$nombre' eliminado")
         }
     }
 

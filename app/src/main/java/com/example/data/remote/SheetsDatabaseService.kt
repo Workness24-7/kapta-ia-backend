@@ -1072,6 +1072,38 @@ class SheetsDatabaseService(
      * Eliminación de usuario en Apps Script con action "eliminar_usuario".
      * Payload: {"action": "eliminar_usuario", "empresaNombre": "NOMBRE_DE_LA_EMPRESA", "userEmail": "EMAIL_DEL_USUARIO"}
      */
+    suspend fun eliminarProducto(sheetName: String, nombre: String): Boolean = withContext(Dispatchers.IO) {
+        val result = executeWithRetry {
+            val jsonPayload = JSONObject().apply {
+                put("action", "eliminar_producto")
+                put("sheetName", sheetName)
+                put("producto", nombre)
+            }
+
+            val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
+            val targetUrl: String = if (!webAppScriptUrl.isNullOrBlank()) webAppScriptUrl!! else APPS_SCRIPT_WEB_APP_URL
+            val request = Request.Builder()
+                .url(targetUrl)
+                .post(body)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (response.code == 429) throw RateLimitException("429 Rate Limit")
+                val responseStr = response.body?.string() ?: ""
+                val ok = try {
+                    val json = JSONObject(responseStr)
+                    json.optString("status").equals("success", ignoreCase = true) ||
+                            json.optBoolean("success", false) ||
+                            json.optString("message", "").lowercase().contains("eliminad")
+                } catch (_: Exception) {
+                    responseStr.lowercase().contains("eliminad") || responseStr.lowercase().contains("success")
+                }
+                response.isSuccessful && (ok || responseStr.isBlank())
+            }
+        }
+        result ?: false
+    }
+
     suspend fun eliminarUsuario(empresaNombre: String, userEmail: String): Boolean = withContext(Dispatchers.IO) {
         val result = executeWithRetry {
             val jsonPayload = JSONObject().apply {

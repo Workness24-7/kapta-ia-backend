@@ -705,6 +705,26 @@ def action_eliminar_usuario(params):
     return respuesta_success({"correo": correo, "eliminado": True})
 
 
+def action_eliminar_producto(params):
+    clave = str(params.get("sheetName") or params.get("idEmpresa")
+                or params.get("empresa") or "").strip()
+    if not clave:
+        return respuesta_error("No se recibió la empresa.")
+    empresa = resolver_hoja(clave)
+    if not empresa:
+        return respuesta_error("No existe la hoja: " + clave)
+    nombre = str(params.get("producto") or params.get("nombre")
+                or params.get("idProducto") or "").strip()
+    if not nombre:
+        return respuesta_error("No se recibió el nombre del producto.")
+    borrados = 0
+    for (n, d) in db.leer_tabla(empresa, "inventario"):
+        if str(d[2] or "").strip().lower() == nombre.lower():
+            db.borrar_fila(empresa, "inventario", n)
+            borrados += 1
+    return respuesta_success({"empresa": empresa, "producto": nombre, "eliminados": borrados})
+
+
 def action_reportes(params):
     id_empresa = str(params.get("idEmpresa") or "").strip()
     tipo = str(params.get("tipo") or "ventas").strip().lower()
@@ -1000,6 +1020,7 @@ POST_ACTIONS = {
     "pagar_deudor": action_pagar_deudor,
     "eliminar_empresa": action_eliminar_empresa,
     "eliminar_usuario": action_eliminar_usuario,
+    "eliminar_producto": action_eliminar_producto,
     "comprar_plan": action_comprar_plan,
     "registrar_finanza_kapta": action_registrar_finanza_kapta,
     "registrar_soporte": action_registrar_soporte,
