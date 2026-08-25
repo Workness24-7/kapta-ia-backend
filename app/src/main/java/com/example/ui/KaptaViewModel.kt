@@ -1732,6 +1732,17 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
 
     fun saveOrUpdateProduct(product: PosProductEntity, onSuccess: () -> Unit) {
         viewModelScope.launch {
+            val nombre = product.name.trim()
+            if (nombre.isNotBlank()) {
+                val existentes = repository.getProductsByCompany(product.companyCode).first()
+                val duplicado = existentes.find {
+                    it.id != product.id && it.name.trim().equals(nombre, ignoreCase = true)
+                }
+                if (duplicado != null) {
+                    showToast("Ya existe un producto con el nombre '$nombre'")
+                    return@launch
+                }
+            }
             val finalImageUrl = if (product.imageUrl.isNotBlank() && !product.imageUrl.startsWith("http")) {
                 subirImagen(product.imageUrl)
             } else product.imageUrl

@@ -203,6 +203,31 @@ def _asegurar_columnas(empresa, tabla):
         print(f"[migracion] tabla {tbl}: {e}")
 
 
+def dedup_inventario(empresa):
+    """Elimina filas duplicadas de inventario por Nom_Producto (mantiene la de
+    mayor fila). Regla de negocio: un producto no se repite por nombre."""
+    tbl = _tabname(empresa, "inventario")
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f'SELECT fila, "Nom_Producto" FROM "{tbl}"')
+                visto = {}
+                borrar = []
+                for (fila, nombre) in cur.fetchall():
+                    clave = str(nombre or "").strip().lower()
+                    if clave == "":
+                        continue
+                    if clave in visto:
+                        borrar.append(fila)
+                    else:
+                        visto[clave] = fila
+                if borrar:
+                    cur.execute(f'DELETE FROM "{tbl}" WHERE fila IN %s', (tuple(borrar),))
+                    conn.commit()
+    except Exception as e:
+        print(f"[dedup_inventario] {tbl}: {e}")
+
+
 def _crear_tabla_global(cur, tabla):
     """Global: PK compuesta (codigo_empresa, fila); primera col = codigo_empresa."""
     cols = COLUMNS_GLOBALES[tabla]
@@ -366,6 +391,8 @@ def leer_tabla(empresa, tabla):
     """Devuelve todas las filas (incluye headers en fila 2) como (fila, lista_valores).
     En tablas globales filtra por codigo de empresa y NO incluye esa columna."""
     _asegurar_columnas(empresa, tabla)
+    if str(tabla).lower() == "inventario":
+        dedup_inventario(empresa)
     key = _slug(tabla)
     es_global = key in CABECERAS_GLOBALES
     cols = COLUMNS_GLOBALES[key] if es_global else COLUMNS[key]

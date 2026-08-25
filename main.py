@@ -509,11 +509,26 @@ def action_escribir_fila(params):
     else:
         prefijo = prefijo_id_tabla(table_name)
         ancho = 5
-    if prefijo and str(datos[0] or "").strip() == "":
+    id_era_vacio = str(datos[0] or "").strip() == ""
+    fila = None
+    # ponytail: el cliente re-envía el producto sin Id_Producto en cada sync; si ya
+    # existe uno con el mismo Nom_Producto, reusa su fila en vez de crear otra (anti-duplicado).
+    if id_era_vacio and tabla_key == "INVENTARIO":
+        nombre_n = str(datos[2] or "").strip().lower()
+        if nombre_n:
+            for (n, d) in db.leer_tabla(empresa, "inventario"):
+                if str(d[2] or "").strip().lower() == nombre_n:
+                    datos = list(datos)
+                    datos[0] = str(d[0] or "").strip()
+                    fila = n
+                    id_era_vacio = False
+                    break
+    if fila is None:
+        fila = db.siguiente_fila_libre(empresa, tabla_key.lower(), TABLAS[tabla_key]["FILA_INICIO"])
+    if prefijo and id_era_vacio:
         datos = list(datos)
         datos[0] = db.siguiente_id(empresa, tabla_key.lower(), prefijo, ancho)
 
-    fila = db.siguiente_fila_libre(empresa, tabla_key.lower(), TABLAS[tabla_key]["FILA_INICIO"])
     columnas = TABLAS[tabla_key]["COLUMNAS"]
     fila_valores = datos[:columnas] + [""] * max(0, columnas - len(datos))
 
