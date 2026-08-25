@@ -205,7 +205,8 @@ def _asegurar_columnas(empresa, tabla):
 
 def dedup_inventario(empresa):
     """Elimina filas duplicadas de inventario por Nom_Producto (mantiene la de
-    mayor fila). Regla de negocio: un producto no se repite por nombre."""
+    mayor fila). Regla de negocio: un producto no se repite por nombre.
+    Devuelve (eliminadas, error_o_None)."""
     tbl = _tabname(empresa, "inventario")
     try:
         with _connect() as conn:
@@ -224,8 +225,10 @@ def dedup_inventario(empresa):
                 if borrar:
                     cur.execute(f'DELETE FROM "{tbl}" WHERE fila IN %s', (tuple(borrar),))
                     conn.commit()
+                return (len(borrar), None)
     except Exception as e:
         print(f"[dedup_inventario] {tbl}: {e}")
+        return (0, str(e))
 
 
 def _crear_tabla_global(cur, tabla):

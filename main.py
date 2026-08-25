@@ -228,6 +228,18 @@ def action_read(params):
     return respuesta_success({"sheetName": empresa, "rows": todas})
 
 
+def action_dedup_inventario(params):
+    """Mantenimiento: elimina duplicados de inventario por Nom_Producto."""
+    clave = str(params.get("sheetName") or params.get("idEmpresa") or "").strip()
+    empresa = resolver_hoja(clave)
+    if not empresa:
+        return respuesta_error("No existe la hoja: " + clave)
+    antes = len(db.leer_tabla(empresa, "inventario"))
+    eliminadas, err = db.dedup_inventario(empresa)
+    despues = len(db.leer_tabla(empresa, "inventario"))
+    return respuesta_success({"antes": antes, "eliminadas": eliminadas, "despues": despues, "error": err})
+
+
 # ===================================================
 # SEGURIDAD: hash PBKDF2 de contraseñas + bloqueo por intentos
 # ===================================================
@@ -993,6 +1005,7 @@ POST_ACTIONS = {
     "registrar_soporte": action_registrar_soporte,
     "subir_foto": action_subir_foto,
     "importar_inventario": action_importar_inventario,
+    "dedup_inventario": action_dedup_inventario,
     "registrar_inventario": action_escribir_fila,
     "registrar_venta": action_escribir_fila,
     "registrar_deudor": action_escribir_fila,
