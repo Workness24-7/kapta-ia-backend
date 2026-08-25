@@ -216,11 +216,12 @@ fun CompanyLoginScreen(
                     contentDescription = comp.name,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .height(54.dp)
+                        .height(120.dp)
+                        .fillMaxWidth(0.8f)
                         .padding(horizontal = 16.dp)
                 )
             } else {
-                KaptaLogoHeader(showSlogan = false, fontSize = 42)
+                KaptaLogoHeader(showSlogan = false, fontSize = 56)
             }
 
             Spacer(modifier = Modifier.height(20.dp))

@@ -1853,8 +1853,18 @@ fun CreateEditCompanyScreen(
                     }
                     formError = null
                     scope.launch {
-                        val finalLogo = viewModel.subirImagen(logoUri ?: "")
-                        val finalIcon = viewModel.subirImagen(listIconUri ?: "")
+                        val logoUriVal = logoUri
+                        val listIconUriVal = listIconUri
+                        val prevLogo = companyToEdit?.logoUrl ?: ""
+                        val prevIcon = companyToEdit?.listIconUrl ?: ""
+                        val finalLogo = if (logoUriVal != null && !logoUriVal.startsWith("http")) {
+                            val up = viewModel.subirImagen(logoUriVal)
+                            if (up.startsWith("http")) up else prevLogo
+                        } else prevLogo
+                        val finalIcon = if (listIconUriVal != null && !listIconUriVal.startsWith("http")) {
+                            val up = viewModel.subirImagen(listIconUriVal)
+                            if (up.startsWith("http")) up else prevIcon
+                        } else prevIcon
                         viewModel.saveOrUpdateCompany(
                             companyId = companyToEdit?.id,
                             name = companyName,
