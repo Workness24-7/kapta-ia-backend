@@ -172,6 +172,37 @@ def _crear_tabla(cur, codigo, tabla):
     return tbl
 
 
+def _asegurar_columnas(empresa, tabla):
+    """Migración en caliente: agrega a la tabla física las columnas de COLUMNS
+    que le falten (p.ej. 'Imagen' añadida después de crear la tabla). Evita que
+    un SELECT/INSERT falle por columna inexistente en tablas antiguas.
+    ponytail: idempotente vía information_schema; no rompe la lectura/escritura."""
+    key = _slug(tabla)
+    es_global = key in CABECERAS_GLOBALES
+    if es_global:
+        tbl = key
+        cols = COLUMNS_GLOBALES[key]
+    else:
+        tbl = _tabname(empresa, tabla)
+        cols = COLUMNS[key]
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name=%s",
+                    (tbl,),
+                )
+                existentes = {str(r[0]).lower() for r in cur.fetchall()}
+                faltan = [c for c in cols if c.lower() not in existentes]
+                for c in faltan:
+                    cur.execute(f'ALTER TABLE "{tbl}" ADD COLUMN "{c}" TEXT DEFAULT \'\'')
+                if faltan:
+                    conn.commit()
+    except Exception as e:
+        # La migración no debe impedir la operación normal.
+        print(f"[migracion] tabla {tbl}: {e}")
+
+
 def _crear_tabla_global(cur, tabla):
     """Global: PK compuesta (codigo_empresa, fila); primera col = codigo_empresa."""
     cols = COLUMNS_GLOBALES[tabla]
@@ -334,6 +365,7 @@ def hoja_existe(codigo):
 def leer_tabla(empresa, tabla):
     """Devuelve todas las filas (incluye headers en fila 2) como (fila, lista_valores).
     En tablas globales filtra por codigo de empresa y NO incluye esa columna."""
+    _asegurar_columnas(empresa, tabla)
     key = _slug(tabla)
     es_global = key in CABECERAS_GLOBALES
     cols = COLUMNS_GLOBALES[key] if es_global else COLUMNS[key]
@@ -357,6 +389,7 @@ def leer_tabla(empresa, tabla):
 
 
 def guardar_fila(empresa, tabla, fila, data):
+    _asegurar_columnas(empresa, tabla)
     key = _slug(tabla)
     es_global = key in CABECERAS_GLOBALES
     cols = COLUMNS_GLOBALES[key] if es_global else COLUMNS[key]

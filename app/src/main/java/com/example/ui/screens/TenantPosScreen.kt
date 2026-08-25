@@ -3565,32 +3565,35 @@ private fun InventarioSectionView(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 iOSLargeTitle(
                     title = if (isCajero) "Inventario de Productos (Solo Lectura)" else "Inventario de Productos",
                     subtitle = "Stock Actual y Precio C/U"
                 )
             }
+        }
 
-            if (!isCajero) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = { importLauncher.launch("*/*") },
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text("Carga Masiva", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                    }
-                    Button(
-                        onClick = onNewProduct,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("+ Producto", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                    }
+        if (!isCajero) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+            ) {
+                OutlinedButton(
+                    onClick = { importLauncher.launch("*/*") },
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                ) {
+                    Text("Carga Masiva", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = onNewProduct,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("+ Producto", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
         }
