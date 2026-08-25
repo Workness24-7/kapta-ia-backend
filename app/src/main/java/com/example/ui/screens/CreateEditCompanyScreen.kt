@@ -1827,13 +1827,31 @@ fun CreateEditCompanyScreen(
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
+            var formError by remember { mutableStateOf<String?>(null) }
+            if (formError != null) {
+                Text(
+                    text = formError ?: "",
+                    color = Color(0xFFFF453A),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 10.dp)
+                )
+            }
             // 9. Botones Principales de Acción (Pie de página)
             Button(
                 enabled = !isSaving,
                 onClick = {
-                    if (companyName.isBlank()) {
+                    val faltan = mutableListOf<String>()
+                    if (companyName.isBlank()) faltan.add("Nombre del negocio")
+                    if (country.isBlank()) faltan.add("País")
+                    if (plan.isBlank()) faltan.add("Plan")
+                    if (adminEmail.isBlank()) faltan.add("Correo del administrador")
+                    if (!isEditMode && adminPass.isBlank()) faltan.add("Contraseña del administrador")
+                    if (faltan.isNotEmpty()) {
+                        formError = "Campos obligatorios: " + faltan.joinToString(", ")
                         return@Button
                     }
+                    formError = null
                     scope.launch {
                         val finalLogo = viewModel.subirImagen(logoUri ?: "")
                         val finalIcon = viewModel.subirImagen(listIconUri ?: "")

@@ -6,6 +6,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import android.util.Log
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
@@ -611,6 +612,7 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
                         val rawName = row.getOrNull(2)
                         val name = rawName?.trim() ?: ""
                         val category = row.getOrNull(3)?.trim() ?: "General"
+                        val imageUrl = row.getOrNull(12)?.trim() ?: ""
                         val rawStock = row.getOrNull(4)
                         val stock = rawStock?.trim()?.toIntOrNull() ?: 0
                         val rawCost = row.getOrNull(5)
@@ -637,6 +639,7 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
                                     existing.copy(
                                         companyCode = cleanCode,
                                         category = category,
+                                        imageUrl = imageUrl,
                                         stock = stock,
                                         costPrice = cost,
                                         price = price,
@@ -653,6 +656,7 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
                                         companyCode = cleanCode,
                                         name = name,
                                         category = category,
+                                        imageUrl = imageUrl,
                                         stock = stock,
                                         costPrice = cost,
                                         price = price,
@@ -1728,7 +1732,10 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
 
     fun saveOrUpdateProduct(product: PosProductEntity, onSuccess: () -> Unit) {
         viewModelScope.launch {
-            val unsynced = product.copy(isSynced = false)
+            val finalImageUrl = if (product.imageUrl.isNotBlank() && !product.imageUrl.startsWith("http")) {
+                subirImagen(product.imageUrl)
+            } else product.imageUrl
+            val unsynced = product.copy(imageUrl = finalImageUrl, isSynced = false)
             if (unsynced.id > 0) {
                 repository.updateProduct(unsynced)
                 showToast("Producto '${unsynced.name}' actualizado")
@@ -1814,6 +1821,40 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
                 showToast("Deuda liquidada localmente para $clientName")
                 onSuccess()
             }
+        }
+    }
+
+    fun enviarSoporte(
+        companyCode: String,
+        tipoSolicitud: String,
+        observaciones: String,
+        onSuccess: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val company = repository.getCompanyByCode(companyCode)
+            val sheetName = company?.name ?: companyCode
+            val codigo = company?.code ?: companyCode
+            val success = sheetsService.registrarSoporte(
+                sheetName = sheetName,
+                tipoSolicitud = tipoSolicitud,
+                observaciones = observaciones,
+                solicitante = codigo
+            )
+            if (success) {
+                showToast("Solicitud de soporte enviada. Te contactaremos pronto.")
+            } else {
+                showToast("No se pudo enviar la solicitud. Intenta de nuevo.")
+            }
+            onSuccess()
+        }
+    }
+
+    val soportes = mutableStateOf<List<Map<String, Any>>>(emptyList())
+
+    fun cargarSoportes() {
+        viewModelScope.launch {
+            val lista = sheetsService.listarSoportes()
+            if (lista != null) soportes.value = lista
         }
     }
 

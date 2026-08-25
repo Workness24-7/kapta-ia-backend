@@ -202,48 +202,14 @@ private data class DebtorRawOrderItem(
     val timeStr: String
 )
 
-private fun getGroupedProductsForDebtor(name: String, amountOwed: Double): List<DebtorGroupedProduct> {
-    return when {
-        name.contains("Carlos", ignoreCase = true) -> listOf(
-            DebtorGroupedProduct(20, "Cerveza Poker 330ml", 160000.0),
-            DebtorGroupedProduct(2, "Aguardiente Tapa Roja 750ml", 215000.0)
-        )
-        name.contains("Laura", ignoreCase = true) -> listOf(
-            DebtorGroupedProduct(3, "Coctel Mojito ClÃ¡sico", 54000.0),
-            DebtorGroupedProduct(1, "Tabla de Quesos & Jamones", 31000.0)
-        )
-        name.contains("AndrÃ©s", ignoreCase = true) -> listOf(
-            DebtorGroupedProduct(1, "Botella Ron Viejo de Caldas", 180000.0),
-            DebtorGroupedProduct(5, "Cerveza Corona 355ml", 75000.0)
-        )
-        else -> listOf(
-            DebtorGroupedProduct(1, "Consumo General / Productos POS", amountOwed)
-        )
-    }
+private fun getGroupedProductsForDebtor(concept: String, amountOwed: Double): List<DebtorGroupedProduct> {
+    val nombre = concept.takeIf { it.isNotBlank() } ?: "Consumo General"
+    return listOf(DebtorGroupedProduct(1, nombre, amountOwed))
 }
 
-private fun getRawOrdersForDebtor(name: String, amountOwed: Double, dateStr: String): List<DebtorRawOrderItem> {
-    return when {
-        name.contains("Carlos", ignoreCase = true) -> listOf(
-            DebtorRawOrderItem(10, "Cerveza Poker 330ml", 8000.0, "18:30"),
-            DebtorRawOrderItem(10, "Cerveza Poker 330ml", 8000.0, "20:15"),
-            DebtorRawOrderItem(1, "Aguardiente Tapa Roja 750ml", 107500.0, "21:00"),
-            DebtorRawOrderItem(1, "Aguardiente Tapa Roja 750ml", 107500.0, "22:45")
-        )
-        name.contains("Laura", ignoreCase = true) -> listOf(
-            DebtorRawOrderItem(2, "Coctel Mojito ClÃ¡sico", 18000.0, "19:10"),
-            DebtorRawOrderItem(1, "Coctel Mojito ClÃ¡sico", 18000.0, "20:40"),
-            DebtorRawOrderItem(1, "Tabla de Quesos & Jamones", 31000.0, "21:00")
-        )
-        name.contains("AndrÃ©s", ignoreCase = true) -> listOf(
-            DebtorRawOrderItem(1, "Botella Ron Viejo de Caldas", 180000.0, "20:00"),
-            DebtorRawOrderItem(3, "Cerveza Corona 355ml", 15000.0, "21:30"),
-            DebtorRawOrderItem(2, "Cerveza Corona 355ml", 15000.0, "23:00")
-        )
-        else -> listOf(
-            DebtorRawOrderItem(1, "Consumo Registrado", amountOwed, "16:32")
-        )
-    }
+private fun getRawOrdersForDebtor(concept: String, amountOwed: Double, dateStr: String): List<DebtorRawOrderItem> {
+    val nombre = concept.takeIf { it.isNotBlank() } ?: "Consumo Registrado"
+    return listOf(DebtorRawOrderItem(1, nombre, amountOwed, dateStr))
 }
 
 data class DebtorHistoryItem(
@@ -438,6 +404,7 @@ private fun DebtorsManagementModal(
     if (showAddDebtorDialog) {
         var newName by remember { mutableStateOf("") }
         var newAmountText by remember { mutableStateOf("") }
+        var newConcept by remember { mutableStateOf("") }
 
         AlertDialog(
             onDismissRequest = { showAddDebtorDialog = false },
@@ -449,6 +416,15 @@ private fun DebtorsManagementModal(
                         onValueChange = { newName = it },
                         label = { Text("Nombre del Cliente *") },
                         placeholder = { Text("Ej. Carlos Mendoza") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = newConcept,
+                        onValueChange = { newConcept = it },
+                        label = { Text("Producto / Concepto") },
+                        placeholder = { Text("Ej. Cerveza Poker 330ml") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -476,7 +452,7 @@ private fun DebtorsManagementModal(
                                     name = newName.trim(),
                                     phone = "3000000000",
                                     amountOwed = amount,
-                                    concept = "Consumo directo",
+                                    concept = newConcept.trim().ifBlank { "Consumo directo" },
                                     date = currentDate,
                                     abonoAmount = 0.0
                                 )
@@ -515,11 +491,11 @@ private fun DebtorDetailFloatingModal(
     val pendingBalance = (debtor.amountOwed - debtor.abonoAmount).coerceAtLeast(0.0)
 
     val groupedProducts = remember(debtor) {
-        getGroupedProductsForDebtor(debtor.name, debtor.amountOwed)
+        getGroupedProductsForDebtor(debtor.concept, debtor.amountOwed)
     }
 
     val rawOrders = remember(debtor) {
-        getRawOrdersForDebtor(debtor.name, debtor.amountOwed, debtor.date)
+        getRawOrdersForDebtor(debtor.concept, debtor.amountOwed, debtor.date)
     }
 
     Dialog(
@@ -1168,7 +1144,8 @@ fun TenantPosScreen(
     }
 
     val lowStockList = productsFlow.filter { it.stock <= it.minStockAlert }
-    var showNotificacionesDialog by remember { mutableStateOf(false) }
+        var showNotificacionesDialog by remember { mutableStateOf(false) }
+        var showSoporteDialog by remember { mutableStateOf(false) }
 
     val filteredProducts = productsFlow.filter { prod ->
         val matchesSearch = searchPosQuery.isEmpty() ||
@@ -1556,9 +1533,9 @@ fun TenantPosScreen(
                                 tint = fg,
                                 modifier = Modifier.size(26.dp)
                             )
-                        }
-                        }
-                    }
+                }
+            }
+        }
                 }
             }
 
@@ -1610,6 +1587,14 @@ fun TenantPosScreen(
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { showSoporteDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Solicitar Soporte", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             },
@@ -1619,11 +1604,51 @@ fun TenantPosScreen(
         )
     }
 
+    if (showSoporteDialog) {
+        var tipoSoporte by remember { mutableStateOf("Error / Bug") }
+        var obsSoporte by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showSoporteDialog = false },
+            title = { Text("Solicitar Soporte", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("Tipo de solicitud:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    listOf("Error / Bug", "Sugerencia", "Capacitación", "Otro").forEach { t ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = tipoSoporte == t, onClick = { tipoSoporte = t })
+                            Text(t, fontSize = 13.sp)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = obsSoporte,
+                        onValueChange = { obsSoporte = it },
+                        label = { Text("Observaciones") },
+                        placeholder = { Text("Describe tu solicitud") },
+                        singleLine = false,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    viewModel.enviarSoporte(company.code, tipoSoporte, obsSoporte.trim())
+                    showSoporteDialog = false
+                }) { Text("Enviar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSoporteDialog = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
     // -------------------------------------------------------------------------------------
     // NUEVA VENTA FULL SCREEN OVERLAY VIEW
     // -------------------------------------------------------------------------------------
     if (showNuevaVentaView) {
         NuevaVentaView(
+            companyCode = company.code,
             products = productsFlow,
             debtorsList = debtorsList,
             onClose = { showNuevaVentaView = false },
@@ -2577,10 +2602,10 @@ private fun InicioDashboardView(
         Spacer(modifier = Modifier.height(10.dp))
 
         val accionesRapidas = listOf(
-            AccionRapida("Compras", Icons.Default.ShoppingCart, Color(0xFF315AA8), Color(0xFF416FC2), onQuickActionVenta),
-            AccionRapida("Billetera", Icons.Default.AccountBalanceWallet, Color(0xFF5428B8), Color(0xFF7046D4), onQuickActionGasto),
+            AccionRapida("Venta", Icons.Default.ShoppingCart, Color(0xFF315AA8), Color(0xFF416FC2), onQuickActionVenta),
+            AccionRapida("Gasto", Icons.Default.AccountBalanceWallet, Color(0xFF5428B8), Color(0xFF7046D4), onQuickActionGasto),
             AccionRapida("Agregar", Icons.Default.Add, Color(0xFF18A94F), Color(0xFF32C96A), onQuickActionAddStock),
-            AccionRapida("Perfil", Icons.Default.Person, Color(0xFFE58A05), Color(0xFFF2A01A), onQuickActionDeudores)
+            AccionRapida("Deudores", Icons.Default.Person, Color(0xFFE58A05), Color(0xFFF2A01A), onQuickActionDeudores)
         )
 
         // Fila única 1x4 en cualquier ancho
@@ -2606,6 +2631,24 @@ private fun InicioDashboardView(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 18.dp)
         )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Toggle de vista: Lista / Recuadro
+        var vistaAlertasLista by remember { mutableStateOf(false) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { vistaAlertasLista = true },
+                colors = ButtonDefaults.buttonColors(containerColor = if (vistaAlertasLista) Color(0xFF4F46E5) else Color(0xFFEEF0FA)),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.height(36.dp)
+            ) { Text("Lista", color = if (vistaAlertasLista) Color.White else Color(0xFF334155), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            Button(
+                onClick = { vistaAlertasLista = false },
+                colors = ButtonDefaults.buttonColors(containerColor = if (!vistaAlertasLista) Color(0xFF4F46E5) else Color(0xFFEEF0FA)),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.height(36.dp)
+            ) { Text("Recuadro", color = if (!vistaAlertasLista) Color.White else Color(0xFF334155), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+        }
         Spacer(modifier = Modifier.height(10.dp))
 
         if (lowStockProducts.isEmpty()) {
@@ -2622,22 +2665,30 @@ private fun InicioDashboardView(
                 }
             }
         } else {
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val columns = when {
-                    maxWidth >= 900.dp -> 4
-                    maxWidth >= 600.dp -> 3
-                    else -> 2
+            if (vistaAlertasLista) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    lowStockProducts.forEach { prod ->
+                        ProductAlertListItem(product = prod, onAddStock = onQuickActionAddStock)
+                    }
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    lowStockProducts.chunked(columns).forEach { rowItems ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            rowItems.forEach { prod ->
-                                Box(modifier = Modifier.weight(1f)) {
-                                    ProductAlertCard(product = prod, onViewInventory = onQuickActionAddStock)
+            } else {
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val columns = when {
+                        maxWidth >= 900.dp -> 4
+                        maxWidth >= 600.dp -> 3
+                        else -> 2
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        lowStockProducts.chunked(columns).forEach { rowItems ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                rowItems.forEach { prod ->
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        ProductAlertCard(product = prod, onViewInventory = onQuickActionAddStock)
+                                    }
                                 }
-                            }
-                            repeat(columns - rowItems.size) {
-                                Spacer(modifier = Modifier.weight(1f))
+                                repeat(columns - rowItems.size) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
                             }
                         }
                     }
@@ -2748,14 +2799,74 @@ private fun ProductAlertCard(product: PosProductEntity, onViewInventory: () -> U
             Button(
                 onClick = onViewInventory,
                 shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 7.dp),
                 modifier = Modifier.fillMaxWidth().height(34.dp)
             ) {
                 Icon(imageVector = Icons.Default.Inventory2, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Ver inventario", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text("Agregar", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
             }
+        }
+    }
+}
+
+@Composable
+private fun ProductAlertListItem(product: PosProductEntity, onAddStock: () -> Unit) {
+    val isDark = LocalIsDarkMode.current
+    val cardBg = if (isDark) Color(0xFF1C1C1E) else Color.White
+    val cardBorder = if (isDark) Color(0xFFF59E0B).copy(alpha = 0.28f) else Color(0xFFE5E7EB)
+    val nameColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
+    val secondaryColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+
+    val sinStock = product.stock <= 0
+    val critico = !sinStock && product.stock <= (product.minStockAlert / 2)
+    val (alertText, alertDetail) = when {
+        sinStock -> "Sin stock" to "Producto agotado"
+        critico -> "Stock crÃ­tico" to "Quedan ${product.stock} unidades"
+        else -> "Stock bajo" to "Quedan ${product.stock} unidades"
+    }
+    val alertColor = if (sinStock || critico) Color(0xFFB91C1C) else Color(0xFF92400E)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(cardBg)
+            .border(1.dp, cardBorder, RoundedCornerShape(14.dp))
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (isDark) Color(0xFF26262B) else Color(0xFFEEF0FA)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (product.imageUrl.isNotBlank()) {
+                AsyncImage(model = product.imageUrl, contentDescription = product.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(4.dp))
+            } else {
+                Icon(imageVector = Icons.Default.Inventory2, contentDescription = null, tint = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8), modifier = Modifier.size(24.dp))
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(product.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = nameColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(alertText, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = alertColor)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text("$alertDetail â¢ LÃ­mite: ${product.minStockAlert}", fontSize = 11.sp, color = secondaryColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Button(
+            onClick = onAddStock,
+            shape = RoundedCornerShape(50),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+        ) {
+            Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Agregar", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -2793,56 +2904,6 @@ private fun VentasSectionView(
             .padding(horizontal = 16.dp, vertical = 14.dp)
             .padding(bottom = 90.dp)
     ) {
-        // Acciones Operativas RÃ¡pidas para Venta, Stock y Gasto
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.cardElevation(2.dp)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Text(
-                    text = "Acciones Operativas Autorizadas",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = onQuickActionVenta,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("âš¡ Nueva Venta", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Button(
-                        onClick = onQuickActionAddStock,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("ðŸ“¦ AÃ±adir Stock", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Button(
-                        onClick = onQuickActionGasto,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9F0A)),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("ðŸ’¸ Reg. Gasto", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-
         iOSLargeTitle(title = "Resumen Financiero de Ventas")
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -2935,8 +2996,10 @@ private fun VentasSectionView(
             }.sortedByDescending { it.second }
         }
 
+        var mostrarTodoRanking by remember { mutableStateOf(false) }
+        val rankingVisibles = if (mostrarTodoRanking) rankingList else rankingList.take(5)
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            rankingList.forEachIndexed { index, (prod, units, revenue) ->
+            rankingVisibles.forEachIndexed { index, (prod, units, revenue) ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -3032,6 +3095,18 @@ private fun VentasSectionView(
                         }
                     }
                 }
+            }
+        }
+
+        if (rankingList.size > 5) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Button(
+                onClick = { mostrarTodoRanking = !mostrarTodoRanking },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().height(44.dp)
+            ) {
+                Text(if (mostrarTodoRanking) "Ver menos" else "Ver más", color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -3510,7 +3585,27 @@ private fun InventarioSectionView(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Product Items List grouped by Category
+        // Toggle vista: Lista / Recuadro
+        var vistaInventarioLista by remember { mutableStateOf(true) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { vistaInventarioLista = true },
+                colors = ButtonDefaults.buttonColors(containerColor = if (vistaInventarioLista) Color(0xFF4F46E5) else Color(0xFFEEF0FA)),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.height(36.dp)
+            ) { Text("Lista", color = if (vistaInventarioLista) Color.White else Color(0xFF334155), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            Button(
+                onClick = { vistaInventarioLista = false },
+                colors = ButtonDefaults.buttonColors(containerColor = if (!vistaInventarioLista) Color(0xFF4F46E5) else Color(0xFFEEF0FA)),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.height(36.dp)
+            ) { Text("Recuadro", color = if (!vistaInventarioLista) Color.White else Color(0xFF334155), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Product Items
+        if (vistaInventarioLista) {
         filtered.forEach { prod ->
             val baseline = savedInventoryBaselines[prod.id]
             val formatText = if (baseline != null) {
@@ -3540,7 +3635,7 @@ private fun InventarioSectionView(
                                 model = prod.imageUrl,
                                 contentDescription = prod.name,
                                 modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
+                        contentScale = ContentScale.Fit
                             )
                         } else {
                             Icon(imageVector = Icons.Default.Image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -3591,6 +3686,25 @@ private fun InventarioSectionView(
                 }
             }
         }
+        } else {
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val columns = if (maxWidth >= 700.dp) 3 else 2
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    filtered.chunked(columns).forEach { rowItems ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            rowItems.forEach { prod ->
+                                Box(modifier = Modifier.weight(1f)) {
+                                    InventoryProductCard(product = prod, isCajero = isCajero, onEditProduct = onEditProduct, onDeleteProduct = onDeleteProduct)
+                                }
+                            }
+                            repeat(columns - rowItems.size) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         if (!isCajero) {
             Spacer(modifier = Modifier.height(24.dp))
@@ -3625,6 +3739,54 @@ private fun InventarioSectionView(
                         Icon(imageVector = Icons.Default.BarChart, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Hacer Inventario", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InventoryProductCard(
+    product: PosProductEntity,
+    isCajero: Boolean,
+    onEditProduct: (PosProductEntity) -> Unit,
+    onDeleteProduct: (Int) -> Unit
+) {
+    GlassCard(shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                if (product.imageUrl.isNotBlank()) {
+                    AsyncImage(model = product.imageUrl, contentDescription = product.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(6.dp))
+                } else {
+                    Icon(imageVector = Icons.Default.Image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(product.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(modifier = Modifier.height(4.dp))
+            Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer) {
+                Text(product.category, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp))
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text("${formatCurrency(product.price)} C/U", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text("Stock: ${product.stock}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (product.stock <= 15) Color(0xFFFF453A) else Color(0xFF34C759))
+            Spacer(modifier = Modifier.height(10.dp))
+            if (!isCajero) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { onEditProduct(product) }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f).height(36.dp)) {
+                        Text("Editar", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Button(onClick = { onDeleteProduct(product.id) }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF453A)), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f).height(36.dp)) {
+                        Text("Eliminar", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -4198,7 +4360,7 @@ private fun CartProductCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(3f / 1f)
+                    .aspectRatio(1f)
                     .clip(RoundedCornerShape(10.dp))
                     .background(
                         Brush.linearGradient(
@@ -4387,6 +4549,7 @@ private fun CartProductCard(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NuevaVentaView(
+    companyCode: String,
     products: List<PosProductEntity>,
     debtorsList: List<DebtorRecord>,
     onClose: () -> Unit,
@@ -4410,20 +4573,27 @@ private fun NuevaVentaView(
     var abonoInput by remember { mutableStateOf("") }
     var abonoMethodSelection by remember { mutableStateOf("Efectivo") }
 
-    val favoriteProductIds = remember { mutableStateListOf<Int>() }
+    val context = LocalContext.current
+    val favPrefs = remember { context.getSharedPreferences("kapta_favoritos", android.content.Context.MODE_PRIVATE) }
+    val favoriteProductIds = remember {
+        val saved = favPrefs.getStringSet("favs_$companyCode", emptySet())?.mapNotNull { it.toIntOrNull() } ?: emptyList()
+        mutableStateListOf<Int>().apply { addAll(saved) }
+    }
     val cartItems = remember { mutableStateListOf<CartItem>() }
 
-    // Pre-cargar productos estrella/favoritos en la cuadrÃ­cula de "Productos Seleccionados" inicializados con cantidad 0
+    fun persistFavs() {
+        favPrefs.edit()
+            .putStringSet("favs_$companyCode", favoriteProductIds.map { it.toString() }.toSet())
+            .apply()
+    }
+
+    // Pre-cargar productos favoritos del usuario (cantidad 0) al abrir la venta de venta
     LaunchedEffect(products) {
-        if (favoriteProductIds.isEmpty() && products.isNotEmpty()) {
-            val defaultFavs = products.filter { it.minPrice > 0 || it.hasMinPrice }.map { it.id }.ifEmpty { products.take(6).map { it.id } }
-            favoriteProductIds.addAll(defaultFavs)
-        }
         if (cartItems.isEmpty() && products.isNotEmpty()) {
-            val favs = products.filter { favoriteProductIds.contains(it.id) }
-            favs.forEach { prod ->
-                cartItems.add(CartItem(product = prod, initialQuantity = 0, initialIsMinPrice = false))
-            }
+            products.filter { favoriteProductIds.contains(it.id) }
+                .forEach { prod ->
+                    cartItems.add(CartItem(product = prod, initialQuantity = 0, initialIsMinPrice = false))
+                }
         }
     }
 
@@ -4804,6 +4974,7 @@ private fun NuevaVentaView(
                                         } else {
                                             favoriteProductIds.add(item.product.id)
                                         }
+                                        persistFavs()
                                     },
                                     onRemove = { cartItems.remove(item) },
                                     modifier = Modifier

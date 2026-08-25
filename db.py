@@ -15,7 +15,8 @@ from psycopg2.extras import RealDictCursor
 CABECERAS = {
     "inventario": ["Id_Producto", "Codigo_Barras", "Nom_Producto", "Categoria",
                    "Cantidad", "Costo", "Precio_Venta", "Precio_Minimo",
-                   "Alerta_Stock", "Estado", "Fecha_Creacion", "Ultima_Modificacion"],
+                   "Alerta_Stock", "Estado", "Fecha_Creacion", "Ultima_Modificacion",
+                   "Imagen"],
     "ventas": ["Id_Venta", "Fecha", "Hora", "Cliente", "Id_Producto", "Producto",
                "Cantidad", "Precio_Unitario", "Subtotal", "Descuento",
                "Transferencia", "Efectivo", "Total", "Usuario", "Estado",
@@ -99,6 +100,19 @@ CREATE TABLE IF NOT EXISTS finanzas_kapta (
     metodo_pago TEXT DEFAULT '',
     referencia TEXT DEFAULT '',
     usuario TEXT DEFAULT ''
+);
+"""
+
+SCHEMA_SOPORTE = """
+CREATE TABLE IF NOT EXISTS soporte (
+    id SERIAL PRIMARY KEY,
+    id_soporte TEXT,
+    tipo_solicitud TEXT,
+    observaciones TEXT,
+    solicitante TEXT,
+    fecha_solicitud TEXT,
+    usuario TEXT DEFAULT '',
+    fecha_resuelto TEXT DEFAULT ''
 );
 """
 
@@ -248,6 +262,7 @@ def init_db():
         with conn.cursor() as cur:
             cur.execute(SCHEMA_EMPRESAS)
             cur.execute(SCHEMA_FINANZAS_KAPTA)
+            cur.execute(SCHEMA_SOPORTE)
             for tabla_global in CABECERAS_GLOBALES:
                 _crear_tabla_global(cur, tabla_global)
             cur.execute("SELECT codigo FROM empresas WHERE codigo IS NOT NULL AND codigo <> ''")
@@ -552,16 +567,19 @@ def obtener_foto(foto_id):
 
 
 # ===================================================
-# SEGURIDAD LOGIN: límite de intentos por empresa+correo
+# SEGURIDAD LOGIN: límite de intentos por empresa+correo (bloqueo por niveles)
 # ===================================================
-MAX_INTENTOS_LOGIN = 5
-MINUTOS_BLOQUEO = 15
+# Nivel 0: hasta 5 intentos -> bloqueo 30s. Nivel 1: 3 intentos -> bloqueo 60s.
+# Nivel 2: 2 intentos -> bloqueo permanente (contactar administrador).
+UMBRALES_INTENTOS = [5, 3, 2]
+DURACIONES_BLOQUEO = [30, 60]   # segundos
 
 
 def _tabla_bloqueos(cur):
     cur.execute(
         "CREATE TABLE IF NOT EXISTS bloqueos_login ("
-        "clave TEXT PRIMARY KEY, intentos INT DEFAULT 0, bloqueado_hasta TEXT DEFAULT '')"
+        "correo TEXT PRIMARY KEY, intentos INT DEFAULT 0, nivel INT DEFAULT 0, "
+        "bloqueado_hasta TEXT DEFAULT '')"
     )
 
 
@@ -569,54 +587,81 @@ def _clave_bloqueo(empresa, correo):
     return f"{str(empresa or '').upper()}|{str(correo or '').lower().strip()}"
 
 
-def minutos_bloqueo_restantes(empresa, correo):
-    """Minutos restantes de bloqueo; 0 si no está bloqueado."""
+def segundos_bloqueo_restantes(empresa, correo):
+    """Segundos restantes de bloqueo; 0 si libre, -1 si permanente."""
     with _connect() as conn:
         with conn.cursor() as cur:
             _tabla_bloqueos(cur)
             cur.execute(
-                "SELECT bloqueado_hasta FROM bloqueos_login WHERE clave=%s",
+                "SELECT bloqueado_hasta FROM bloqueos_login WHERE correo=%s",
                 (_clave_bloqueo(empresa, correo),),
             )
             row = cur.fetchone()
     hasta = str(row[0] or "") if row else ""
+    if hasta == "PERMANENTE":
+        return -1
     if not hasta:
         return 0
     try:
-        diff = datetime.datetime.strptime(hasta, "%Y-%m-%d %H:%M") - datetime.datetime.now()
+        diff = datetime.datetime.strptime(hasta, "%Y-%m-%d %H:%M:%S") - datetime.datetime.now()
     except ValueError:
         return 0
-    if diff.total_seconds() <= 0:
-        return 0
-    return int(diff.total_seconds() // 60) + 1
+    return max(int(diff.total_seconds()), 0)
+
+
+def minutos_bloqueo_restantes(empresa, correo):
+    """Compatibilidad: minutos restantes (0 si libre)."""
+    s = segundos_bloqueo_restantes(empresa, correo)
+    if s == -1:
+        return -1
+    return (s + 59) // 60 if s > 0 else 0
 
 
 def registrar_fallo_login(empresa, correo):
-    """Suma un intento fallido. Devuelve los minutos de bloqueo si acaba de activarse."""
+    """Suma un intento fallido. Devuelve segundos de bloqueo (0=libre, -1=permanente)."""
     with _connect() as conn:
         with conn.cursor() as cur:
             _tabla_bloqueos(cur)
+            clave = _clave_bloqueo(empresa, correo)
             cur.execute(
-                "INSERT INTO bloqueos_login (clave, intentos) VALUES (%s, 1) "
-                "ON CONFLICT (clave) DO UPDATE SET intentos = bloqueos_login.intentos + 1",
-                (_clave_bloqueo(empresa, correo),),
+                "INSERT INTO bloqueos_login (correo, intentos, nivel) VALUES (%s, 1, 0) "
+                "ON CONFLICT (correo) DO UPDATE SET intentos = bloqueos_login.intentos + 1",
+                (clave,),
             )
             cur.execute(
-                "SELECT intentos FROM bloqueos_login WHERE clave=%s",
-                (_clave_bloqueo(empresa, correo),),
+                "SELECT intentos, nivel, bloqueado_hasta FROM bloqueos_login WHERE correo=%s",
+                (clave,),
             )
-            intentos = int(cur.fetchone()[0])
-            if intentos >= MAX_INTENTOS_LOGIN:
-                hasta = (datetime.datetime.now()
-                         + datetime.timedelta(minutes=MINUTOS_BLOQUEO)).strftime("%Y-%m-%d %H:%M")
+            intentos, nivel, hasta = cur.fetchone()
+            if hasta == "PERMANENTE":
+                conn.commit()
+                return -1
+            if hasta:
+                try:
+                    if datetime.datetime.strptime(hasta, "%Y-%m-%d %H:%M:%S") > datetime.datetime.now():
+                        conn.commit()
+                        return segundos_bloqueo_restantes(empresa, correo)
+                except ValueError:
+                    pass
+            umbral = UMBRALES_INTENTOS[min(nivel, len(UMBRALES_INTENTOS) - 1)]
+            if intentos >= umbral:
+                if nivel < len(DURACIONES_BLOQUEO):
+                    nuevo_hasta = (datetime.datetime.now()
+                                   + datetime.timedelta(seconds=DURACIONES_BLOQUEO[nivel])).strftime("%Y-%m-%d %H:%M:%S")
+                    cur.execute(
+                        "UPDATE bloqueos_login SET bloqueado_hasta=%s, intentos=0, nivel=nivel+1 WHERE correo=%s",
+                        (nuevo_hasta, clave),
+                    )
+                    conn.commit()
+                    return DURACIONES_BLOQUEO[nivel]
                 cur.execute(
-                    "UPDATE bloqueos_login SET bloqueado_hasta=%s, intentos=0 WHERE clave=%s",
-                    (hasta, _clave_bloqueo(empresa, correo)),
+                    "UPDATE bloqueos_login SET bloqueado_hasta='PERMANENTE' WHERE correo=%s",
+                    (clave,),
                 )
                 conn.commit()
-                return MINUTOS_BLOQUEO
-        conn.commit()
-    return 0
+                return -1
+            conn.commit()
+            return 0
 
 
 def reset_fallos_login(empresa, correo):
@@ -624,7 +669,7 @@ def reset_fallos_login(empresa, correo):
         with conn.cursor() as cur:
             _tabla_bloqueos(cur)
             cur.execute(
-                "DELETE FROM bloqueos_login WHERE clave=%s",
+                "DELETE FROM bloqueos_login WHERE correo=%s",
                 (_clave_bloqueo(empresa, correo),),
             )
         conn.commit()
@@ -633,8 +678,8 @@ def reset_fallos_login(empresa, correo):
 def actualizar_contrasena(empresa_codigo, correo, hash_nuevo):
     """Migra contraseñas legadas en texto plano a hash."""
     cols = COLUMNS_GLOBALES["usuarios"]
-    col_correo = cols[3]   # Correo
-    col_clave = cols[4]    # Contrasena
+    col_correo = cols[2]   # Correo
+    col_clave = cols[3]    # Contrasena
     with _connect() as conn:
         with conn.cursor() as cur:
             _crear_tabla_global(cur, "usuarios")
@@ -649,8 +694,8 @@ def actualizar_contrasena(empresa_codigo, correo, hash_nuevo):
 def actualizar_ultimo_acceso(empresa_codigo, correo, fecha):
     """Tabla global de usuarios: un UPDATE indexado por codigo+correo."""
     cols = COLUMNS_GLOBALES["usuarios"]
-    col_correo = cols[3]   # Correo
-    col_ultimo = cols[8]   # Ultimo_Acceso
+    col_correo = cols[2]   # Correo
+    col_ultimo = cols[7]   # Ultimo_Acceso
     with _connect() as conn:
         with conn.cursor() as cur:
             _crear_tabla_global(cur, "usuarios")
@@ -702,4 +747,27 @@ def listar_finanzas_kapta():
     with _connect() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT * FROM finanzas_kapta ORDER BY id DESC")
+            return [dict(r) for r in cur.fetchall()]
+
+
+def registrar_soporte(tipo_solicitud, observaciones, solicitante):
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(SCHEMA_SOPORTE)
+            cur.execute("SELECT COUNT(*) FROM soporte")
+            num = int(cur.fetchone()[0]) + 1
+            nuevo_id = "S_" + str(num).zfill(5)
+            cur.execute(
+                "INSERT INTO soporte (id_soporte, tipo_solicitud, observaciones, solicitante, fecha_solicitud) "
+                "VALUES (%s,%s,%s,%s,%s)",
+                (nuevo_id, tipo_solicitud, observaciones, solicitante, datetime.date.today().isoformat()),
+            )
+        conn.commit()
+    return nuevo_id
+
+
+def listar_soportes():
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM soporte ORDER BY id DESC")
             return [dict(r) for r in cur.fetchall()]

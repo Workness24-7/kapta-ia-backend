@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.shadow
@@ -33,9 +35,12 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -73,6 +78,7 @@ import com.example.ui.components.KaptaLogoHeader
 import com.example.ui.components.SuperAdminScaffold
 import com.example.ui.components.UserProfileModal
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SuperAdminDashboardScreen(
     viewModel: KaptaViewModel,
@@ -91,6 +97,7 @@ fun SuperAdminDashboardScreen(
     var showGlobalSearchModal by remember { mutableStateOf(false) }
     var showUserProfileModal by remember { mutableStateOf(false) }
     var showNotificationsModal by remember { mutableStateOf(false) }
+    var showSoporteModal by remember { mutableStateOf(false) }
     val allUsers by viewModel.users.collectAsState()
     val companies by viewModel.companies.collectAsState()
     val notificationCount = com.example.ui.components.construirNotificaciones(companies).size
@@ -100,6 +107,9 @@ fun SuperAdminDashboardScreen(
         viewModel.fetchRemoteCompanies()
         android.util.Log.d("KAPTA_ISOLATION", "[KAPTA_ISOLATION] SuperAdminDashboardScreen: role=SUPER_ADMIN, activeCompanyCode='$activeCompCode', salesCount=0, salesTotal=0")
         android.util.Log.d("KAPTA_UI_TOTAL", "[KAPTA_UI_TOTAL] role=SUPER_ADMIN, screen=SuperAdminDashboard, salesCount=0, salesTotal=0, displayedTotal=0")
+    }
+    LaunchedEffect(Unit) {
+        viewModel.cargarSoportes()
     }
 
     var headerCollapsePx by remember { mutableFloatStateOf(0f) }
@@ -161,6 +171,44 @@ fun SuperAdminDashboardScreen(
             onNavigateToEditCompany = onNavigateToEditCompany,
             onEnterAsAdmin = onEnterAsAdmin
         )
+    }
+
+    if (showSoporteModal) {
+        val lista = viewModel.soportes.value
+        ModalBottomSheet(
+            onDismissRequest = { showSoporteModal = false },
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(20.dp).verticalScroll(rememberScrollState())) {
+                Text("Solicitudes de Soporte", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                Spacer(modifier = Modifier.height(12.dp))
+                if (lista.isEmpty()) {
+                    Text("Sin solicitudes por ahora.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    lista.forEach { s ->
+                        val tipo = s["tipo_solicitud"]?.toString() ?: ""
+                        val obs = s["observaciones"]?.toString() ?: ""
+                        val sol = s["solicitante"]?.toString() ?: ""
+                        val fecha = s["fecha_solicitud"]?.toString() ?: ""
+                        val idS = s["id_soporte"]?.toString() ?: ""
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                                Text("$idS  •  $tipo", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
+                                Text("Solicitante: $sol", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Fecha: $fecha", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (obs.isNotBlank()) Text("Obs: $obs", fontSize = 12.sp, color = MaterialTheme.colorScheme.onBackground)
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                TextButton(onClick = { showSoporteModal = false }) { Text("Cerrar") }
+            }
+        }
     }
 
     if (showUserProfileModal) {
@@ -261,7 +309,9 @@ fun SuperAdminDashboardScreen(
                         onNavigateToPlans = onNavigateToPlans,
                         onNavigateToReports = onNavigateToReports,
                         onNavigateToEmpresasTab = { selectedTab = 1 },
-                        onNavigateToFinanzasTab = { selectedTab = 2 },
+                         onNavigateToFinanzasTab = { selectedTab = 2 },
+                        soporteCount = viewModel.soportes.value.size,
+                        onVerSoportes = { showSoporteModal = true },
                         onCompanySelected = { company ->
                             viewModel.selectCompany(company)
                             onNavigateToCompanyDetail(company)

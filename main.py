@@ -264,9 +264,15 @@ def _limpiar(valor, max_len):
     return limpio[:max_len]
 
 
-def _mensaje_bloqueo(minutos):
+def _mensaje_bloqueo(segundos):
+    if segundos == -1:
+        return "Demasiados intentos fallidos. Contacta al Administrador para recuperar tu acceso."
+    if segundos < 60:
+        return ("Cuenta bloqueada temporalmente por múltiples intentos fallidos. "
+                f"Intenta de nuevo en {segundos} segundo(s).")
+    mins = (segundos + 59) // 60
     return ("Cuenta bloqueada temporalmente por múltiples intentos fallidos. "
-            f"Intenta de nuevo en {minutos} minuto(s).")
+            f"Intenta de nuevo en {mins} minuto(s).")
 
 
 def action_login(params):
@@ -298,8 +304,8 @@ def action_login(params):
             pass
 
     # Bloqueo temporal por intentos fallidos previos
-    restantes = db.minutos_bloqueo_restantes(codigo, correo)
-    if restantes > 0:
+    restantes = db.segundos_bloqueo_restantes(codigo, correo)
+    if restantes != 0:
         return respuesta_error(_mensaje_bloqueo(restantes))
 
     usuario = None
@@ -313,9 +319,9 @@ def action_login(params):
     if str(usuario[5] or "") in ("Suspendido", "Bloqueado"):
         return respuesta_error("Usuario " + str(usuario[5]).lower() + ".")
     if not _verificar_password(password, usuario[3]):
-        minutos = db.registrar_fallo_login(codigo, correo)
-        if minutos > 0:
-            return respuesta_error(_mensaje_bloqueo(minutos))
+        segundos = db.registrar_fallo_login(codigo, correo)
+        if segundos != 0:
+            return respuesta_error(_mensaje_bloqueo(segundos))
         return respuesta_error(MSG_CREDENCIALES)
 
     # Migración transparente: texto plano -> hash PBKDF2
@@ -389,6 +395,18 @@ def action_registrar_empresa(params):
         "fecha_creacion": fecha_hoy, "fecha_vencimiento": fecha_vencimiento,
         "observaciones": str(datos.get("observaciones") or ""),
     })
+
+    # Ingreso KAPTA: registrar el plan elegido en finanzas_kapta (no si es Permanente)
+    tiempo_sel = str(datos.get("tiempo") or "").strip()
+    if tiempo_sel.lower() != "permanente":
+        monto_plan = str(datos.get("precio") or datos.get("monto") or "0")
+        db.registrar_finanza_kapta(
+            tipo="Ingreso",
+            categoria=f"Plan {str(datos.get('plan') or 'Básico')}",
+            concepto=f"Registro empresa {nombre} - Plan {str(datos.get('plan') or 'Básico')} {tiempo_sel}",
+            monto=monto_plan,
+            metodo_pago="", referencia="", usuario=str(datos.get("adminCorreo") or ""),
+        )
 
     # Crear hoja: headers (fila 2) en tablas por negocio Y globales
     for nombre_tabla, cab in {**CABECERAS, **CABECERAS_GLOBALES}.items():
@@ -498,6 +516,23 @@ def action_escribir_fila(params):
     fila = db.siguiente_fila_libre(empresa, tabla_key.lower(), TABLAS[tabla_key]["FILA_INICIO"])
     columnas = TABLAS[tabla_key]["COLUMNAS"]
     fila_valores = datos[:columnas] + [""] * max(0, columnas - len(datos))
+
+    # ponytail: evita duplicados en VENTAS por re-envío de red; solo omite fila idéntica
+    # (mismo Cliente/Producto/Cantidad/Total/Fecha/Hora). Techo: no dedupe ventas
+    # legítimas distintas en el mismo minuto.
+    if tabla_key == "VENTAS":
+        cli_n = str(datos[3] or "").strip()
+        prod_n = str(datos[5] or "").strip()
+        cant_n = str(datos[6] or "").strip()
+        tot_n = str(datos[12] or "").strip()
+        fec_n = str(datos[1] or "").strip()
+        hor_n = str(datos[2] or "").strip()
+        for (n, d) in db.leer_tabla(empresa, "ventas"):
+            if (str(d[3] or "").strip() == cli_n and str(d[5] or "").strip() == prod_n
+                    and str(d[6] or "").strip() == cant_n and str(d[12] or "").strip() == tot_n
+                    and str(d[1] or "").strip() == fec_n and str(d[2] or "").strip() == hor_n):
+                return respuesta_success({"registrado": True, "duplicado": True, "fila": n})
+
     db.guardar_fila(empresa, tabla_key.lower(), fila, fila_valores)
 
     return respuesta_success({
@@ -572,6 +607,19 @@ def _to_float(v):
         return 0.0
 
 
+def _resolver_id_producto(empresa, nombre_producto):
+    nombre = (nombre_producto or "").strip().lower()
+    if not nombre:
+        return ""
+    try:
+        for (n, d) in db.leer_tabla(empresa, "inventario"):
+            if str(d[2] or "").strip().lower() == nombre:
+                return str(d[0] or "").strip()
+    except Exception:
+        pass
+    return ""
+
+
 def mover_deudor_a_ventas(empresa, fila_deudor, datos, nueva_transferencia, nuevo_efectivo):
     fila_venta = db.siguiente_fila_libre(empresa, "ventas", TABLAS["VENTAS"]["FILA_INICIO"])
     total = nueva_transferencia + nuevo_efectivo
@@ -583,8 +631,9 @@ def mover_deudor_a_ventas(empresa, fila_deudor, datos, nueva_transferencia, nuev
     hora = fecha_hora[1] if len(fecha_hora) > 1 else ""
 
     id_venta = db.siguiente_id(empresa, "ventas", "V-")
+    id_producto = _resolver_id_producto(empresa, datos[2])
     fila_valores = [
-        id_venta, fecha, hora, datos[1] or "", "", datos[2] or "",
+        id_venta, fecha, hora, datos[1] or "", id_producto, datos[2] or "",
         cantidad, precio_unitario, total, "", nueva_transferencia,
         nuevo_efectivo, total, "", "Activo", "", "", "", "", "", "",
     ]
@@ -857,6 +906,21 @@ def action_subir_foto(params):
     return respuesta_success({"id": foto_id, "url": "/foto/" + foto_id})
 
 
+def action_registrar_soporte(params):
+    datos = params.get("data") or params
+    tipo = str(datos.get("tipo_solicitud") or datos.get("tipo") or "").strip()
+    obs = str(datos.get("observaciones") or "").strip()
+    solic = str(datos.get("solicitante") or datos.get("codigo") or "").strip().upper()
+    if not tipo:
+        return respuesta_error("Debe indicar el tipo de solicitud.")
+    nuevo_id = db.registrar_soporte(tipo, obs, solic)
+    return respuesta_success({"idSoporte": nuevo_id})
+
+
+def action_listar_soportes(params=None):
+    return respuesta_success({"data": db.listar_soportes()})
+
+
 POST_ACTIONS = {
     "reportes": action_reportes,
     "login": action_login,
@@ -868,6 +932,7 @@ POST_ACTIONS = {
     "eliminar_usuario": action_eliminar_usuario,
     "comprar_plan": action_comprar_plan,
     "registrar_finanza_kapta": action_registrar_finanza_kapta,
+    "registrar_soporte": action_registrar_soporte,
     "subir_foto": action_subir_foto,
     "registrar_inventario": action_escribir_fila,
     "registrar_venta": action_escribir_fila,
@@ -886,6 +951,7 @@ GET_ACTIONS = {
     "ping": action_ping,
     "saludo": action_ping,
     "listar_finanzas_kapta": action_listar_finanzas_kapta,
+    "listar_soportes": action_listar_soportes,
     "listar_todos_usuarios": action_listar_todos_usuarios,
 }
 
