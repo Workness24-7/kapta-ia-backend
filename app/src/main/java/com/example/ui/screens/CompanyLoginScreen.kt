@@ -377,7 +377,7 @@ fun CompanyLoginScreen(
                                 loginErrorMsg = "Por favor completa Correo y Contraseña"
                             } else {
                                 loginErrorMsg = null
-                                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                scope.launch {
                                     // Online: el servidor es autoridad (credenciales, bloqueo, hash).
                                     // Offline: login local estricto contra usuarios cacheados en Room;
                                     // ventas/gastos/inventario pendientes se sincronizan solos al reconectar.
