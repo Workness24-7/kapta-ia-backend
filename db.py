@@ -208,10 +208,11 @@ def dedup_inventario(empresa):
     mayor fila). Regla de negocio: un producto no se repite por nombre.
     Devuelve (eliminadas, error_o_None)."""
     tbl = _tabname(empresa, "inventario")
+    col_prod = COLUMNS["inventario"][2]
     try:
         with _connect() as conn:
             with conn.cursor() as cur:
-                cur.execute(f'SELECT fila, "Nom_Producto" FROM "{tbl}"')
+                cur.execute(f'SELECT fila, "{col_prod}" FROM "{tbl}"')
                 visto = {}
                 borrar = []
                 for (fila, nombre) in cur.fetchall():
