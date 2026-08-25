@@ -934,6 +934,7 @@ POST_ACTIONS = {
     "registrar_finanza_kapta": action_registrar_finanza_kapta,
     "registrar_soporte": action_registrar_soporte,
     "subir_foto": action_subir_foto,
+    "importar_inventario": action_importar_inventario,
     "registrar_inventario": action_escribir_fila,
     "registrar_venta": action_escribir_fila,
     "registrar_deudor": action_escribir_fila,
@@ -941,6 +942,50 @@ POST_ACTIONS = {
     "crear_usuario": action_escribir_fila,
     "append": action_escribir_fila,
 }
+
+
+def action_importar_inventario(params):
+    """Carga masiva de inventario desde CSV/TXT.
+    Columnas (7): Nombre, Categoria, Costo, Precio, PrecioMinimo(vacio=sin valor),
+    StockActual, StockMinimo. El backend autogenera Id_Producto."""
+    clave = str(params.get("sheetName") or params.get("idEmpresa") or params.get("empresa") or "").strip()
+    if not clave:
+        return respuesta_error("No se recibió la empresa.")
+    empresa = resolver_hoja(clave)
+    if not empresa:
+        return respuesta_error("No existe la hoja: " + clave)
+    raw = params.get("csv")
+    if not isinstance(raw, str):
+        raw = params.get("contenido")
+    if not isinstance(raw, str) or not raw.strip():
+        return respuesta_error("El archivo está vacío.")
+    lineas = [l.strip() for l in raw.replace("\r\n", "\n").split("\n") if l.strip()]
+    if not lineas:
+        return respuesta_error("El archivo no contiene filas.")
+    insertados = 0
+    errores = []
+    hoy = fecha_actual()
+    for i, linea in enumerate(lineas, start=1):
+        partes = [p.strip() for p in linea.split(",")]
+        if len(partes) < 7:
+            errores.append(f"Fila {i}: se esperaban 7 columnas, tiene {len(partes)}")
+            continue
+        nombre = partes[0]
+        if nombre.lower() in ("nombre", "nombre del producto", "producto"):
+            continue  # cabecera
+        datos = ["", "", partes[0], partes[1], partes[5], partes[2],
+                 partes[3], partes[4], partes[6], "Activo", hoy, hoy]
+        sub = dict(params)
+        sub["tableName"] = "inventario"
+        sub["data"] = datos
+        r = action_escribir_fila(sub)
+        body = json.loads(r.body)
+        if body.get("status") == "success":
+            insertados += 1
+        else:
+            errores.append(f"Fila {i} ({partes[0]}): {body.get('message', 'error')}")
+    return respuesta_success({"insertados": insertados, "errores": errores, "total": len(lineas)})
+
 
 GET_ACTIONS = {
     "listar_empresas": action_listar_empresas,

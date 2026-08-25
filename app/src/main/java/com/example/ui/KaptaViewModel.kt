@@ -1858,6 +1858,27 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun importarInventario(
+        companyCode: String,
+        csv: String,
+        onResult: (insertados: Int, errores: List<String>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val resp = sheetsService.importarInventario(companyCode, csv)
+            if (resp != null && resp.optString("status") == "success") {
+                val data = resp.optJSONObject("data")
+                val insertados = data?.optInt("insertados", 0) ?: 0
+                val errores = mutableListOf<String>()
+                val arr = data?.optJSONArray("errores")
+                if (arr != null) for (i in 0 until arr.length()) errores.add(arr.optString(i))
+                syncTenantBusinessDataFromSheets(companyCode, companyCode)
+                onResult(insertados, errores)
+            } else {
+                onResult(0, listOf(resp?.optString("message") ?: "Error desconocido"))
+            }
+        }
+    }
+
     fun registrarDeudorDirecto(
         companyCode: String,
         clientName: String,

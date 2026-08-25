@@ -1427,6 +1427,8 @@ fun TenantPosScreen(
                     // BOTON 4: Inventario (Lista por categorÃ­a, Guardar Inventario & Hacer Inventario)
                     3 -> InventarioSectionView(
                         products = productsFlow,
+                        companyCode = company.code,
+                        viewModel = viewModel,
                         savedInventoryBaselines = savedInventoryBaselines,
                         inventorySavedDate = inventorySavedDate,
                         onNewProduct = {
@@ -3515,6 +3517,8 @@ private fun FinanzasSectionView(
 @Composable
 private fun InventarioSectionView(
     products: List<PosProductEntity>,
+    companyCode: String,
+    viewModel: KaptaViewModel,
     savedInventoryBaselines: Map<Int, Pair<Int, Int>>,
     inventorySavedDate: String,
     onNewProduct: () -> Unit,
@@ -3524,6 +3528,27 @@ private fun InventarioSectionView(
     onHacerInventario: () -> Unit,
     isCajero: Boolean = false
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val importLauncher = rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        try {
+            val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: ""
+            if (text.isBlank()) {
+                viewModel.showToast("El archivo está vacío")
+                return@rememberLauncherForActivityResult
+            }
+            viewModel.importarInventario(companyCode, text) { insertados, errores ->
+                val msg = if (insertados > 0) "Se importaron $insertados productos" else "No se importó ningún producto"
+                val detalle = if (errores.isNotEmpty()) " (${errores.size} con errores)" else ""
+                viewModel.showToast(msg + detalle)
+            }
+        } catch (e: Exception) {
+            viewModel.showToast("Error leyendo archivo: ${e.message}")
+        }
+    }
+
     var selectedCatFilter by remember { mutableStateOf("Todos") }
     val categories = remember(products) {
         listOf("Todos") + products.map { it.category.trim() }.filter { it.isNotBlank() }.distinct().sorted()
@@ -3551,12 +3576,21 @@ private fun InventarioSectionView(
             }
 
             if (!isCajero) {
-                Button(
-                    onClick = onNewProduct,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text("+ Producto", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { importLauncher.launch("*/*") },
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Carga Masiva", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = onNewProduct,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("+ Producto", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
