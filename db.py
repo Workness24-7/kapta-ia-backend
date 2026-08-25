@@ -581,6 +581,19 @@ def _tabla_bloqueos(cur):
         "correo TEXT PRIMARY KEY, intentos INT DEFAULT 0, nivel INT DEFAULT 0, "
         "bloqueado_hasta TEXT DEFAULT '')"
     )
+    # ponytail: si la tabla preexiste con esquema viejo (sin columna correo),
+    # recrearla. Pierde bloqueos previos (datos efímeros, aceptable).
+    cur.execute(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name='bloqueos_login' AND column_name='correo'"
+    )
+    if not cur.fetchone():
+        cur.execute("DROP TABLE IF EXISTS bloqueos_login")
+        cur.execute(
+            "CREATE TABLE bloqueos_login ("
+            "correo TEXT PRIMARY KEY, intentos INT DEFAULT 0, nivel INT DEFAULT 0, "
+            "bloqueado_hasta TEXT DEFAULT '')"
+        )
 
 
 def _clave_bloqueo(empresa, correo):
