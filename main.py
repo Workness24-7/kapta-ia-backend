@@ -921,29 +921,6 @@ def action_listar_soportes(params=None):
     return respuesta_success({"data": db.listar_soportes()})
 
 
-POST_ACTIONS = {
-    "reportes": action_reportes,
-    "login": action_login,
-    "registrar_empresa": action_registrar_empresa,
-    "read": action_read,
-    "obtener_todo": action_obtener_todo,
-    "pagar_deudor": action_pagar_deudor,
-    "eliminar_empresa": action_eliminar_empresa,
-    "eliminar_usuario": action_eliminar_usuario,
-    "comprar_plan": action_comprar_plan,
-    "registrar_finanza_kapta": action_registrar_finanza_kapta,
-    "registrar_soporte": action_registrar_soporte,
-    "subir_foto": action_subir_foto,
-    "importar_inventario": action_importar_inventario,
-    "registrar_inventario": action_escribir_fila,
-    "registrar_venta": action_escribir_fila,
-    "registrar_deudor": action_escribir_fila,
-    "registrar_gasto": action_escribir_fila,
-    "crear_usuario": action_escribir_fila,
-    "append": action_escribir_fila,
-}
-
-
 def action_importar_inventario(params):
     """Carga masiva de inventario desde CSV/TXT.
     Columnas (7): Nombre, Categoria, Costo, Precio, PrecioMinimo(vacio=sin valor),
@@ -985,6 +962,29 @@ def action_importar_inventario(params):
         else:
             errores.append(f"Fila {i} ({partes[0]}): {body.get('message', 'error')}")
     return respuesta_success({"insertados": insertados, "errores": errores, "total": len(lineas)})
+
+
+POST_ACTIONS = {
+    "reportes": action_reportes,
+    "login": action_login,
+    "registrar_empresa": action_registrar_empresa,
+    "read": action_read,
+    "obtener_todo": action_obtener_todo,
+    "pagar_deudor": action_pagar_deudor,
+    "eliminar_empresa": action_eliminar_empresa,
+    "eliminar_usuario": action_eliminar_usuario,
+    "comprar_plan": action_comprar_plan,
+    "registrar_finanza_kapta": action_registrar_finanza_kapta,
+    "registrar_soporte": action_registrar_soporte,
+    "subir_foto": action_subir_foto,
+    "importar_inventario": action_importar_inventario,
+    "registrar_inventario": action_escribir_fila,
+    "registrar_venta": action_escribir_fila,
+    "registrar_deudor": action_escribir_fila,
+    "registrar_gasto": action_escribir_fila,
+    "crear_usuario": action_escribir_fila,
+    "append": action_escribir_fila,
+}
 
 
 GET_ACTIONS = {
