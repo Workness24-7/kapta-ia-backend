@@ -645,9 +645,8 @@ def action_escribir_fila(params):
     # Tablas globales (USUARIOS, GASTOS...) usan CABECERAS_GLOBALES (sin Codigo_Empresa);
     # las por-negocio usan TABLAS. El corte debe respetar esa longitud o se pierden
     # columnas como Funciones en usuarios.
-    key_g = _normalize_key(table_name).replace(" ", "_")
-    if key_g in CABECERAS_GLOBALES:
-        columnas = len(CABECERAS_GLOBALES[key_g])
+    if tabla_key in CABECERAS_GLOBALES:
+        columnas = len(CABECERAS_GLOBALES[tabla_key])
     else:
         columnas = TABLAS[tabla_key]["COLUMNAS"]
     fila_valores = datos[:columnas] + [""] * max(0, columnas - len(datos))
