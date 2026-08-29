@@ -34,7 +34,7 @@ CABECERAS = {
 CABECERAS_GLOBALES = {
     "usuarios": ["Codigo_Empresa", "Id_Usuario", "Nombre", "Correo", "Contrasena",
                  "Rol", "Estado", "Fecha_Creacion", "Ultimo_Acceso",
-                 "Fecha_Cambio_Estado", "Motivo_Cambio", "Cambiado_Por"],
+                 "Fecha_Cambio_Estado", "Motivo_Cambio", "Cambiado_Por", "Funciones"],
     "gastos": ["Codigo_Empresa", "Id_Gasto", "Fecha", "Hora", "Categoria",
                "Concepto", "Descripcion", "Proveedor", "Monto", "Metodo_Pago",
                "Referencia", "Usuario", "Estado", "Fecha_Modificacion",
@@ -84,7 +84,29 @@ CREATE TABLE IF NOT EXISTS empresas (
     fecha_vencimiento TEXT DEFAULT '',
     observaciones TEXT DEFAULT '',
     tipo_sistema TEXT DEFAULT 'CLIENTE',
-    tipo_plataforma TEXT DEFAULT 'POS'
+    tipo_plataforma TEXT DEFAULT 'POS',
+    logo_url TEXT DEFAULT '',
+    list_icon_url TEXT DEFAULT '',
+    color_primario TEXT DEFAULT '',
+    color_secundario TEXT DEFAULT '',
+    color_terciario TEXT DEFAULT '',
+    color_neutro TEXT DEFAULT '',
+    tipo_fuente TEXT DEFAULT '',
+    funciones TEXT DEFAULT ''
+);
+"""
+
+SCHEMA_FUNCIONES = """
+CREATE TABLE IF NOT EXISTS funciones_lib (
+    id SERIAL PRIMARY KEY,
+    nombre TEXT UNIQUE NOT NULL,
+    descripcion TEXT DEFAULT '',
+    rol TEXT DEFAULT '',
+    plan_tier TEXT DEFAULT 'Basico',
+    tipo_negocio TEXT DEFAULT '',
+    modulo TEXT DEFAULT '',
+    creado_por TEXT DEFAULT '',
+    fecha TEXT DEFAULT ''
 );
 """
 
@@ -323,6 +345,19 @@ def init_db():
             cur.execute(SCHEMA_EMPRESAS)
             cur.execute(SCHEMA_FINANZAS_KAPTA)
             cur.execute(SCHEMA_SOPORTE)
+            cur.execute(SCHEMA_FUNCIONES)
+            # Migración en caliente de columnas nuevas en empresas.
+            cur.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='empresas'",
+            )
+            existentes = {str(r[0]).lower() for r in cur.fetchall()}
+            for col, default in (
+                ("logo_url", ""), ("list_icon_url", ""), ("color_primario", ""),
+                ("color_secundario", ""), ("color_terciario", ""), ("color_neutro", ""),
+                ("tipo_fuente", ""), ("funciones", ""),
+            ):
+                if col not in existentes:
+                    cur.execute(f'ALTER TABLE empresas ADD COLUMN "{col}" TEXT DEFAULT %s', (default,))
             for tabla_global in CABECERAS_GLOBALES:
                 _crear_tabla_global(cur, tabla_global)
             cur.execute("SELECT codigo FROM empresas WHERE codigo IS NOT NULL AND codigo <> ''")
@@ -546,20 +581,80 @@ def registrar_empresa_db(datos):
                 """INSERT INTO empresas
                    (id, nombre, nit, codigo, tipo, pais, ciudad, direccion, correo,
                     celular1, celular2, estado, plan, tiempo, fecha_creacion,
-                    ultimo_acceso, fecha_vencimiento, observaciones, tipo_sistema, tipo_plataforma)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    ultimo_acceso, fecha_vencimiento, observaciones, tipo_sistema, tipo_plataforma,
+                    logo_url, list_icon_url, color_primario, color_secundario,
+                    color_terciario, color_neutro, tipo_fuente, funciones)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                           %s,%s,%s,%s,%s,%s,%s,%s)""",
                 (
                     datos["id"], datos["nombre"], datos.get("nit", ""),
                     datos["codigo"], datos.get("tipo", ""), datos.get("pais", ""),
-                    datos.get("ciudad", ""), datos.get("direccion", ""),
-                    datos.get("correo", ""), datos.get("celular1", ""),
-                    datos.get("celular2", ""), datos["estado"], datos.get("plan", "Básico"),
+                    datos["ciudad"], datos["direccion"],
+                    datos["correo"], datos["celular1"],
+                    datos["celular2"], datos["estado"], datos.get("plan", "Básico"),
                     datos.get("tiempo", "1 Mes"), datos["fecha_creacion"],
                     "", datos["fecha_vencimiento"], str(datos.get("observaciones") or ""), "CLIENTE", "POS",
+                    datos.get("logo_url", ""), datos.get("list_icon_url", ""),
+                    datos.get("color_primario", ""), datos.get("color_secundario", ""),
+                    datos.get("color_terciario", ""), datos.get("color_neutro", ""),
+                    datos.get("tipo_fuente", ""), datos.get("funciones", ""),
                 ),
             )
             for tabla in CABECERAS:
                 _crear_tabla(cur, datos["codigo"], tabla)
+        conn.commit()
+
+
+def actualizar_empresa_db(codigo, campos):
+    """Actualiza columnas de empresas por código. campos: dict col_bd -> valor."""
+    if not campos:
+        return
+    sets = ", ".join(f'"{k}"=%s' for k in campos)
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f'UPDATE empresas SET {sets} WHERE codigo=%s',
+                (*[str(v) for v in campos.values()], codigo),
+            )
+        conn.commit()
+
+
+def listar_funciones_db():
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT nombre, descripcion, rol, plan_tier, tipo_negocio, modulo "
+                "FROM funciones_lib ORDER BY nombre"
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+
+def crear_funcion_db(datos):
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO funciones_lib
+                   (nombre, descripcion, rol, plan_tier, tipo_negocio, modulo, creado_por, fecha)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                   ON CONFLICT (nombre) DO UPDATE SET
+                       descripcion=EXCLUDED.descripcion, rol=EXCLUDED.rol,
+                       plan_tier=EXCLUDED.plan_tier, tipo_negocio=EXCLUDED.tipo_negocio,
+                       modulo=EXCLUDED.modulo, creado_por=EXCLUDED.creado_por,
+                       fecha=EXCLUDED.fecha""",
+                (
+                    datos["nombre"], datos.get("descripcion", ""),
+                    datos.get("rol", ""), datos.get("plan_tier", "Basico"),
+                    datos.get("tipo_negocio", ""), datos.get("modulo", ""),
+                    datos.get("creado_por", ""), datos.get("fecha", ""),
+                ),
+            )
+        conn.commit()
+
+
+def eliminar_funcion_db(nombre):
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM funciones_lib WHERE nombre=%s", (nombre,))
         conn.commit()
 
 

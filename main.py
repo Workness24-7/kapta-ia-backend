@@ -60,8 +60,8 @@ CABECERAS_GLOBALES = {
     "AUDITORIA_GASTOS": ["Id_Evento", "Id_Empresa", "Id_Gasto", "Accion",
                          "Usuario", "Fecha_Hora", "Detalles", "Estado"],
     "USUARIOS": ["Id_Usuario", "Nombre", "Correo", "Contraseña", "Rol",
-                 "Estado", "Fecha_Creacion", "Ultimo_Acceso",
-                 "Fecha_Cambio_Estado", "Motivo_Cambio", "Cambiado_Por"],
+                  "Estado", "Fecha_Creacion", "Ultimo_Acceso",
+                  "Fecha_Cambio_Estado", "Motivo_Cambio", "Cambiado_Por", "Funciones"],
     "CONFIG_NEGOCIO": ["Parametro", "Valor", "Descripcion", "Fecha_Actualizacion",
                        "Usuario", "Observaciones"],
 }
@@ -199,6 +199,14 @@ def action_listar_empresas(params=None):
             "observaciones": e["observaciones"] or "",
             "tipoSistema": e["tipo_sistema"] or "",
             "tipoPlataforma": e["tipo_plataforma"] or "",
+            "logoUrl": e["logo_url"] or "",
+            "listIconUrl": e["list_icon_url"] or "",
+            "colorPrimario": e["color_primario"] or "",
+            "colorSecundario": e["color_secundario"] or "",
+            "colorTerciario": e["color_terciario"] or "",
+            "colorNeutro": e["color_neutro"] or "",
+            "tipoFuente": e["tipo_fuente"] or "",
+            "funciones": e["funciones"] or "",
         })
     return respuesta_success({"empresas": lista})
 
@@ -406,6 +414,14 @@ def action_registrar_empresa(params):
         "tiempo": str(datos.get("tiempo") or "") or "1 Mes",
         "fecha_creacion": fecha_hoy, "fecha_vencimiento": fecha_vencimiento,
         "observaciones": str(datos.get("observaciones") or ""),
+        "logo_url": str(datos.get("logoUrl") or ""),
+        "list_icon_url": str(datos.get("listIconUrl") or ""),
+        "color_primario": str(datos.get("colorPrimario") or ""),
+        "color_secundario": str(datos.get("colorSecundario") or ""),
+        "color_terciario": str(datos.get("colorTerciario") or ""),
+        "color_neutro": str(datos.get("colorNeutro") or ""),
+        "tipo_fuente": str(datos.get("tipoFuente") or ""),
+        "funciones": str(datos.get("funciones") or ""),
     })
 
     # Ingreso KAPTA: registrar el plan elegido en finanzas_kapta (no si es Permanente)
@@ -444,6 +460,91 @@ def action_registrar_empresa(params):
 
     return respuesta_success({"idEmpresa": id_empresa, "codigo": codigo,
                               "empresa": nombre})
+
+
+def action_actualizar_empresa(params):
+    datos = params.get("data") or params
+    if isinstance(datos, str):
+        try:
+            datos = json.loads(datos)
+        except json.JSONDecodeError:
+            return respuesta_error("datos JSON inválidos.")
+    if not isinstance(datos, dict):
+        return respuesta_error("datos inválidos.")
+
+    codigo = str(datos.get("codigo") or "").strip().upper()
+    if not codigo:
+        return respuesta_error("Debe indicar el código de la empresa.")
+    emp = db.buscar_empresa(codigo)
+    if not emp:
+        return respuesta_error("No existe la empresa: " + codigo)
+
+    campos = {}
+    for cli, bd in (
+        ("nombre", "nombre"),
+        ("tipo", "tipo"),
+        ("pais", "pais"),
+        ("ciudad", "ciudad"),
+        ("direccion", "direccion"),
+        ("correo", "correo"),
+        ("celular1", "celular1"),
+        ("celular2", "celular2"),
+        ("estado", "estado"),
+        ("plan", "plan"),
+        ("logoUrl", "logo_url"),
+        ("listIconUrl", "list_icon_url"),
+        ("colorPrimario", "color_primario"),
+        ("colorSecundario", "color_secundario"),
+        ("colorTerciario", "color_terciario"),
+        ("colorNeutro", "color_neutro"),
+        ("tipoFuente", "tipo_fuente"),
+        ("funciones", "funciones"),
+    ):
+        if cli in datos:
+            campos[bd] = str(datos[cli])
+    if "tiempo" in datos:
+        campos["tiempo"] = str(datos["tiempo"])
+
+    db.actualizar_empresa_db(codigo, campos)
+    return respuesta_success({"codigo": codigo, "actualizada": True})
+
+
+def action_listar_funciones(params=None):
+    funciones = db.listar_funciones_db()
+    data = [{
+        "nombre": f["nombre"],
+        "descripcion": f["descripcion"],
+        "rol": f["rol"],
+        "planTier": f["plan_tier"],
+        "tipoNegocio": f["tipo_negocio"],
+        "modulo": f["modulo"],
+    } for f in funciones]
+    return respuesta_success(data)
+
+
+def action_crear_funcion(params):
+    nombre = str(params.get("nombre") or "").strip()
+    if not nombre:
+        return respuesta_error("Debe indicar el nombre de la función.")
+    db.crear_funcion_db({
+        "nombre": nombre,
+        "descripcion": str(params.get("descripcion") or ""),
+        "rol": str(params.get("rol") or ""),
+        "plan_tier": str(params.get("planTier") or "Basico"),
+        "tipo_negocio": str(params.get("tipoNegocio") or ""),
+        "modulo": str(params.get("modulo") or ""),
+        "creado_por": str(params.get("creadoPor") or ""),
+        "fecha": fecha_actual(),
+    })
+    return respuesta_success({"nombre": nombre, "creada": True})
+
+
+def action_eliminar_funcion(params):
+    nombre = str(params.get("nombre") or "").strip()
+    if not nombre:
+        return respuesta_error("Debe indicar el nombre de la función.")
+    db.eliminar_funcion_db(nombre)
+    return respuesta_success({"nombre": nombre, "eliminada": True})
 
 
 def calcular_vencimiento(tiempo, desde):
@@ -930,6 +1031,7 @@ def action_listar_todos_usuarios(params=None):
             "fechaCambioEstado": f.get("Fecha_Cambio_Estado", ""),
             "motivoCambio": f.get("Motivo_Cambio", ""),
             "cambiadoPor": f.get("Cambiado_Por", ""),
+            "funciones": f.get("Funciones", ""),
         })
     return respuesta_success({"usuarios": usuarios, "total": len(usuarios)})
 
@@ -1015,6 +1117,10 @@ POST_ACTIONS = {
     "reportes": action_reportes,
     "login": action_login,
     "registrar_empresa": action_registrar_empresa,
+    "actualizar_empresa": action_actualizar_empresa,
+    "listar_funciones": action_listar_funciones,
+    "crear_funcion": action_crear_funcion,
+    "eliminar_funcion": action_eliminar_funcion,
     "read": action_read,
     "obtener_todo": action_obtener_todo,
     "pagar_deudor": action_pagar_deudor,
