@@ -678,29 +678,21 @@ def marcar_empresa_eliminada(empresa_id, fecha):
 
 
 def purgar_empresas_eliminadas(dias=2):
-    """Eliminación definitiva: tablas por negocio, filas globales y registro maestro."""
-    limite = (datetime.date.today() - datetime.timedelta(days=dias)).isoformat()
-    borradas = 0
+    # ponytail: retención intencional. Las tablas por negocio NUNCA se borran, para que
+    # una empresa eliminada por error se recupere recreándola con el mismo código y nombre.
+    return 0
+
+
+def reactivar_empresa(codigo):
+    """Recuperación: saca de ELIMINADO y conserva tablas/datos existentes."""
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute("ALTER TABLE empresas ADD COLUMN IF NOT EXISTS fecha_eliminacion TEXT DEFAULT ''")
             cur.execute(
-                "SELECT id, codigo FROM empresas "
-                "WHERE estado='ELIMINADO' AND COALESCE(fecha_eliminacion,'') <> '' "
-                "AND LEFT(fecha_eliminacion,10) <= %s",
-                (limite,),
+                "UPDATE empresas SET estado='Activo', fecha_eliminacion='' WHERE codigo=%s",
+                (codigo,),
             )
-            for emp_id, codigo in cur.fetchall():
-                slug = _slug(codigo or "")
-                for tabla in CABECERAS:
-                    cur.execute(f'DROP TABLE IF EXISTS "{slug}_{_slug(tabla)}"')
-                for glo in CABECERAS_GLOBALES:
-                    col0 = COLUMNS_GLOBALES[glo][0]
-                    cur.execute(f'DELETE FROM "{glo}" WHERE "{col0}"=%s', (codigo,))
-                cur.execute("DELETE FROM empresas WHERE id=%s", (emp_id,))
-                borradas += 1
         conn.commit()
-    return borradas
 
 
 def guardar_foto(datos_b64):

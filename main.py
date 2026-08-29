@@ -388,8 +388,12 @@ def action_registrar_empresa(params):
     if not codigo:
         return respuesta_error("Debe indicar el código de acceso.")
 
-    if db.buscar_empresa(codigo):
-        return respuesta_error("El código de acceso ya existe.")
+    emp_existente = db.buscar_empresa(codigo)
+    if emp_existente:
+        # Recuperación: reactivar y conservar tablas/datos existentes (no recrear ni borrar)
+        db.reactivar_empresa(codigo)
+        return respuesta_success({"idEmpresa": emp_existente.get("id"), "codigo": codigo,
+                                  "empresa": emp_existente.get("nombre"), "recuperada": True})
 
     nit = str(datos.get("nit") or "").strip()
     if db.buscar_empresa_por_nit(nit):
