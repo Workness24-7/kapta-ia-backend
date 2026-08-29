@@ -113,6 +113,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.example.data.local.entity.CompanyEntity
+import com.example.data.local.entity.FuncionLib
 import com.example.ui.KaptaViewModel
 import com.example.ui.components.EtherealBackground
 import com.example.ui.components.GlassCard
@@ -164,6 +165,7 @@ fun CreateEditCompanyScreen(
     var phone2 by remember { mutableStateOf(companyToEdit?.phone2 ?: "") }
     var email by remember { mutableStateOf(companyToEdit?.email ?: "") }
     var businessType by remember { mutableStateOf(companyToEdit?.businessType ?: "🍸 Bar") }
+    var businessTypeOtro by remember { mutableStateOf(if (companyToEdit != null && businessType == "Otro") companyToEdit.businessType else "") }
     val initialStatus = remember(companyToEdit) {
         companyToEdit?.status?.replace(Regex("[^a-zA-Z0-9 áéíóúÁÉÍÓÚñÑ]"), "")?.trim()?.takeIf { it.isNotBlank() } ?: "Activo"
     }
@@ -202,7 +204,8 @@ fun CreateEditCompanyScreen(
             "Tienda de mascotas",
             "Tienda de cosméticos",
             "Ferretería",
-            "Licorería"
+            "Licorería",
+            "Otro"
         )
     }
     // Logo image launchers
@@ -267,8 +270,16 @@ fun CreateEditCompanyScreen(
     // Other modules sheet state
     var showOtherModulesSheet by remember { mutableStateOf(false) }
     // Custom AI functions
-    var aiPromptInput by remember { mutableStateOf("") }
+    var aiFuncionNombre by remember { mutableStateOf("") }
+    var aiFuncionDesc by remember { mutableStateOf("") }
+    var isGeneratingAi by remember { mutableStateOf(false) }
+    var isGeneratingTipo by remember { mutableStateOf(false) }
     val aiFunctionsList by viewModel.createdAiFunctions.collectAsState()
+    val functionLibrary by viewModel.functionLibrary.collectAsState()
+    LaunchedEffect(companyToEdit?.id) {
+        viewModel.loadFunctionLibrary()
+        viewModel.setCustomAiFunctionsFromCompany(companyToEdit?.customFunctionsJson)
+    }
     // Login Preview & Advanced Customization Sheet
     var showCustomizationSheet by remember { mutableStateOf(false) }
     var primaryColorHex by remember { mutableStateOf(companyToEdit?.primaryColorHex ?: "#4F46E5") }
@@ -674,6 +685,42 @@ fun CreateEditCompanyScreen(
                                     }
                                 )
                             }
+                        }
+                    }
+                    if (businessType == "Otro") {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = businessTypeOtro,
+                            onValueChange = { businessTypeOtro = it },
+                            placeholder = { Text("Describe tu tipo de negocio (ej. Taller de motos)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                            singleLine = true,
+                            colors = compactTextFieldColors,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth().height(52.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                val tipo = businessTypeOtro.trim()
+                                if (tipo.isNotBlank()) {
+                                    isGeneratingTipo = true
+                                    scope.launch {
+                                        try {
+                                            val funcs = viewModel.generarFuncionesPorTipoNegocio(tipo)
+                                            funcs.forEach { f ->
+                                                viewModel.addFunctionToLibrary(f.copy(tipoNegocio = tipo))
+                                                viewModel.addCustomAiFunction(f.nombre, f.descripcion)
+                                            }
+                                        } finally { isGeneratingTipo = false }
+                                    }
+                                }
+                            },
+                            enabled = businessTypeOtro.isNotBlank() && !isGeneratingTipo,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().height(44.dp)
+                        ) {
+                            Text(if (isGeneratingTipo) "Generando..." else "Generar funciones para este tipo de negocio", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
@@ -1486,21 +1533,39 @@ fun CreateEditCompanyScreen(
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                OutlinedTextField(
-                                    value = aiPromptInput,
-                                    onValueChange = { aiPromptInput = it },
-                                    placeholder = { Text("Describe la función que deseas crear...", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                                    singleLine = true,
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedContainerColor = Color.Transparent,
-                                        unfocusedContainerColor = Color.Transparent,
-                                        focusedBorderColor = Color.Transparent,
-                                        unfocusedBorderColor = Color.Transparent,
-                                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
-                                    ),
-                                    modifier = Modifier.weight(1f)
-                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    OutlinedTextField(
+                                        value = aiFuncionNombre,
+                                        onValueChange = { aiFuncionNombre = it },
+                                        placeholder = { Text("Nombre de la función *", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                                        singleLine = true,
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedContainerColor = Color.Transparent,
+                                            unfocusedContainerColor = Color.Transparent,
+                                            focusedBorderColor = Color.Transparent,
+                                            unfocusedBorderColor = Color.Transparent,
+                                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    OutlinedTextField(
+                                        value = aiFuncionDesc,
+                                        onValueChange = { aiFuncionDesc = it },
+                                        placeholder = { Text("Describe qué hace la función...", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                                        singleLine = true,
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedContainerColor = Color.Transparent,
+                                            unfocusedContainerColor = Color.Transparent,
+                                            focusedBorderColor = Color.Transparent,
+                                            unfocusedBorderColor = Color.Transparent,
+                                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
@@ -1513,17 +1578,33 @@ fun CreateEditCompanyScreen(
                                             )
                                         )
                                         .clickable {
-                                            if (aiPromptInput.isNotBlank()) {
-                                                viewModel.addCustomAiFunction(
-                                                    "Función IA - ${aiPromptInput.take(20)}...",
-                                                    aiPromptInput
-                                                )
-                                                aiPromptInput = ""
+                                            if (aiFuncionNombre.isNotBlank() && aiFuncionDesc.isNotBlank() && !isGeneratingAi) {
+                                                isGeneratingAi = true
+                                                val nombre = aiFuncionNombre.trim()
+                                                val desc = aiFuncionDesc.trim()
+                                                scope.launch {
+                                                    try {
+                                                        val funcs = viewModel.generarFuncionesConIA("Nombre: $nombre. Descripción: $desc")
+                                                        if (funcs.isEmpty()) {
+                                                            viewModel.addFunctionToLibrary(FuncionLib(nombre, desc, planTier = "Básico", modulo = "General"))
+                                                            viewModel.addCustomAiFunction(nombre, desc)
+                                                        } else {
+                                                            funcs.forEach {
+                                                                viewModel.addFunctionToLibrary(it.copy(modulo = it.modulo.ifBlank { "General" }, planTier = it.planTier.ifBlank { "Básico" }))
+                                                                viewModel.addCustomAiFunction(it.nombre, it.descripcion)
+                                                            }
+                                                        }
+                                                    } finally {
+                                                        isGeneratingAi = false
+                                                        aiFuncionNombre = ""
+                                                        aiFuncionDesc = ""
+                                                    }
+                                                }
                                             }
                                         }
                                 ) {
                                     Text(
-                                        text = "+ Crear función con IA",
+                                        text = if (isGeneratingAi) "Generando..." else "+ Crear función con IA",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,
@@ -1533,55 +1614,63 @@ fun CreateEditCompanyScreen(
                             }
                         }
                         Spacer(modifier = Modifier.height(14.dp))
-                        // Tarjeta de funciones creadas
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color.White.copy(alpha = 0.20f))
-                                .border(1.dp, Color.White.copy(alpha = 0.50f), RoundedCornerShape(16.dp))
-                                .padding(12.dp)
-                        ) {
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.AutoAwesome,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Funciones creadas (${aiFunctionsList.size})",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                if (aiFunctionsList.isEmpty()) {
-                                    Text(
-                                        text = "Aún no has creado funciones personalizadas.",
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                } else {
-                                    aiFunctionsList.forEachIndexed { idx, fn ->
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(vertical = 2.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(text = "• ${fn.first}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            Text(
-                                                text = "Eliminar",
-                                                fontSize = 10.sp,
-                                                color = Color(0xFFFF453A),
-                                                modifier = Modifier.clickable { viewModel.removeCustomAiFunction(idx) }
-                                            )
+                        // Biblioteca global de funciones IA (SuperAdmin)
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Outlined.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Biblioteca de funciones (${functionLibrary.size})",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Creadas por SuperAdmin. Activa las que este negocio puede usar; el admin del negocio las asigna a sus usuarios.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            if (functionLibrary.isEmpty()) {
+                                Text(
+                                    text = "Aún no hay funciones en la biblioteca. Usa el campo de arriba para generar la primera con IA.",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                functionLibrary.forEach { (nombre, desc) ->
+                                    val activa = aiFunctionsList.any { it.first == nombre }
+                                    val rol = rolDeDescripcion(desc)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Checkbox(
+                                            checked = activa,
+                                            onCheckedChange = { viewModel.toggleCustomAiFunction(nombre, desc) }
+                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(text = nombre, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                                            if (rol.isNotBlank()) Text(text = "Rol: $rol", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
+                                        Text(
+                                            text = "Eliminar",
+                                            fontSize = 10.sp,
+                                            color = Color(0xFFFF453A),
+                                            modifier = Modifier.clickable {
+                                                scope.launch {
+                                                    if (activa) viewModel.toggleCustomAiFunction(nombre, desc)
+                                                    viewModel.removeFunctionFromLibrary(nombre)
+                                                }
+                                            }
+                                        )
                                     }
                                 }
                             }
@@ -1881,7 +1970,7 @@ fun CreateEditCompanyScreen(
                             phone = phone1,
                             phone2 = phone2,
                             email = email,
-                            businessType = businessType,
+                            businessType = if (businessType == "Otro") businessTypeOtro.trim().ifBlank { "Otro" } else businessType,
                             adminName = adminName,
                             adminEmail = adminEmail,
                             adminPass = adminPass,
@@ -2523,4 +2612,11 @@ fun FeatureMatrixItemRow(
             )
         }
     }
+}
+
+private fun rolDeDescripcion(descripcion: String): String {
+    val idx = descripcion.indexOf("[Rol:", ignoreCase = true)
+    if (idx < 0) return ""
+    val end = descripcion.indexOf("]", startIndex = idx)
+    return if (end > idx) descripcion.substring(idx + 6, end).trim() else ""
 }

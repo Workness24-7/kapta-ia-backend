@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -71,6 +72,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import com.example.data.local.entity.CompanyEntity
 import com.example.ui.KaptaViewModel
 import com.example.ui.components.GlobalSearchModal
@@ -110,45 +115,6 @@ fun SuperAdminDashboardScreen(
     }
     LaunchedEffect(Unit) {
         viewModel.cargarSoportes()
-    }
-
-    var headerCollapsePx by remember { mutableFloatStateOf(0f) }
-    val density = LocalDensity.current
-    // Solo colapsa el saludo (58dp): el dock sube bajo el logo pero NUNCA sale de la vista
-    var maxCollapsePx by remember { mutableFloatStateOf(with(density) { 58.dp.toPx() }) }
-    // Altura real del saludo (58dp -> 0dp): layout de verdad, el contenido sube con el dock sin huecos
-    val saludoAltura = with(density) { (maxCollapsePx + headerCollapsePx).coerceAtLeast(0f).toDp() }
-
-    val nestedScrollConnection = remember {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                val delta = available.y
-                if (delta < 0) { // Scrolling down -> collapse greeting + dock first
-                    val oldOffset = headerCollapsePx
-                    val newOffset = (headerCollapsePx + delta).coerceIn(-maxCollapsePx, 0f)
-                    val consumed = newOffset - oldOffset
-                    headerCollapsePx = newOffset
-                    return Offset(0f, consumed)
-                }
-                return Offset.Zero
-            }
-
-            override fun onPostScroll(
-                consumed: Offset,
-                available: Offset,
-                source: NestedScrollSource
-            ): Offset {
-                val delta = available.y
-                if (delta > 0) { // Scrolling up at top -> expand again
-                    val oldOffset = headerCollapsePx
-                    val newOffset = (headerCollapsePx + delta).coerceIn(-maxCollapsePx, 0f)
-                    val consumedCustom = newOffset - oldOffset
-                    headerCollapsePx = newOffset
-                    return Offset(0f, consumedCustom)
-                }
-                return Offset.Zero
-            }
-        }
     }
 
     if (showNotificationsModal) {
@@ -236,58 +202,67 @@ fun SuperAdminDashboardScreen(
             Column(
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Fixed App Logo Header Container (KAPTA IA + Notification Bell + Profile Avatar)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .zIndex(2f)
-                        .background(MaterialTheme.colorScheme.background)
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                ) {
-                    AppLogoHeaderWidget(
-                        userName = "Brayam",
-                        userRole = "AI",
-                        notificationCount = notificationCount,
-                        onNotificationClick = { showNotificationsModal = true },
-                        onProfileClick = { showUserProfileModal = true }
-                    )
-                }
+                AppLogoHeaderWidget(
+                    userEmail = "AdminMauricio@kaptaia.com",
+                    notificationCount = notificationCount,
+                    onNotificationClick = { showNotificationsModal = true },
+                    onProfileClick = { showUserProfileModal = true }
+                )
 
-                // Saludo colapsable: su ALTURA REAL se encoge con el scroll
-                Box(
+                Spacer(modifier = Modifier.height(8.dp))
+
+                val navBorderBrush = Brush.linearGradient(
+                    colors = listOf(Color(0xFFFFFFFF), Color(0xFFA6A6A6)),
+                    start = Offset(0f, 0f),
+                    end = Offset(1000f, 1000f)
+                )
+
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(saludoAltura)
-                        .clipToBounds(),
-                    contentAlignment = Alignment.BottomStart
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Greeting ("Buenos días, Brayam 👋" & "Panel de Administración")
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(58.dp)
-                            .background(MaterialTheme.colorScheme.background)
-                            .padding(horizontal = 20.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        GreetingHeaderWidget(
-                            userName = "Brayam"
+                    // Dock principal (cápsula) con los 4 iconos
+                    Box(modifier = Modifier.weight(1f)) {
+                        FloatingDockBar(
+                            selectedTab = selectedTab,
+                            onTabSelected = { selectedTab = it },
+                            isDarkMode = isDarkMode,
+                            borderBrush = navBorderBrush
                         )
                     }
-                }
 
-                // Floating Dock Bar (Inicio, Empresas, Finanzas, Usuarios + Lupa)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                ) {
-                    FloatingDockBar(
-                        selectedTab = selectedTab,
-                        onTabSelected = { selectedTab = it },
-                        onSearchClick = { showGlobalSearchModal = true },
-                        isDarkMode = isDarkMode
+                    // Dock de búsqueda (isla circular independiente, misma altura que el dock)
+                    val searchBorderBrush = Brush.linearGradient(
+                        colors = listOf(Color(0xFFFFFFFF), Color(0xFFA6A6A6)),
+                        start = Offset(0f, 0f),
+                        end = Offset(90f, 90f)
                     )
+                    Box(
+                        modifier = Modifier
+                            .wrapContentSize()
+                            .shadow(8.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.10f))
+                            .clip(CircleShape)
+                            .background(Color(0xFFF8F8F8))
+                            .border(1.dp, searchBorderBrush, CircleShape)
+                            .padding(7.dp)
+                            .clickable { showGlobalSearchModal = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier.size(52.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                painter = painterResource(R.drawable.lupa_icono),
+                                contentDescription = "Buscar",
+                                modifier = Modifier.size(28.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -295,7 +270,6 @@ fun SuperAdminDashboardScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .nestedScroll(nestedScrollConnection)
         ) {
             Box(
                 modifier = Modifier.fillMaxSize()
@@ -341,96 +315,67 @@ fun SuperAdminDashboardScreen(
 private fun FloatingDockBar(
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
-    onSearchClick: () -> Unit,
-    isDarkMode: Boolean
+    isDarkMode: Boolean,
+    borderBrush: Brush = Brush.linearGradient(
+        colors = listOf(Color(0xFFFFFFFF), Color(0xFFA6A6A6)),
+        start = Offset(0f, 0f),
+        end = Offset(1000f, 1000f)
+    )
 ) {
-    val dockBg = if (isDarkMode) Color(0xFF1C1C1E) else Color.White
-    val dockBorder = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)
-    val selectedBg = if (isDarkMode) Color(0xFF2A2A2E) else Color(0xFFF1F4F9)
+    val selectedBg = if (isDarkMode) Color(0xFF2A2A2E) else Color(0xFFEEF1F6)
+    val selectedFg = if (isDarkMode) Color(0xFF8AB4FF) else Color(0xFF2563EB)
     val inactiveFg = if (isDarkMode) Color(0xFF94A3B8) else Color(0xFF64748B)
-    val selectedFg = MaterialTheme.colorScheme.primary
 
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 16.dp, top = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+            .shadow(8.dp, RoundedCornerShape(50), ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.10f))
+            .clip(RoundedCornerShape(50))
+            .background(Color(0xFFF8F8F8))
+            .border(1.dp, borderBrush, RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 7.dp)
     ) {
-        Surface(
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(50),
-            color = dockBg,
-            border = BorderStroke(1.dp, dockBorder),
-            shadowElevation = 6.dp
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    DockItem(
-                        selected = selectedTab == 0,
-                        onClick = { onTabSelected(0) },
-                        icon = Icons.Default.Home,
-                        label = "Inicio",
-                        isDarkMode = isDarkMode
-                    )
-                }
-                Box(modifier = Modifier.weight(1f)) {
-                    DockItem(
-                        selected = selectedTab == 1,
-                        onClick = { onTabSelected(1) },
-                        icon = Icons.Default.Business,
-                        label = "Empresas",
-                        isDarkMode = isDarkMode
-                    )
-                }
-                Box(modifier = Modifier.weight(1f)) {
-                    DockItem(
-                        selected = selectedTab == 2,
-                        onClick = { onTabSelected(2) },
-                        icon = Icons.Default.AccountBalanceWallet,
-                        label = "Finanzas",
-                        isDarkMode = isDarkMode
-                    )
-                }
-                Box(modifier = Modifier.weight(1f)) {
-                    DockItem(
-                        selected = selectedTab == 3,
-                        onClick = { onTabSelected(3) },
-                        icon = Icons.Default.People,
-                        label = "Usuarios",
-                        isDarkMode = isDarkMode
-                    )
-                }
-            }
-        }
-
-        // Botón de búsqueda circular independiente
-        Surface(
-            onClick = { onSearchClick() },
-            shape = CircleShape,
-            color = dockBg,
-            border = BorderStroke(1.dp, dockBorder),
-            shadowElevation = 6.dp,
-            modifier = Modifier.size(56.dp)
-        ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = "Buscar",
-                    tint = inactiveFg,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
+            DockItem(
+                selected = selectedTab == 0,
+                onClick = { onTabSelected(0) },
+                painter = R.drawable.inicio_icono,
+                contentDescription = "Inicio",
+                selectedBg = selectedBg,
+                selectedFg = selectedFg,
+                inactiveFg = inactiveFg
+            )
+            DockItem(
+                selected = selectedTab == 1,
+                onClick = { onTabSelected(1) },
+                painter = R.drawable.empresas_icono,
+                contentDescription = "Empresas",
+                selectedBg = selectedBg,
+                selectedFg = selectedFg,
+                inactiveFg = inactiveFg
+            )
+            DockItem(
+                selected = selectedTab == 2,
+                onClick = { onTabSelected(2) },
+                painter = R.drawable.modulo_financiero_icono,
+                contentDescription = "Finanzas",
+                selectedBg = selectedBg,
+                selectedFg = selectedFg,
+                inactiveFg = inactiveFg
+            )
+            DockItem(
+                selected = selectedTab == 3,
+                onClick = { onTabSelected(3) },
+                painter = R.drawable.usuarios_icono,
+                contentDescription = "Usuarios",
+                selectedBg = selectedBg,
+                selectedFg = selectedFg,
+                inactiveFg = inactiveFg
+            )
         }
     }
 }
@@ -439,36 +384,31 @@ private fun FloatingDockBar(
 private fun DockItem(
     selected: Boolean,
     onClick: () -> Unit,
-    icon: ImageVector,
-    label: String,
-    isDarkMode: Boolean
+    painter: Int,
+    contentDescription: String,
+    selectedBg: Color,
+    selectedFg: Color,
+    inactiveFg: Color
 ) {
-    val selectedBg = if (isDarkMode) Color(0xFF2A2A2E) else Color(0xFFF1F4F9)
-    val inactiveFg = if (isDarkMode) Color(0xFF94A3B8) else Color(0xFF64748B)
-    val selectedFg = MaterialTheme.colorScheme.primary
     val bg by animateColorAsState(
         if (selected) selectedBg else Color.Transparent,
-        animationSpec = tween(250)
-    )
-    val fg by animateColorAsState(
-        if (selected) selectedFg else inactiveFg,
         animationSpec = tween(250)
     )
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(50),
         color = bg,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.size(52.dp)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(vertical = 10.dp)
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = fg,
-                modifier = Modifier.size(26.dp)
+            Image(
+                painter = painterResource(painter),
+                contentDescription = contentDescription,
+                modifier = Modifier.size(30.dp),
+                contentScale = ContentScale.Fit
             )
         }
     }

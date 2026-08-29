@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,7 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
@@ -32,8 +33,6 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -52,11 +51,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.ui.components.EtherealBackground
 import com.example.ui.components.KaptaLogoHeader
 
@@ -71,6 +72,13 @@ fun SuperAdminLoginScreen(
     var rememberMe by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Degradado de marca: cian / azul claro → índigo → morado
+    val brandColors = listOf(Color(0xFF38BDF8), Color(0xFF6366F1), Color(0xFFA855F7))
+
+    // Foto de perfil del Super Admin: reutiliza el mismo almacenamiento del perfil (SharedPreferences kapta_perfil, clave foto_$email)
+    val profilePrefs = remember { context.getSharedPreferences("kapta_perfil", android.content.Context.MODE_PRIVATE) }
+    var superAdminPhotoUrl by remember(emailInput) { mutableStateOf(profilePrefs.getString("foto_$emailInput", "") ?: "") }
 
     EtherealBackground {
         Column(
@@ -119,21 +127,38 @@ fun SuperAdminLoginScreen(
                     modifier = Modifier.padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // User Avatar Icon with thin blue border
+                    // Círculo de perfil del Super Admin con borde degradado (cian → morado)
                     Box(
                         modifier = Modifier
-                            .size(64.dp)
+                            .size(72.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFEFF6FF))
-                            .border(1.5.dp, Color(0xFF60A5FA), CircleShape),
+                            .background(Brush.linearGradient(colors = brandColors))
+                            .padding(2.5.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = "Avatar de Usuario",
-                            tint = Color(0xFF2563EB),
-                            modifier = Modifier.size(34.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                                .background(Color(0xFFE0F2FE)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (superAdminPhotoUrl.isNotBlank()) {
+                                AsyncImage(
+                                    model = superAdminPhotoUrl,
+                                    contentDescription = "Foto de perfil del Super Admin",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Avatar de Usuario",
+                                    tint = Color(0xFF6366F1),
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -249,14 +274,29 @@ fun SuperAdminLoginScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(
-                                checked = rememberMe,
-                                onCheckedChange = { rememberMe = it },
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = Color(0xFF2563EB),
-                                    uncheckedColor = Color(0xFF94A3B8)
-                                )
-                            )
+                            val checkBoxModifier = Modifier
+                                .size(22.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable { rememberMe = !rememberMe }
+                            Box(
+                                modifier = if (rememberMe) {
+                                    checkBoxModifier.background(Brush.linearGradient(colors = brandColors))
+                                } else {
+                                    checkBoxModifier
+                                        .background(Color.White.copy(alpha = 0.55f))
+                                        .border(1.5.dp, Brush.linearGradient(colors = brandColors), RoundedCornerShape(6.dp))
+                                },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (rememberMe) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Recordarme",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
                             Text(
                                 text = "Recordarme",
                                 fontSize = 13.sp,
@@ -317,38 +357,15 @@ fun SuperAdminLoginScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(
-                                    brush = Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color(0xFF2563EB), // Intense Blue
-                                            Color(0xFF1D4ED8)  // Deep Royal Blue
-                                        )
-                                    )
-                                ),
+                                .background(Brush.horizontalGradient(colors = brandColors)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 20.dp)
-                            ) {
-                                Spacer(modifier = Modifier.weight(1f))
-                                Text(
-                                    text = "Iniciar sesión",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp
-                                )
-                                Spacer(modifier = Modifier.weight(1f))
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                    contentDescription = "Iniciar sesión",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
+                            Text(
+                                text = "Iniciar sesión",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
                         }
                     }
 

@@ -2,6 +2,7 @@ package com.example.data.remote
 
 import android.util.Log
 import com.example.BuildConfig
+import com.example.data.local.entity.FuncionLib
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -953,6 +954,122 @@ class SheetsDatabaseService(
             }
         }
         result
+    }
+
+    /**
+     * Actualiza campos de la empresa en Apps Script (action "actualizar_empresa").
+     * El backend debe localizar la fila por "codigo" y escribir los campos recibidos
+     * (logoUrl, listIconUrl, colorPrimario, colorSecundario, colorTerciario, colorNeutro, tipoFuente).
+     */
+    suspend fun actualizarEmpresa(payload: Map<String, Any>): JSONObject? = withContext(Dispatchers.IO) {
+        try {
+            executeWithRetry {
+                val jsonPayload = JSONObject(payload).apply { put("action", "actualizar_empresa") }
+                val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
+                val targetUrl: String = if (!webAppScriptUrl.isNullOrBlank()) webAppScriptUrl!! else APPS_SCRIPT_WEB_APP_URL
+                val request = Request.Builder().url(targetUrl).post(body).build()
+                client.newCall(request).execute().use { response ->
+                    val str = response.body?.string() ?: ""
+                    val json = JSONObject(str)
+                    if (json.optString("status") == "success" || json.optBoolean("success", false)) json else null
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error actualizando empresa: ${e.message}", e)
+            null
+        }
+    }
+
+    /**
+     * Lista la biblioteca global de funciones IA (action "listar_funciones").
+     */
+    suspend fun listarFunciones(): List<FuncionLib> = withContext(Dispatchers.IO) {
+        try {
+            executeWithRetry {
+                val json = JSONObject().apply { put("action", "listar_funciones") }
+                val body = json.toString().toRequestBody("application/json".toMediaType())
+                val targetUrl: String = if (!webAppScriptUrl.isNullOrBlank()) webAppScriptUrl!! else APPS_SCRIPT_WEB_APP_URL
+                val request = Request.Builder().url(targetUrl).post(body).build()
+                client.newCall(request).execute().use { response ->
+                    val str = response.body?.string() ?: ""
+                    val root = JSONObject(str)
+                    val arr = root.optJSONArray("data") ?: root.optJSONArray("funciones") ?: JSONArray()
+                    val out = mutableListOf<FuncionLib>()
+                    for (i in 0 until arr.length()) {
+                        val o = arr.optJSONObject(i) ?: continue
+                        val nombre = o.optString("nombre").orEmpty()
+                        if (nombre.isBlank()) continue
+                        out.add(
+                            FuncionLib(
+                                nombre = nombre,
+                                descripcion = o.optString("descripcion", ""),
+                                rol = o.optString("rol", ""),
+                                planTier = o.optString("planTier", "Basico"),
+                                tipoNegocio = o.optString("tipoNegocio", ""),
+                                modulo = o.optString("modulo", "")
+                            )
+                        )
+                    }
+                    out
+                }
+            } ?: emptyList()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error listando funciones: ${e.message}", e)
+            emptyList()
+        }
+    }
+
+    suspend fun crearFuncion(
+        nombre: String,
+        descripcion: String,
+        rol: String = "",
+        planTier: String = "Basico",
+        tipoNegocio: String = "",
+        modulo: String = ""
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            executeWithRetry {
+                val json = JSONObject().apply {
+                    put("action", "crear_funcion")
+                    put("nombre", nombre)
+                    put("descripcion", descripcion)
+                    put("rol", rol)
+                    put("planTier", planTier)
+                    put("tipoNegocio", tipoNegocio)
+                    put("modulo", modulo)
+                }
+                val body = json.toString().toRequestBody("application/json".toMediaType())
+                val targetUrl: String = if (!webAppScriptUrl.isNullOrBlank()) webAppScriptUrl!! else APPS_SCRIPT_WEB_APP_URL
+                val request = Request.Builder().url(targetUrl).post(body).build()
+                client.newCall(request).execute().use { response ->
+                    val str = response.body?.string() ?: ""
+                    val root = JSONObject(str)
+                    root.optString("status") == "success" || root.optBoolean("success", false)
+                }
+            } ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Error creando funcion: ${e.message}", e)
+            false
+        }
+    }
+
+    suspend fun eliminarFuncion(nombre: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            executeWithRetry {
+                val json = JSONObject().apply { put("action", "eliminar_funcion"); put("nombre", nombre) }
+                val body = json.toString().toRequestBody("application/json".toMediaType())
+                val targetUrl: String = if (!webAppScriptUrl.isNullOrBlank()) webAppScriptUrl!! else APPS_SCRIPT_WEB_APP_URL
+                val request = Request.Builder().url(targetUrl).post(body).build()
+                client.newCall(request).execute().use { response ->
+                    val str = response.body?.string() ?: ""
+                    val root = JSONObject(str)
+                    root.optString("status") == "success" || root.optBoolean("success", false)
+                }
+            } ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Error eliminando funcion: ${e.message}", e)
+            false
+        }
     }
 
     /**

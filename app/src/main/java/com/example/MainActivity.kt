@@ -30,6 +30,7 @@ import com.example.ui.screens.SuperAdminDashboardScreen
 import com.example.ui.screens.SuperAdminLoginScreen
 import com.example.ui.screens.TenantPosScreen
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.theme.BusinessTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -264,11 +265,13 @@ fun KaptaApp() {
         composable("tenant_pos") {
             val selectedComp by viewModel.selectedCompany.collectAsState()
             selectedComp?.let { comp ->
-                TenantPosScreen(
-                    viewModel = viewModel,
-                    company = comp,
-                    onExitPos = { navController.popBackStack() }
-                )
+                BusinessTheme(company = comp) {
+                    TenantPosScreen(
+                        viewModel = viewModel,
+                        company = comp,
+                        onExitPos = { navController.popBackStack() }
+                    )
+                }
             }
         }
     }

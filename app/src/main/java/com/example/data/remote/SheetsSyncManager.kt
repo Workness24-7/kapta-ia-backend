@@ -114,8 +114,8 @@ class SheetsSyncManager(
             for (user in unsyncedUsers) {
                 val company = repository.getCompanyByCode(user.companyCode)
                 val sheetName = company?.name ?: user.companyCode
-                // Usuarios (BQ:CA - 11 cols): Id_Usuario, Nombre, Correo, Contraseña, Rol, Estado, Fecha_Creacion, Ultimo_Acceso, Fecha_Cambio_Estado, Motivo_Cambio, Cambiado_Por
-                val payload = listOf("", user.username.ifBlank { user.name }, user.email, user.password, user.role, "Activo", user.creationDate, user.lastAccess, "", "", "")
+                // Usuarios (BQ:CA - 12 cols): Id_Usuario, Nombre, Correo, Contraseña, Rol, Estado, Fecha_Creacion, Ultimo_Acceso, Fecha_Cambio_Estado, Motivo_Cambio, Cambiado_Por, Funciones
+                val payload = listOf("", user.username.ifBlank { user.name }, user.email, user.password, user.role, "Activo", user.creationDate, user.lastAccess, "", "", "", user.assignedFunctionsJson)
                 val success = sheetsService.crearUsuario(sheetName, payload)
                 if (success) {
                     repository.markUserSynced(user.id)

@@ -5,6 +5,7 @@ import com.example.data.local.dao.KaptaDao
 import com.example.data.local.entity.CompanyEntity
 import com.example.data.local.entity.CompanyUserEntity
 import com.example.data.local.entity.FinancialTransactionEntity
+import com.example.data.local.entity.IaFunctionEntity
 import com.example.data.local.entity.PosProductEntity
 import com.example.data.local.entity.PosSaleEntity
 import kotlinx.coroutines.flow.Flow
@@ -60,6 +61,13 @@ class KaptaRepository(private val dao: KaptaDao) {
     suspend fun insertTransaction(transaction: FinancialTransactionEntity) = dao.insertTransaction(transaction)
     suspend fun getUnsyncedTransactions(): List<FinancialTransactionEntity> = dao.getUnsyncedTransactions()
     suspend fun markTransactionSynced(id: Int) = dao.markTransactionSynced(id)
+
+    // IA Functions Library (global, owned by SuperAdmin)
+    val allIaFunctions: Flow<List<IaFunctionEntity>> = dao.getAllIaFunctions()
+    suspend fun getAllIaFunctionsSync(): List<IaFunctionEntity> = dao.getAllIaFunctionsSync()
+    suspend fun insertIaFunction(f: IaFunctionEntity) = dao.insertIaFunction(f)
+    suspend fun deleteIaFunctionByNombre(nombre: String) = dao.deleteIaFunctionByNombre(nombre)
+    suspend fun getIaFunctionByNombre(nombre: String): IaFunctionEntity? = dao.getIaFunctionByNombre(nombre)
 
     // ponytail: sin fecha válida se asume membresía activa lejana (10 años)
     private fun diasHastaVencimiento(fechaIso: String): Int {

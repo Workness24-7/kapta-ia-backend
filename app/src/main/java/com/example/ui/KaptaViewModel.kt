@@ -12,6 +12,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
 import com.example.data.local.entity.CompanyEntity
 import com.example.data.local.entity.CompanyUserEntity
+import com.example.data.local.entity.IaFunctionEntity
+import com.example.data.local.entity.FuncionLib
 import com.example.data.local.entity.FinancialTransaction
 import com.example.data.local.entity.FinancialTransactionEntity
 import com.example.data.local.entity.PosProductEntity
@@ -41,6 +43,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import org.json.JSONArray
+import org.json.JSONObject
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import com.example.BuildConfig
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -1498,6 +1506,153 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun toggleCustomAiFunction(nombre: String, descripcion: String) {
+        val current = _createdAiFunctions.value.toMutableList()
+        val i = current.indexOfFirst { it.first == nombre }
+        if (i >= 0) current.removeAt(i) else current.add(Pair(nombre, descripcion))
+        _createdAiFunctions.value = current
+    }
+
+    private val aiHttpClient = OkHttpClient()
+
+    /**
+     * Llama a OpenRouter (modelo gratuito) para generar funciones de negocio a partir de un prompt.
+     * Devuelve lista de FuncionLib (con planTier y modulo). Sin key o fallo: vacío.
+     */
+    suspend fun generarFuncionesConIA(prompt: String): List<FuncionLib> = withContext(Dispatchers.IO) {
+        val apiKey = BuildConfig.OPENROUTER_API_KEY
+        if (apiKey.isBlank() || apiKey.startsWith("REEMPLAZA")) return@withContext emptyList()
+        val model = "mistralai/mistral-7b-instruct:free"
+        val system = """Eres un arquitecto de funciones para un POS multi-tenant. Diseñas funciones REUTILIZABLES (plantillas) para cualquier negocio.
+Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
+[{"nombre":"...","descripcion":"...","rol":"...","plan":"Basico|Premium|MaxIA","modulo":"ventas|gastos|deudores|inventario|facturacion|reporte|caja|usuario|cliente|custom"}]
+"plan" = nivel minimo del negocio que la obtiene: Basico=vitales, Premium=basicas+utiles, MaxIA=todas+avanzadas a gran escala.
+"modulo" = plantilla de UI que la renderiza (igual para todos los negocios). Crea entre 3 y 8 funciones coherentes."""
+        val bodyJson = JSONObject().apply {
+            put("model", model)
+            put("temperature", 0.7)
+            put("messages", JSONArray().apply {
+                put(JSONObject().apply { put("role", "system"); put("content", system) })
+                put(JSONObject().apply { put("role", "user"); put("content", prompt) })
+            })
+        }
+        val request = Request.Builder()
+            .url("https://openrouter.ai/api/v1/chat/completions")
+            .addHeader("Authorization", "Bearer $apiKey")
+            .addHeader("Content-Type", "application/json")
+            .post(bodyJson.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        try {
+            aiHttpClient.newCall(request).execute().use { response ->
+                val str = response.body?.string() ?: ""
+                if (!response.isSuccessful) {
+                    Log.e("KaptaViewModel", "OpenRouter error ${response.code}: $str")
+                    return@withContext emptyList()
+                }
+                val json = JSONObject(str)
+                val content = json.optJSONArray("choices")
+                    ?.optJSONObject(0)
+                    ?.optJSONObject("message")
+                    ?.optString("content") ?: ""
+                parseFuncionesIA(content)
+            }
+        } catch (e: Exception) {
+            Log.e("KaptaViewModel", "Error IA: ${e.message}", e)
+            emptyList()
+        }
+    }
+
+    /** Genera el set completo de funciones para un tipo de negocio, clasificadas por plan. */
+    suspend fun generarFuncionesPorTipoNegocio(tipoNegocio: String): List<FuncionLib> {
+        return generarFuncionesConIA(
+            "Tipo de negocio: $tipoNegocio. Crea TODAS sus funciones clasificadas por plan: " +
+            "Basico = vitales; Premium = basicas + utiles; MaxIA = todas + avanzadas a gran escala. " +
+            "Cada funcion mapea a un modulo existente (ventas, gastos, deudores, inventario, facturacion, reporte, caja, usuario, cliente)."
+        )
+    }
+
+    private fun parseFuncionesIA(content: String): List<FuncionLib> {
+        val text = content.trim()
+        val start = text.indexOf('[')
+        val end = text.lastIndexOf(']')
+        if (start < 0 || end <= start) return emptyList()
+        return try {
+            val arr = JSONArray(text.substring(start, end + 1))
+            val out = mutableListOf<FuncionLib>()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val nombre = o.optString("nombre").ifBlank { continue }
+                val descripcion = o.optString("descripcion", "")
+                val rol = o.optString("rol", "")
+                val plan = o.optString("plan", "Basico").ifBlank { "Basico" }
+                val modulo = o.optString("modulo", "custom").ifBlank { "custom" }
+                out.add(FuncionLib(nombre = nombre, descripcion = descripcion, rol = rol, planTier = plan, modulo = modulo))
+            }
+            out
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun rolDeDescripcion(descripcion: String): String {
+        val idx = descripcion.indexOf("[Rol:", ignoreCase = true)
+        if (idx < 0) return ""
+        val end = descripcion.indexOf("]", startIndex = idx)
+        return if (end > idx) descripcion.substring(idx + 6, end).trim() else ""
+    }
+
+    fun parseCustomFunctions(json: String?): List<Pair<String, String>> {
+        if (json.isNullOrBlank()) return emptyList()
+        return try {
+            val arr = JSONArray(json)
+            val out = mutableListOf<Pair<String, String>>()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i)
+                if (o != null) {
+                    val nombre = o.optString("nombre").ifBlank { continue }
+                    out.add(Pair(nombre, o.optString("descripcion", "")))
+                } else {
+                    val s = arr.optString(i)
+                    if (s.isNotBlank()) out.add(Pair(s, ""))
+                }
+            }
+            out
+        } catch (e: Exception) { emptyList() }
+    }
+
+    // Biblioteca global de funciones IA (propiedad de SuperAdmin)
+    private val _functionLibrary = MutableStateFlow<List<FuncionLib>>(emptyList())
+    val functionLibrary: StateFlow<List<FuncionLib>> = _functionLibrary.asStateFlow()
+
+    fun loadFunctionLibrary() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val remoto = runCatching { sheetsService.listarFunciones() }.getOrDefault(emptyList())
+            val local = runCatching { repository.getAllIaFunctionsSync() }.getOrDefault(emptyList())
+                .map { FuncionLib(nombre = it.nombre, descripcion = it.descripcion, rol = it.rol, planTier = it.planTier, tipoNegocio = it.tipoNegocio, modulo = it.modulo) }
+            val merged = (remoto + local).distinctBy { it.nombre }
+            _functionLibrary.value = merged
+            merged.forEach {
+                runCatching { repository.insertIaFunction(IaFunctionEntity(nombre = it.nombre, descripcion = it.descripcion, rol = it.rol, planTier = it.planTier, tipoNegocio = it.tipoNegocio, modulo = it.modulo)) }
+            }
+        }
+    }
+
+    suspend fun addFunctionToLibrary(f: FuncionLib) {
+        runCatching { sheetsService.crearFuncion(f.nombre, f.descripcion, f.rol, f.planTier, f.tipoNegocio, f.modulo) }
+        runCatching { repository.insertIaFunction(IaFunctionEntity(nombre = f.nombre, descripcion = f.descripcion, rol = f.rol, planTier = f.planTier, tipoNegocio = f.tipoNegocio, modulo = f.modulo)) }
+        _functionLibrary.value = (_functionLibrary.value + f).distinctBy { it.nombre }
+    }
+
+    suspend fun removeFunctionFromLibrary(nombre: String) {
+        runCatching { sheetsService.eliminarFuncion(nombre) }
+        runCatching { repository.deleteIaFunctionByNombre(nombre) }
+        _functionLibrary.value = _functionLibrary.value.filter { it.nombre != nombre }
+    }
+
+    fun setCustomAiFunctionsFromCompany(json: String?) {
+        _createdAiFunctions.value = parseCustomFunctions(json)
+    }
+
     fun saveOrUpdateCompany(
         companyId: Int? = null,
         name: String,
@@ -1542,7 +1697,11 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val modulesJson = JSONArray(selectedModules).toString()
-                val createdFunctionsJson = JSONArray(_createdAiFunctions.value.map { it.first }).toString()
+                val createdFunctionsJson = JSONArray().apply {
+                    _createdAiFunctions.value.forEach {
+                        put(JSONObject().apply { put("nombre", it.first); put("descripcion", it.second) })
+                    }
+                }.toString()
                 val cleanCode = if (code.isBlank()) name.lowercase().replace(" ", "").replace("[^a-zA-Z0-9]".toRegex(), "") else code.lowercase().replace(" ", "")
 
                 val isTrial = durationTime.contains("Prueba", ignoreCase = true) || status.contains("Prueba", ignoreCase = true)
@@ -1587,6 +1746,25 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
                 )
 
                 if (companyId != null && companyId > 0) {
+                    val updatePayload = mapOf(
+                        "codigo" to company.code,
+                        "nombre" to name,
+                        "estado" to finalStatus,
+                        "plan" to finalPlan,
+                        "logoUrl" to logoUrl,
+                        "listIconUrl" to listIconUrl,
+                        "colorPrimario" to primaryColor,
+                        "colorSecundario" to secondaryColor,
+                        "colorTerciario" to tertiaryColor,
+                        "colorNeutro" to neutralColor,
+                        "tipoFuente" to fontType,
+                        "funciones" to createdFunctionsJson
+                    )
+                    try {
+                        sheetsService.actualizarEmpresa(updatePayload)
+                    } catch (e: Exception) {
+                        Log.e("KaptaViewModel", "No se sincronizó la actualización en la nube: ${e.message}")
+                    }
                     repository.updateCompany(company)
                     showToast("Empresa '$name' actualizada con éxito")
                     _createdAiFunctions.value = emptyList()
@@ -1619,7 +1797,15 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
                                 append(" en ")
                                 append(listOf(city, country).filter { it.isNotBlank() }.joinToString(", "))
                             }
-                        }
+                        },
+                        "logoUrl" to logoUrl,
+                        "listIconUrl" to listIconUrl,
+                        "colorPrimario" to primaryColor,
+                        "colorSecundario" to secondaryColor,
+                        "colorTerciario" to tertiaryColor,
+                        "colorNeutro" to neutralColor,
+                        "tipoFuente" to fontType,
+                        "funciones" to createdFunctionsJson
                     )
 
                     val responseJson = sheetsService.registrarEmpresa(payload)

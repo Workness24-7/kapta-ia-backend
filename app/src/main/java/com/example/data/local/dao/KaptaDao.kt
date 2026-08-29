@@ -8,6 +8,7 @@ import androidx.room.Update
 import com.example.data.local.entity.CompanyEntity
 import com.example.data.local.entity.CompanyUserEntity
 import com.example.data.local.entity.FinancialTransactionEntity
+import com.example.data.local.entity.IaFunctionEntity
 import com.example.data.local.entity.PosProductEntity
 import com.example.data.local.entity.PosSaleEntity
 import kotlinx.coroutines.flow.Flow
@@ -122,4 +123,20 @@ interface KaptaDao {
 
     @Query("UPDATE financial_transactions SET isSynced = 1 WHERE id = :id")
     suspend fun markTransactionSynced(id: Int)
+
+    // IA Functions Library (global, owned by SuperAdmin)
+    @Query("SELECT * FROM ia_functions ORDER BY id ASC")
+    fun getAllIaFunctions(): Flow<List<IaFunctionEntity>>
+
+    @Query("SELECT * FROM ia_functions")
+    suspend fun getAllIaFunctionsSync(): List<IaFunctionEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertIaFunction(f: IaFunctionEntity)
+
+    @Query("DELETE FROM ia_functions WHERE nombre = :nombre")
+    suspend fun deleteIaFunctionByNombre(nombre: String)
+
+    @Query("SELECT * FROM ia_functions WHERE nombre = :nombre LIMIT 1")
+    suspend fun getIaFunctionByNombre(nombre: String): IaFunctionEntity?
 }

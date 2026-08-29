@@ -25,11 +25,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.foundation.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,18 +47,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import com.example.R
 import com.example.ui.KaptaViewModel
 import com.example.ui.components.EtherealBackground
 import com.example.ui.components.GlassCard
 import com.example.ui.components.KaptaLogoHeader
 
-data class CountryItem(val name: String, val flag: String)
+data class CountryItem(val name: String, val flagRes: Int)
 
 @Composable
 fun RedirectionLoginScreen(
@@ -68,18 +70,18 @@ fun RedirectionLoginScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
-    var selectedCountry by remember { mutableStateOf(CountryItem("Colombia", "🇨🇴")) }
+    var selectedCountry by remember { mutableStateOf(CountryItem("Colombia", R.drawable.flag_colombia)) }
     var countryDropdownExpanded by remember { mutableStateOf(false) }
     var companyCodeInput by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val countries = listOf(
-        CountryItem("Colombia", "🇨🇴"),
-        CountryItem("México", "🇲🇽"),
-        CountryItem("Perú", "🇵🇪"),
-        CountryItem("Chile", "🇨🇱"),
-        CountryItem("Argentina", "🇦🇷"),
-        CountryItem("Ecuador", "🇪🇨")
+        CountryItem("Colombia", R.drawable.flag_colombia),
+        CountryItem("México", R.drawable.flag_mexico),
+        CountryItem("Perú", R.drawable.flag_peru),
+        CountryItem("Chile", R.drawable.flag_chile),
+        CountryItem("Argentina", R.drawable.flag_argentina),
+        CountryItem("Ecuador", R.drawable.flag_ecuador)
     )
 
     EtherealBackground {
@@ -124,61 +126,87 @@ fun RedirectionLoginScreen(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Box {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(Color.White.copy(alpha = 0.25f))
-                                .border(1.dp, Color.White.copy(alpha = 0.60f), RoundedCornerShape(18.dp))
-                                .clickable { countryDropdownExpanded = true }
-                        ) {
-                            Row(
+                        Column {
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(Color.White.copy(alpha = 0.25f))
+                                    .border(1.dp, Color.White.copy(alpha = 0.60f), RoundedCornerShape(18.dp))
+                                    .clickable { countryDropdownExpanded = !countryDropdownExpanded }
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(text = selectedCountry.flag, fontSize = 22.sp)
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Text(
-                                        text = selectedCountry.name,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFF0F172A)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Image(
+                                            painter = painterResource(selectedCountry.flagRes),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(26.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(
+                                            text = selectedCountry.name,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFF0F172A)
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = if (countryDropdownExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "Desplegar países",
+                                        tint = Color(0xFF64748B)
                                     )
                                 }
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowDown,
-                                    contentDescription = "Desplegar países",
-                                    tint = Color(0xFF64748B)
-                                )
                             }
-                        }
 
-                        DropdownMenu(
-                            expanded = countryDropdownExpanded,
-                            onDismissRequest = { countryDropdownExpanded = false }
-                        ) {
-                            countries.forEach { item ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(text = item.flag, fontSize = 20.sp)
+                            AnimatedVisibility(visible = countryDropdownExpanded) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 8.dp)
+                                        .clip(RoundedCornerShape(18.dp))
+                                        .background(Color.White)
+                                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(18.dp))
+                                ) {
+                                    countries.forEachIndexed { index, item ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    selectedCountry = item
+                                                    countryDropdownExpanded = false
+                                                }
+                                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Image(
+                                                painter = painterResource(item.flagRes),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(26.dp)
+                                            )
                                             Spacer(modifier = Modifier.width(12.dp))
                                             Text(
                                                 text = item.name,
                                                 fontSize = 14.sp,
-                                                fontWeight = FontWeight.Medium
+                                                fontWeight = if (item.name == selectedCountry.name) FontWeight.Bold else FontWeight.Medium,
+                                                color = Color(0xFF0F172A)
                                             )
                                         }
-                                    },
-                                    onClick = {
-                                        selectedCountry = item
-                                        countryDropdownExpanded = false
+                                        if (index < countries.size - 1) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(1.dp)
+                                                    .background(Color(0xFFE2E8F0))
+                                            )
+                                        }
                                     }
-                                )
+                                }
                             }
                         }
                     }
