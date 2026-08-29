@@ -166,6 +166,8 @@ fun CreateEditCompanyScreen(
     var email by remember { mutableStateOf(companyToEdit?.email ?: "") }
     var businessType by remember { mutableStateOf(companyToEdit?.businessType ?: "🍸 Bar") }
     var businessTypeOtro by remember { mutableStateOf(if (companyToEdit != null && businessType == "Otro") companyToEdit.businessType else "") }
+    val yaTieneFunciones = companyToEdit?.customFunctionsJson?.isNotBlank() == true
+    val tipoExistente = companyToEdit?.businessType?.takeIf { it.isNotBlank() && it != "Otro" }
     val initialStatus = remember(companyToEdit) {
         companyToEdit?.status?.replace(Regex("[^a-zA-Z0-9 áéíóúÁÉÍÓÚñÑ]"), "")?.trim()?.takeIf { it.isNotBlank() } ?: "Activo"
     }
@@ -680,7 +682,12 @@ fun CreateEditCompanyScreen(
                                 DropdownMenuItem(
                                     text = { Text(type, fontSize = 13.sp, fontWeight = FontWeight.Medium) },
                                     onClick = {
-                                        businessType = type
+                                        if (type == "Otro" && yaTieneFunciones && tipoExistente != null) {
+                                            businessType = tipoExistente
+                                            viewModel.showToast("Este negocio ya tiene funciones; se mantiene el tipo '$tipoExistente'")
+                                        } else {
+                                            businessType = type
+                                        }
                                         businessTypeExpanded = false
                                     }
                                 )
@@ -702,7 +709,7 @@ fun CreateEditCompanyScreen(
                         Button(
                             onClick = {
                                 val tipo = businessTypeOtro.trim()
-                                if (tipo.isNotBlank()) {
+                                if (tipo.isNotBlank() && !yaTieneFunciones) {
                                     isGeneratingTipo = true
                                     scope.launch {
                                         try {
@@ -715,12 +722,18 @@ fun CreateEditCompanyScreen(
                                     }
                                 }
                             },
-                            enabled = businessTypeOtro.isNotBlank() && !isGeneratingTipo,
+                            enabled = !yaTieneFunciones && businessTypeOtro.isNotBlank() && !isGeneratingTipo,
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth().height(44.dp)
                         ) {
-                            Text(if (isGeneratingTipo) "Generando..." else "Generar funciones para este tipo de negocio", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(
+                                when {
+                                    yaTieneFunciones -> "Este negocio ya tiene funciones (se reutilizan)"
+                                    isGeneratingTipo -> "Generando..."
+                                    else -> "Generar funciones para este tipo de negocio"
+                                }, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp
+                            )
                         }
                     }
                     Spacer(modifier = Modifier.height(12.dp))

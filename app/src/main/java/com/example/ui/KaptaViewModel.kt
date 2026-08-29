@@ -1564,6 +1564,9 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
 
     /** Genera el set completo de funciones para un tipo de negocio, clasificadas por plan. */
     suspend fun generarFuncionesPorTipoNegocio(tipoNegocio: String): List<FuncionLib> {
+        // ponytail: si el tipo ya tiene funciones en la biblioteca, reusarlas y no gastar IA
+        val existentes = _functionLibrary.value.filter { it.tipoNegocio.equals(tipoNegocio, ignoreCase = true) }
+        if (existentes.isNotEmpty()) return existentes
         return generarFuncionesConIA(
             "Tipo de negocio: $tipoNegocio. Crea TODAS sus funciones clasificadas por plan: " +
             "Basico = vitales; Premium = basicas + utiles; MaxIA = todas + avanzadas a gran escala. " +

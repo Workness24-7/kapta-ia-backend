@@ -922,6 +922,75 @@ private data class BusinessModule(
     val allowedBusinessTypes: List<String>? = null
 )
 
+private data class FuncionUi(
+    val nombre: String,
+    val descripcion: String,
+    val modulo: String,
+    val planTier: String
+)
+
+private fun funcionModuloToIcon(modulo: String): ImageVector = when (modulo.lowercase()) {
+    "ventas" -> Icons.Default.ShoppingCart
+    "gastos", "finanzas", "caja" -> Icons.Default.AccountBalanceWallet
+    "inventario" -> Icons.Default.Inventory2
+    "deudores" -> Icons.Default.Person
+    "facturacion" -> Icons.Default.Receipt
+    "reporte" -> Icons.Default.BarChart
+    "usuario", "cliente", "custom", "general" -> Icons.Default.AutoAwesome
+    else -> Icons.Default.Star
+}
+
+private fun funcionModuloToColor(modulo: String): Color = when (modulo.lowercase()) {
+    "ventas" -> Color(0xFF416FC2)
+    "gastos", "finanzas", "caja" -> Color(0xFF7046D4)
+    "inventario" -> Color(0xFF059669)
+    "deudores" -> Color(0xFFF2A01A)
+    "facturacion" -> Color(0xFF0284C7)
+    "reporte" -> Color(0xFF4F46E5)
+    "usuario", "cliente", "custom", "general" -> Color(0xFF7C3AED)
+    else -> Color(0xFF416FC2)
+}
+
+private fun funcionModuloToDockTab(modulo: String): Int = when (modulo.lowercase()) {
+    "ventas" -> 1
+    "gastos", "finanzas", "caja", "reporte" -> 2
+    "inventario" -> 3
+    "deudores", "usuario", "cliente", "custom", "facturacion", "general" -> 4
+    else -> 1
+}
+
+private fun moduloMatchesModuleTitle(modulo: String, title: String): Boolean {
+    val t = title.lowercase()
+    return when (modulo.lowercase()) {
+        "ventas" -> t.contains("venta") || t.contains("mesa") || t.contains("divisi") || t.contains("split")
+        "gastos", "finanzas", "caja", "reporte" -> t.contains("caja") || t.contains("reporte") || t.contains("turno") || t.contains("analytics")
+        "facturacion" -> t.contains("factur")
+        "inventario" -> t.contains("lote") || t.contains("inventario")
+        "deudores" -> t.contains("deudor")
+        else -> false
+    }
+}
+
+private fun derivarCapacidades(funciones: List<FuncionUi>): Set<String> {
+    val caps = mutableSetOf<String>()
+    funciones.forEach { fn ->
+        when (fn.modulo.lowercase()) {
+            "ventas" -> caps.add("ventas")
+            "gastos", "finanzas", "caja" -> caps.add("gastos")
+            "inventario" -> caps.add("inventario")
+            "deudores" -> caps.add("deudores")
+            "cliente", "clientes" -> caps.add("clientes")
+            "facturacion" -> caps.add("facturacion")
+            "reporte" -> caps.add("reporte")
+            "usuario" -> caps.add("usuarios")
+        }
+        val blob = (fn.nombre + " " + fn.descripcion).lowercase()
+        if (blob.contains("mano de obra") || blob.contains("labor")) caps.add("mano_obra")
+        if (blob.contains("factura")) caps.add("facturacion")
+    }
+    return caps
+}
+
 private fun getModulesForCompany(businessType: String, plan: String, userRole: String = "Administrador"): List<BusinessModule> {
     val isCajero = userRole.equals("Cajero", ignoreCase = true) || userRole.equals("Empleado", ignoreCase = true) || userRole.equals("Mesero", ignoreCase = true)
 
@@ -1038,8 +1107,37 @@ fun TenantPosScreen(
     val isSuperAdminSession by viewModel.isSuperAdminSession.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
 
+    val functionLibrary by viewModel.functionLibrary.collectAsState(initial = emptyList())
+    val isAdminUser = isSuperAdminSession || (currentUser?.role ?: "").equals("Administrador", ignoreCase = true)
+    val userFunctions = remember(currentUser, functionLibrary, isAdminUser) {
+        if (isAdminUser) {
+            functionLibrary.map { FuncionUi(it.nombre, it.descripcion, it.modulo, it.planTier) }
+        } else {
+            currentUser?.assignedFunctionsJson
+                ?.let { viewModel.parseCustomFunctions(it) }
+                ?.mapNotNull { (nombre, descripcion) ->
+                    val lib = functionLibrary.firstOrNull { it.nombre.equals(nombre, ignoreCase = true) }
+                    FuncionUi(nombre, descripcion, lib?.modulo ?: "General", lib?.planTier ?: "Básico")
+                } ?: emptyList()
+        }
+    }
+    LaunchedEffect(company.code) { viewModel.loadFunctionLibrary() }
+
     val userRole = currentUser?.role ?: if (isSuperAdminSession) "Administrador" else "Cajero"
     val isCajero = userRole.equals("Cajero", ignoreCase = true) || userRole.equals("Empleado", ignoreCase = true) || userRole.equals("Mesero", ignoreCase = true)
+
+    val allowedDockTabs = remember(userFunctions, isAdminUser) {
+        if (isAdminUser) setOf(0, 1, 2, 3, 4)
+        else {
+            val tabs = mutableSetOf(0)
+            userFunctions.forEach { fn -> tabs.add(funcionModuloToDockTab(fn.modulo)) }
+            tabs
+        }
+    }
+    val userCapabilities = remember(userFunctions, isAdminUser) {
+        if (isAdminUser) setOf("*") else derivarCapacidades(userFunctions)
+    }
+    val hasCap: (String) -> Boolean = { cap -> isAdminUser || userCapabilities.contains(cap) }
 
     androidx.compose.runtime.LaunchedEffect(company.code, company.id) {
         viewModel.ensureDefaultProductsForCompany(company.code)
@@ -1076,6 +1174,11 @@ fun TenantPosScreen(
     var selectedDebtorForHistory by remember { mutableStateOf<DebtorRecord?>(null) }
     var showAdditionalMenuSheet by remember { mutableStateOf(false) }
     var showHacerInventarioModal by remember { mutableStateOf(false) }
+
+    val onOpenFunction: (FuncionUi) -> Unit = { fn ->
+        if (fn.modulo.equals("deudores", ignoreCase = true)) showDebtorsModal = true
+        else selectedDockTab = funcionModuloToDockTab(fn.modulo)
+    }
 
     // Inventory baseline snapshot state
     var inventorySavedDate by remember { mutableStateOf("31/07/2026 08:00 AM") }
@@ -1350,7 +1453,10 @@ fun TenantPosScreen(
             }
 
             // MAIN CONTENT BODY (Switches dynamically based on selectedDockTab)
-            val activeDockTab = if (isCajero && selectedDockTab != 1 && selectedDockTab != 3) 1 else selectedDockTab
+            val activeDockTab = run {
+        val base = if (isCajero && selectedDockTab != 1 && selectedDockTab != 3) 1 else selectedDockTab
+        if (base !in allowedDockTabs) 0 else base
+    }
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -1376,7 +1482,10 @@ fun TenantPosScreen(
                         onGoToFinanzasDia = {
                             financesFilter = "DÃ­a"
                             selectedDockTab = 2
-                        }
+                        },
+                        userFunctions = userFunctions,
+                        onOpenFunction = onOpenFunction,
+                        hasCap = hasCap
                     )
 
                     // BOTON 2: Ventas (Resumen comparativo & Ranking por categorÃ­a)
@@ -1488,7 +1597,7 @@ fun TenantPosScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val topDockItems = if (isCajero) {
+                    val baseDockItems = if (isCajero) {
                         listOf(
                             TopDockItem(1, "Ventas", Icons.Default.TrendingUp),
                             TopDockItem(3, "Inventario", Icons.Default.Inventory2)
@@ -1502,6 +1611,7 @@ fun TenantPosScreen(
                             TopDockItem(4, "MenÃº", Icons.Default.MoreHoriz)
                         )
                     }
+                    val topDockItems = if (isAdminUser) baseDockItems else baseDockItems.filter { it.index in allowedDockTabs }
 
                     topDockItems.forEach { item ->
                         val isSelected = selectedDockTab == item.index && item.index != 4
@@ -2133,6 +2243,9 @@ fun TenantPosScreen(
     // -------------------------------------------------------------------------------------
     if (showAdditionalMenuSheet) {
         val availableModules = getModulesForCompany(company.businessType, company.plan, userRole)
+        val visibleModules = if (isAdminUser) availableModules else availableModules.filter { mod ->
+            userFunctions.any { fn -> moduloMatchesModuleTitle(fn.modulo, mod.title) }
+        }
 
         ModalBottomSheet(
             onDismissRequest = { showAdditionalMenuSheet = false },
@@ -2159,8 +2272,12 @@ fun TenantPosScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                if (visibleModules.isEmpty()) {
+                    Text("Tu perfil no tiene mÃ³dulos adicionales asignados.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(16.dp))
+                } else {
                 LazyColumn(modifier = Modifier.fillMaxWidth().height(340.dp)) {
-                    items(availableModules) { mod ->
+                    items(visibleModules) { mod ->
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -2194,6 +2311,7 @@ fun TenantPosScreen(
                             }
                         }
                     }
+                }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -2542,7 +2660,10 @@ private fun InicioDashboardView(
     onQuickActionGasto: () -> Unit,
     onQuickActionAddStock: () -> Unit,
     onQuickActionDeudores: () -> Unit,
-    onGoToFinanzasDia: () -> Unit
+    onGoToFinanzasDia: () -> Unit,
+    userFunctions: List<FuncionUi> = emptyList(),
+    onOpenFunction: (FuncionUi) -> Unit = {},
+    hasCap: (String) -> Boolean = { true }
 ) {
     Column(
         modifier = Modifier
@@ -2551,12 +2672,17 @@ private fun InicioDashboardView(
             .padding(horizontal = 16.dp, vertical = 14.dp)
             .padding(bottom = 90.dp)
     ) {
+        if (userFunctions.isNotEmpty()) {
+            FuncionesDock(funciones = userFunctions, onOpen = onOpenFunction)
+            Spacer(modifier = Modifier.height(18.dp))
+        }
+
         // RESUMEN GENERAL (4 KPI Cards)
         iOSLargeTitle(title = "Resumen General del Negocio")
         Spacer(modifier = Modifier.height(10.dp))
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            DashboardKpiCard(
+            if (hasCap("ventas")) DashboardKpiCard(
                 title = "Ventas del DÃ­a",
                 value = formatCurrency(salesToday),
                 subtitle = "En tiempo real (Clic)",
@@ -2565,7 +2691,7 @@ private fun InicioDashboardView(
                 onClick = onGoToFinanzasDia,
                 modifier = Modifier.weight(1f)
             )
-            DashboardKpiCard(
+            if (hasCap("gastos")) DashboardKpiCard(
                 title = "Gastos del Mes",
                 value = formatCurrency(monthlyExpenses),
                 subtitle = "Total acumulado",
@@ -2578,7 +2704,7 @@ private fun InicioDashboardView(
         Spacer(modifier = Modifier.height(10.dp))
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            DashboardKpiCard(
+            if (hasCap("deudores")) DashboardKpiCard(
                 title = "Deudores",
                 value = "$debtorsCount personas",
                 subtitle = "Total: ${formatCurrency(debtorsAmount)} (Clic)",
@@ -2587,7 +2713,7 @@ private fun InicioDashboardView(
                 onClick = onQuickActionDeudores,
                 modifier = Modifier.weight(1f)
             )
-            DashboardKpiCard(
+            if (hasCap("clientes")) DashboardKpiCard(
                 title = "Clientes Activos",
                 value = "$activeClientsCount personas",
                 subtitle = "En establecimiento",
@@ -2608,7 +2734,15 @@ private fun InicioDashboardView(
             AccionRapida("Gasto", Icons.Default.AccountBalanceWallet, Color(0xFF5428B8), Color(0xFF7046D4), onQuickActionGasto),
             AccionRapida("Agregar", Icons.Default.Add, Color(0xFF18A94F), Color(0xFF32C96A), onQuickActionAddStock),
             AccionRapida("Deudores", Icons.Default.Person, Color(0xFFE58A05), Color(0xFFF2A01A), onQuickActionDeudores)
-        )
+        ).filter { accion ->
+            when (accion.titulo) {
+                "Venta" -> hasCap("ventas")
+                "Gasto" -> hasCap("gastos")
+                "Agregar" -> hasCap("inventario")
+                "Deudores" -> hasCap("deudores")
+                else -> true
+            }
+        }
 
         // Fila única 1x4 en cualquier ancho
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -2696,6 +2830,91 @@ private fun InicioDashboardView(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun FuncionesDock(
+    funciones: List<FuncionUi>,
+    onOpen: (FuncionUi) -> Unit
+) {
+    val isDark = LocalIsDarkMode.current
+    var showAll by remember { mutableStateOf(false) }
+    val visible = funciones.take(4)
+    val hasMore = funciones.size > 4
+    Text(
+        text = "Funciones",
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Bold,
+        color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
+        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+    )
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        visible.forEach { fn -> FuncionChip(fn = fn, onClick = { onOpen(fn) }) }
+        if (hasMore) {
+            FuncionChip(fn = FuncionUi("Ver más", "", "general", ""), onClick = { showAll = true }, overflow = true)
+        }
+    }
+    if (showAll) {
+        AlertDialog(
+            onDismissRequest = { showAll = false },
+            confirmButton = { TextButton(onClick = { showAll = false }) { Text("Cerrar") } },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    funciones.forEach { fn ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showAll = false; onOpen(fn) }
+                                .padding(vertical = 12.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(imageVector = funcionModuloToIcon(fn.modulo), contentDescription = null, tint = funcionModuloToColor(fn.modulo), modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(fn.nombre, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color.White else Color(0xFF0F172A))
+                                if (fn.descripcion.isNotBlank()) {
+                                    Text(fn.descripcion, fontSize = 12.sp, color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B), maxLines = 1)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun FuncionChip(fn: FuncionUi, onClick: () -> Unit, overflow: Boolean = false) {
+    val accent = if (overflow) Color(0xFF64748B) else funcionModuloToColor(fn.modulo)
+    Surface(
+        modifier = Modifier.clickable { onClick() },
+        shape = RoundedCornerShape(14.dp),
+        color = accent.copy(alpha = 0.12f),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.35f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = if (overflow) Icons.Default.MoreHoriz else funcionModuloToIcon(fn.modulo),
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                if (overflow) "Ver más" else fn.nombre,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = accent
+            )
         }
     }
 }
