@@ -1185,7 +1185,9 @@ def servir_foto(foto_id: str):
         raw = _b64.b64decode(data)
     except Exception:
         raw = str(data).encode()
-    return _Response(content=raw, media_type="image/jpeg")
+    # ponytail: respetar transparencia de PNG (sin fondo) detectando la firma mágica
+    media_type = "image/png" if raw[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
+    return _Response(content=raw, media_type=media_type)
 
 
 @app.api_route("/exec", methods=["GET", "POST"])
