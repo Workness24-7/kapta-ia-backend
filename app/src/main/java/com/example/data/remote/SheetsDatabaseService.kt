@@ -1261,8 +1261,43 @@ class SheetsDatabaseService(
         result ?: false
     }
 
+    suspend fun resetPassword(empresaNombre: String, userEmail: String, newPass: String): Boolean = withContext(Dispatchers.IO) {
+        val result = executeWithRetry {
+            val jsonPayload = JSONObject().apply {
+                put("action", "actualizar_contrasena")
+                put("empresaNombre", empresaNombre)
+                put("userEmail", userEmail)
+                put("sheetName", empresaNombre)
+                put("clave", newPass)
+            }
+
+            val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
+            val targetUrl: String = if (!webAppScriptUrl.isNullOrBlank()) webAppScriptUrl!! else APPS_SCRIPT_WEB_APP_URL
+            val request = Request.Builder()
+                .url(targetUrl)
+                .post(body)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (response.code == 429) throw RateLimitException("429 Rate Limit")
+                val responseStr = response.body?.string() ?: ""
+                Log.d(TAG, "resetPassword response: $responseStr")
+                val isSuccessJson = try {
+                    val json = JSONObject(responseStr)
+                    val status = json.optString("status")
+                    val isSuccess = json.optBoolean("success", false)
+                    status.equals("success", ignoreCase = true) || isSuccess
+                } catch (_: Exception) {
+                    responseStr.lowercase().contains("success")
+                }
+                response.isSuccessful && isSuccessJson
+            }
+        }
+        result ?: false
+    }
+
     /**
-     * Solicitud de Reportes en Google Apps Script con action "reportes".
+      * Solicitud de Reportes en Google Apps Script con action "reportes".
      * Payload: {"action": "reportes", "idEmpresa": idEmpresa, "tipo": tipoReporte}
      */
     suspend fun solicitarReporte(

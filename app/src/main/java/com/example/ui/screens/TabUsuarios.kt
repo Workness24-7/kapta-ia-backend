@@ -228,7 +228,7 @@ fun TabUsuarios(viewModel: KaptaViewModel) {
         AlertDialog(
             onDismissRequest = { userToDelete = null },
             title = { Text("Eliminar Usuario", fontWeight = FontWeight.Bold) },
-            text = { Text("¿Deseas eliminar al usuario '${user.name}' (${user.email.ifBlank { user.username }}) de Google Sheets? Esta acción removerá el acceso al sistema.") },
+            text = { Text("¿Deseas eliminar al usuario '${user.name}' (${user.email.ifBlank { user.username }}) de Railway? Esta acción removerá el acceso al sistema.") },
             confirmButton = {
                 Button(
                     onClick = {

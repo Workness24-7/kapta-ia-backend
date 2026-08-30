@@ -89,6 +89,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.local.entity.CompanyEntity
+import com.example.data.local.entity.CompanyUserEntity
 import com.example.ui.KaptaViewModel
 import com.example.ui.components.EtherealBackground
 import com.example.ui.components.GlassCard
@@ -118,6 +119,7 @@ fun TabEmpresas(
     var showFilterModal by remember { mutableStateOf(false) }
     var selectedCompanyForOptions by remember { mutableStateOf<CompanyEntity?>(null) }
     var showResetPasswordDialog by remember { mutableStateOf(false) }
+    var companyForResetPassword by remember { mutableStateOf<CompanyEntity?>(null) }
     var showRenewPaymentDialog by remember { mutableStateOf<CompanyEntity?>(null) }
     var newPasswordInput by remember { mutableStateOf("") }
 
@@ -411,6 +413,7 @@ fun TabEmpresas(
                         icon = Icons.Default.LockReset,
                         iconColor = MaterialTheme.colorScheme.primary,
                         onClick = {
+                            companyForResetPassword = company
                             selectedCompanyForOptions = null
                             showResetPasswordDialog = true
                         }
@@ -531,7 +534,19 @@ fun TabEmpresas(
                 Button(
                     onClick = {
                         if (newPasswordInput.isNotBlank()) {
-                            // Reset
+                            companyForResetPassword?.let { company ->
+                                val adminUser = CompanyUserEntity(
+                                    companyId = company.id,
+                                    companyCode = company.code,
+                                    name = company.adminName,
+                                    role = "Administrador",
+                                    email = company.adminEmail,
+                                    username = company.adminEmail.substringBefore("@").ifBlank { company.adminName },
+                                    password = newPasswordInput,
+                                    isSynced = true
+                                )
+                                viewModel.resetUserPassword(adminUser, newPasswordInput)
+                            }
                             showResetPasswordDialog = false
                             newPasswordInput = ""
                         }

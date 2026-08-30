@@ -1475,10 +1475,21 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun resetUserPassword(user: CompanyUserEntity, newPass: String) {
-        viewModelScope.launch {
-            val updated = user.copy(password = newPass)
-            repository.updateUser(updated)
-            showToast("Contraseña restablecida para el usuario ${user.username}")
+        viewModelScope.launch(Dispatchers.IO) {
+            val companyName = repository.getCompanyByCode(user.companyCode)?.name ?: user.companyCode
+            val success = try {
+                sheetsService.resetPassword(companyName, user.email.ifBlank { user.username }, newPass)
+            } catch (e: Exception) {
+                Log.e("KaptaViewModel", "Error al restablecer contraseña en Railway: ${e.message}")
+                false
+            }
+            if (success) {
+                val updated = user.copy(password = newPass)
+                repository.updateUser(updated)
+                showToast("Contraseña restablecida para el usuario ${user.username}")
+            } else {
+                showToast("Fallo al restablecer en servidor (Reintentar)")
+            }
         }
     }
 
@@ -2131,7 +2142,6 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
             val matchingComp = repository.getCompanyByCode(user.companyCode) ?: repository.getCompanyById(user.companyId)
             val companyName = matchingComp?.name ?: user.companyCode
             val userEmailToDelete = user.email.ifBlank { user.username }
-            repository.deleteUser(user.id)
             val success = try {
                 sheetsService.eliminarUsuario(
                     empresaNombre = companyName,
@@ -2143,9 +2153,10 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
             }
             withContext(Dispatchers.Main) {
                 if (success) {
+                    repository.deleteUser(user.id)
                     showToast("Usuario '${user.name}' eliminado exitosamente")
                 } else {
-                    showToast("Usuario '${user.name}' eliminado localmente. Fallo en servidor (reintenta).")
+                    showToast("Fallo al eliminar en servidor (Reintentar)")
                 }
             }
         }
