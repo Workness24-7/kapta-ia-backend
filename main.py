@@ -807,7 +807,7 @@ def action_eliminar_usuario(params):
 
     fila_usr = None
     for (n, d) in db.leer_tabla(empresa, "usuarios"):
-        if str(d[3] or "").lower().strip() == correo:
+        if str(d[2] or "").lower().strip() == correo:
             fila_usr = n
             break
     if fila_usr is None:
