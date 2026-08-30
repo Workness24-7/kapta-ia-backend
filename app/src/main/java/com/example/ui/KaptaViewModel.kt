@@ -1307,7 +1307,10 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
                     android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
                 } ?: return@withContext uriString
                 val bos = java.io.ByteArrayOutputStream()
-                bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, bos)
+                // ponytail: conservar transparencia de PNG/imágenes sin fondo; JPEG solo si es opaca
+                val format = if (bmp.hasAlpha()) android.graphics.Bitmap.CompressFormat.PNG else android.graphics.Bitmap.CompressFormat.JPEG
+                val quality = if (format == android.graphics.Bitmap.CompressFormat.PNG) 100 else 80
+                bmp.compress(format, quality, bos)
                 val b64 = android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP)
                 sheetsService.subirFoto(b64) ?: uriString
             }
@@ -1854,28 +1857,9 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
     }
 
     fun ensureDefaultUsersForCompany(code: String, companyId: Int = 0) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val cleanCode = code.trim().uppercase()
-            val list = repository.getUsersByCompanyCodeAndId(cleanCode, companyId).first()
-            if (list.isEmpty()) {
-                val company = repository.getCompanyByCode(cleanCode)
-                val cId = company?.id ?: companyId
-                val adminName = company?.adminName?.ifBlank { "Administrador" } ?: "Administrador"
-                val adminEmail = company?.adminEmail?.ifBlank { "admin@$cleanCode.com" } ?: "admin@$cleanCode.com"
-
-                repository.insertUser(
-                    CompanyUserEntity(
-                        companyId = cId,
-                        companyCode = cleanCode,
-                        name = adminName,
-                        role = "Administrador",
-                        email = adminEmail,
-                        username = "admin",
-                        password = "adminPassword123"
-                    )
-                )
-            }
-        }
+        // ponytail: los usuarios SOLO se crean desde la vista de administrador del negocio
+        // (o el admin al crear la empresa en Railway). No se auto-generan aquí para evitar
+        // usuarios duplicados/genéricos en la nube.
     }
 
     fun getProductsForCompany(code: String): Flow<List<PosProductEntity>> {
@@ -2161,23 +2145,8 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
     }
 
     private suspend fun ensureCompanyDataCompleted(dao: com.example.data.local.dao.KaptaDao) {
-        val list = dao.getAllCompaniesSync()
-        for (company in list) {
-            val adminUser = dao.getAdminUserByCompanyId(company.id)
-            if (adminUser == null && company.code.isNotBlank()) {
-                dao.insertUser(
-                    CompanyUserEntity(
-                        companyId = company.id,
-                        companyCode = company.code,
-                        name = company.adminName.ifBlank { "Administrador General" },
-                        role = "Administrador",
-                        email = company.adminEmail.ifBlank { "admin@${company.code}.com" },
-                        username = "admin",
-                        password = "adminPassword123"
-                    )
-                )
-            }
-        }
+        // ponytail: ya no se crean usuarios genéricos automáticamente; el admin se crea
+        // al registrar la empresa (Railway) o desde la vista de administrador del negocio.
     }
 
     fun showToast(message: String) {

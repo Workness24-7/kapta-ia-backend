@@ -182,7 +182,7 @@ fun CreateEditCompanyScreen(
     val lastAccess = remember { companyToEdit?.lastAccess ?: "Aún no tiene acceso" }
     var adminName by remember { mutableStateOf(companyToEdit?.adminName ?: "") }
     var adminEmail by remember { mutableStateOf(companyToEdit?.adminEmail ?: "") }
-    var adminPass by remember { mutableStateOf(if (isEditMode) "admin123" else "") }
+    var adminPass by remember { mutableStateOf("") }
     var showAdminPass by remember { mutableStateOf(false) }
     // Dropdown visibility
     var statusExpanded by remember { mutableStateOf(false) }
