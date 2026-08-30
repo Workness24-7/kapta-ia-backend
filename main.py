@@ -391,8 +391,8 @@ def action_registrar_empresa(params):
     emp_existente = db.buscar_empresa(codigo)
     if emp_existente:
         # Recuperación: reactivar y conservar tablas/datos existentes (no recrear ni borrar)
-        db.reactivar_empresa(codigo)
-        return respuesta_success({"idEmpresa": emp_existente.get("id"), "codigo": codigo,
+        db.reactivar_empresa(emp_existente.get("codigo") or codigo)
+        return respuesta_success({"idEmpresa": emp_existente.get("id"), "codigo": emp_existente.get("codigo") or codigo,
                                   "empresa": emp_existente.get("nombre"), "recuperada": True})
 
     nit = str(datos.get("nit") or "").strip()
@@ -483,6 +483,7 @@ def action_actualizar_empresa(params):
     if not emp:
         return respuesta_error("No existe la empresa: " + codigo)
 
+    codigo_real = emp.get("codigo") or codigo
     campos = {}
     for cli, bd in (
         ("nombre", "nombre"),
@@ -509,7 +510,7 @@ def action_actualizar_empresa(params):
     if "tiempo" in datos:
         campos["tiempo"] = str(datos["tiempo"])
 
-    db.actualizar_empresa_db(codigo, campos)
+    db.actualizar_empresa_db(codigo_real, campos)
     return respuesta_success({"codigo": codigo, "actualizada": True})
 
 
@@ -806,14 +807,29 @@ def action_eliminar_usuario(params):
 
     fila_usr = None
     for (n, d) in db.leer_tabla(empresa, "usuarios"):
-        if str(d[2] or "").lower().strip() == correo:
+        if str(d[3] or "").lower().strip() == correo:
             fila_usr = n
-            d[5] = "Suspendido"
-            db.guardar_fila(empresa, "usuarios", n, d)
             break
     if fila_usr is None:
         return respuesta_error("Usuario no encontrado: " + correo)
+    db.borrar_fila(empresa, "usuarios", fila_usr)
     return respuesta_success({"correo": correo, "eliminado": True})
+
+
+def action_actualizar_contrasena(params):
+    clave = str(params.get("sheetName") or params.get("empresaNombre")
+                or params.get("idEmpresa") or "").strip()
+    correo = str(params.get("userEmail") or params.get("correo") or "").lower().strip()
+    clave_nueva = str(params.get("clave") or "").strip()
+    if not clave:
+        return respuesta_error("No existe la hoja: " + clave)
+    if not correo or not clave_nueva:
+        return respuesta_error("No se recibió correo o contraseña.")
+    empresa = resolver_hoja(clave)
+    if not empresa:
+        return respuesta_error("No existe la hoja: " + clave)
+    db.actualizar_contrasena(empresa, correo, _hash_password(clave_nueva))
+    return respuesta_success({"correo": correo, "actualizado": True})
 
 
 def action_eliminar_producto(params):
@@ -1135,6 +1151,7 @@ POST_ACTIONS = {
     "obtener_todo": action_obtener_todo,
     "pagar_deudor": action_pagar_deudor,
     "eliminar_empresa": action_eliminar_empresa,
+    "actualizar_contrasena": action_actualizar_contrasena,
     "eliminar_usuario": action_eliminar_usuario,
     "eliminar_producto": action_eliminar_producto,
     "comprar_plan": action_comprar_plan,
