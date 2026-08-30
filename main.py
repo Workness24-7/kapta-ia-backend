@@ -388,8 +388,12 @@ def action_registrar_empresa(params):
     if not codigo:
         return respuesta_error("Debe indicar el código de acceso.")
 
-    if db.buscar_empresa(codigo):
-        return respuesta_error("El código de acceso ya existe.")
+    emp_existente = db.buscar_empresa(codigo)
+    if emp_existente:
+        # Recuperación: reactivar y conservar tablas/datos existentes (no recrear ni borrar)
+        db.reactivar_empresa(emp_existente.get("codigo") or codigo)
+        return respuesta_success({"idEmpresa": emp_existente.get("id"), "codigo": emp_existente.get("codigo") or codigo,
+                                  "empresa": emp_existente.get("nombre"), "recuperada": True})
 
     nit = str(datos.get("nit") or "").strip()
     if db.buscar_empresa_por_nit(nit):
@@ -479,6 +483,7 @@ def action_actualizar_empresa(params):
     if not emp:
         return respuesta_error("No existe la empresa: " + codigo)
 
+    codigo_real = emp.get("codigo") or codigo
     campos = {}
     for cli, bd in (
         ("nombre", "nombre"),
@@ -505,7 +510,7 @@ def action_actualizar_empresa(params):
     if "tiempo" in datos:
         campos["tiempo"] = str(datos["tiempo"])
 
-    db.actualizar_empresa_db(codigo, campos)
+    db.actualizar_empresa_db(codigo_real, campos)
     return respuesta_success({"codigo": codigo, "actualizada": True})
 
 
@@ -802,13 +807,12 @@ def action_eliminar_usuario(params):
 
     fila_usr = None
     for (n, d) in db.leer_tabla(empresa, "usuarios"):
-        if str(d[2] or "").lower().strip() == correo:
+        if str(d[3] or "").lower().strip() == correo:
             fila_usr = n
-            d[5] = "Suspendido"
-            db.guardar_fila(empresa, "usuarios", n, d)
             break
     if fila_usr is None:
         return respuesta_error("Usuario no encontrado: " + correo)
+    db.borrar_fila(empresa, "usuarios", fila_usr)
     return respuesta_success({"correo": correo, "eliminado": True})
 
 
@@ -1181,7 +1185,9 @@ def servir_foto(foto_id: str):
         raw = _b64.b64decode(data)
     except Exception:
         raw = str(data).encode()
-    return _Response(content=raw, media_type="image/jpeg")
+    # ponytail: respetar transparencia de PNG (sin fondo) detectando la firma mágica
+    media_type = "image/png" if raw[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
+    return _Response(content=raw, media_type=media_type)
 
 
 @app.api_route("/exec", methods=["GET", "POST"])

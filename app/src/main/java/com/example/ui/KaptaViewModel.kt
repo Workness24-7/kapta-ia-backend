@@ -1710,6 +1710,9 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
                 }.toString()
                 val cleanCode = if (code.isBlank()) name.lowercase().replace(" ", "").replace("[^a-zA-Z0-9]".toRegex(), "") else code.lowercase().replace(" ", "")
 
+                val effectiveCompanyId = if (companyId != null && companyId > 0) companyId
+                else (repository.getCompanyByCode(cleanCode)?.id ?: 0)
+
                 val isTrial = durationTime.contains("Prueba", ignoreCase = true) || status.contains("Prueba", ignoreCase = true)
                 val cleanPlanInput = plan.replace(Regex("[^a-zA-Z0-9 áéíóúÁÉÍÓÚñÑ]"), "").trim().ifBlank { "Básico" }
                 val cleanStatusInput = status.replace(Regex("[^a-zA-Z0-9 áéíóúÁÉÍÓÚñÑ]"), "").trim().ifBlank { "Activa" }
@@ -1723,7 +1726,7 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
                 }
 
                 val company = CompanyEntity(
-                    id = companyId ?: 0,
+                    id = effectiveCompanyId,
                     code = cleanCode,
                     name = name,
                     logoUrl = logoUrl,
@@ -1751,12 +1754,20 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
                     fontType = fontType
                 )
 
-                if (companyId != null && companyId > 0) {
+                if (effectiveCompanyId > 0) {
                     val updatePayload = mapOf(
                         "codigo" to company.code,
                         "nombre" to name,
+                        "tipo" to businessType,
                         "estado" to finalStatus,
                         "plan" to finalPlan,
+                        "pais" to country,
+                        "ciudad" to city,
+                        "direccion" to address,
+                        "correo" to email,
+                        "celular1" to phone,
+                        "celular2" to phone2,
+                        "tiempo" to durationTime,
                         "logoUrl" to logoUrl,
                         "listIconUrl" to listIconUrl,
                         "colorPrimario" to primaryColor,
@@ -2119,26 +2130,22 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
         viewModelScope.launch(Dispatchers.IO) {
             val matchingComp = repository.getCompanyByCode(user.companyCode) ?: repository.getCompanyById(user.companyId)
             val companyName = matchingComp?.name ?: user.companyCode
-
             val userEmailToDelete = user.email.ifBlank { user.username }
+            repository.deleteUser(user.id)
             val success = try {
                 sheetsService.eliminarUsuario(
                     empresaNombre = companyName,
                     userEmail = userEmailToDelete
                 )
             } catch (e: Exception) {
-                Log.e("KaptaViewModel", "Error al eliminar usuario en Google Sheets: ${e.message}")
+                Log.e("KaptaViewModel", "Error al eliminar usuario en Railway: ${e.message}")
                 false
             }
-
-            if (success) {
-                repository.deleteUser(user.id)
-                withContext(Dispatchers.Main) {
-                    showToast("Usuario '${user.name}' eliminado exitosamente de Google Sheets")
-                }
-            } else {
-                withContext(Dispatchers.Main) {
-                    showToast("Error al eliminar '${user.name}' en Google Sheets. Intente de nuevo.")
+            withContext(Dispatchers.Main) {
+                if (success) {
+                    showToast("Usuario '${user.name}' eliminado exitosamente")
+                } else {
+                    showToast("Usuario '${user.name}' eliminado localmente. Fallo en servidor (reintenta).")
                 }
             }
         }
