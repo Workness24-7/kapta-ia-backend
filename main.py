@@ -25,7 +25,7 @@ VERSION_API = "KAPTA-1.0.0"
 # Eliminadas: estadisticas, ia.
 # ===================================================
 TABLAS = {
-    "INVENTARIO": {"INICIO": 1, "FILA_INICIO": 3, "COLUMNAS": 12},
+    "INVENTARIO": {"INICIO": 1, "FILA_INICIO": 3, "COLUMNAS": 13},
     "VENTAS": {"INICIO": 14, "FILA_INICIO": 3, "COLUMNAS": 21},
     "DEUDORES": {"INICIO": 36, "FILA_INICIO": 3, "COLUMNAS": 8},
     "GASTOS": {"INICIO": 45, "FILA_INICIO": 3, "COLUMNAS": 14},
