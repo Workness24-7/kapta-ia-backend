@@ -1083,8 +1083,19 @@ def action_subir_foto(params):
     datos = str(params.get("datos") or "")
     if len(datos) < 100:
         return respuesta_error("Imagen no válida.")
-    foto_id = db.guardar_foto(datos)
+    clave = str(params.get("idEmpresa") or params.get("sheetName") or params.get("empresa") or "").strip()
+    empresa = resolver_hoja(clave) if clave else ""
+    if not empresa:
+        empresa = clave.upper()
+    foto_id = db.guardar_foto(datos, empresa)
     return respuesta_success({"id": foto_id, "url": "/foto/" + foto_id})
+
+
+def action_listar_fotos(params=None):
+    """Superadmin: qué imágenes pertenecen a cada empresa (foto id cifrado -> empresa + fecha)."""
+    empresa = str((params or {}).get("empresa") or "").strip().upper()
+    fotos = db.listar_fotos(empresa)
+    return respuesta_success({"fotos": fotos, "total": len(fotos)})
 
 
 def action_registrar_soporte(params):
@@ -1186,6 +1197,7 @@ GET_ACTIONS = {
     "listar_finanzas_kapta": action_listar_finanzas_kapta,
     "listar_soportes": action_listar_soportes,
     "listar_todos_usuarios": action_listar_todos_usuarios,
+    "listar_fotos": action_listar_fotos,
 }
 
 
