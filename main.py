@@ -457,6 +457,12 @@ def action_registrar_empresa(params):
         "correo": str(datos.get("adminCorreo") or "").lower(),
         "password": _hash_password(str(datos.get("adminPassword") or "")[:128]),
     }
+
+    # Limpiar usuarios existentes (solo dejar 1: el admin del form)
+    for (n, _d) in db.leer_tabla(codigo, "usuarios"):
+        if n > 2:
+            db.borrar_fila(codigo, "usuarios", n)
+
     fila_admin = ["USR-" + uuid.uuid4().hex[:8].upper(), admin["nombre"],
                   admin["correo"], admin["password"], "Administrador", "Activo",
                   fecha_hoy, "", "", "", ""]
