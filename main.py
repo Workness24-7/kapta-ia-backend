@@ -653,6 +653,17 @@ def action_escribir_fila(params):
         datos = list(datos)
         datos[0] = db.siguiente_id(empresa, tabla_key.lower(), prefijo, ancho)
 
+    # Venta directa: el cliente suele enviar Id_Producto vacio; se resuelve desde el
+    # inventario por nombre (igual que en el pago de deudores) y se normalizan numeros
+    # (sin decimales fantasma) y fecha (unico formato dd/mm/yyyy).
+    if tabla_key == "VENTAS":
+        datos = list(datos)
+        if not str(datos[4] or "").strip():
+            datos[4] = _resolver_id_producto(empresa, datos[5])
+        datos[1] = _fecha_iso_a_latina(datos[1])
+        for i in (6, 7, 8, 9, 10, 11, 12):
+            datos[i] = _normalizar_numero(datos[i])
+
     # Tablas globales (USUARIOS, GASTOS...) usan CABECERAS_GLOBALES (sin Codigo_Empresa);
     # las por-negocio usan TABLAS. El corte debe respetar esa longitud o se pierden
     # columnas como Funciones en usuarios.
@@ -734,8 +745,10 @@ def action_pagar_deudor(params):
 
     movido_a_ventas = False
     if nuevo_pendiente == 0:
+        usuario = str(params.get("usuario") or params.get("userName")
+                      or params.get("usuarioNombre") or "").strip()
         movido_a_ventas = mover_deudor_a_ventas(empresa, fila_deudor, fila_datos,
-                                                nueva_transferencia, nuevo_efectivo)
+                                                nueva_transferencia, nuevo_efectivo, usuario)
 
     return respuesta_success({
         "cliente": cliente, "pagado": monto_pagado,
@@ -752,6 +765,30 @@ def _to_float(v):
         return 0.0
 
 
+def _normalizar_numero(v):
+    """5.0 -> 5, 2500.5 -> 2500.5, 'abc'/vacio -> se deja como llego (texto o '')."""
+    if v is None or str(v).strip() == "":
+        return ""
+    try:
+        num = float(v)
+    except (TypeError, ValueError):
+        return str(v).strip()
+    if num == int(num):
+        return int(num)
+    return round(num, 2)
+
+
+def _fecha_iso_a_latina(texto):
+    """'2026-08-30' -> '30/08/2026'; si ya viene dd/mm/yyyy (o no parsea) se deja igual."""
+    if not texto:
+        return texto
+    t = str(texto).strip()
+    try:
+        return datetime.datetime.strptime(t[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+    except ValueError:
+        return t
+
+
 def _resolver_id_producto(empresa, nombre_producto):
     nombre = (nombre_producto or "").strip().lower()
     if not nombre:
@@ -765,22 +802,24 @@ def _resolver_id_producto(empresa, nombre_producto):
     return ""
 
 
-def mover_deudor_a_ventas(empresa, fila_deudor, datos, nueva_transferencia, nuevo_efectivo):
+def mover_deudor_a_ventas(empresa, fila_deudor, datos, nueva_transferencia, nuevo_efectivo, usuario=""):
     fila_venta = db.siguiente_fila_libre(empresa, "ventas", TABLAS["VENTAS"]["FILA_INICIO"])
     total = nueva_transferencia + nuevo_efectivo
     cantidad = _to_float(datos[3]) or 1
     precio_unitario = total / cantidad if cantidad else total
 
     fecha_hora = str(datos[0] or "").strip().split()
-    fecha = fecha_hora[0] if fecha_hora else ""
+    fecha = _fecha_iso_a_latina(fecha_hora[0] if fecha_hora else "")
     hora = fecha_hora[1] if len(fecha_hora) > 1 else ""
 
     id_venta = db.siguiente_id(empresa, "ventas", "V-")
     id_producto = _resolver_id_producto(empresa, datos[2])
     fila_valores = [
         id_venta, fecha, hora, datos[1] or "", id_producto, datos[2] or "",
-        cantidad, precio_unitario, total, "", nueva_transferencia,
-        nuevo_efectivo, total, "", "Activo", "", "", "", "", "", "",
+        _normalizar_numero(cantidad), _normalizar_numero(precio_unitario),
+        _normalizar_numero(total), "", _normalizar_numero(nueva_transferencia),
+        _normalizar_numero(nuevo_efectivo), _normalizar_numero(total), usuario,
+        "Activo", "", "", "", "", "", "",
     ]
     db.guardar_fila(empresa, "ventas", fila_venta, fila_valores)
     db.borrar_fila(empresa, "deudores", fila_deudor)
