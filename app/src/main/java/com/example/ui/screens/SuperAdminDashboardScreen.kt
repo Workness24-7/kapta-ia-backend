@@ -120,6 +120,7 @@ fun SuperAdminDashboardScreen(
     if (showNotificationsModal) {
         com.example.ui.components.NotificationsModal(
             companies = companies,
+            soportes = viewModel.soportes.value,
             onDismiss = { showNotificationsModal = false },
             onCompanyClick = { company ->
                 showNotificationsModal = false

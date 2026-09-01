@@ -16,29 +16,35 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.NotificationsNone
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.local.entity.CompanyEntity
-import com.example.ui.theme.LocalIsDarkMode
 
 data class KaptaNotificacion(
     val empresa: CompanyEntity,
@@ -70,22 +76,86 @@ fun construirNotificaciones(companies: List<CompanyEntity>): List<KaptaNotificac
     return notifs
 }
 
+private val gradTurquesaMorado = Brush.linearGradient(
+    listOf(Color(0xFF5CE1E6), Color(0xFF8C52FF))
+)
+private val gradBlancoGris = Brush.linearGradient(
+    listOf(Color(0xFFFFFFFF), Color(0xFFA6A6A6))
+)
+
+private data class ItemNotif(
+    val tipo: String,          // "negocios" | "soporte"
+    val titulo: String,        // nombre negocio (soporte) o tipo de alerta (negocios)
+    val descripcion: String,   // descripción (soporte) o detalle (negocios)
+    val numero: String = "",
+    val gradiente: Brush,      // degradado del círculo
+    val empresa: CompanyEntity? = null
+)
+
+private fun brushAvisoNegocio(tipo: String): Brush = when (tipo) {
+    "suspendida" -> Brush.linearGradient(listOf(Color.White, Color(0xFFFF0000)))
+    "pagos" -> gradTurquesaMorado
+    else -> Brush.linearGradient(listOf(Color(0xFFFFE3C7), Color(0xFFFF8A00)))
+}
+
+private fun brushPlan(plan: String?): Brush = when {
+    plan.isNullOrBlank() || plan.equals("Free", true) -> Brush.linearGradient(listOf(Color.White, Color(0xFFA6A6A6)))
+    plan.equals("Esencial", true) -> Brush.linearGradient(listOf(Color(0xFFFFE3C7), Color(0xFFFF8A00)))
+    else -> gradTurquesaMorado
+}
+
 /**
- * Dock flotante de notificaciones: panel glass translúcido (85%) anclado bajo la campana.
- * Tocar fuera lo cierra; no es una vista aparte.
+ * Panel flotante de notificaciones del SuperAdmin a pantalla completa con blur claro.
+ * Mantiene los tabs Negocios / Soporte / Todo, items con degradado y filtrado en vivo.
  */
 @Composable
 fun NotificationsModal(
     companies: List<CompanyEntity>,
+    soportes: List<Map<String, Any>> = emptyList(),
     onDismiss: () -> Unit,
     onCompanyClick: (CompanyEntity) -> Unit
 ) {
-    val isDark = LocalIsDarkMode.current
-    val notificaciones = construirNotificaciones(companies)
-    val glassColor = if (isDark) Color(0xFF1E293B).copy(alpha = 0.85f)
-                     else Color.White.copy(alpha = 0.85f)
-    val titleColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
-    val subColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    var filtro by remember { mutableStateOf("todo") }
+
+    val notifsNegocio = construirNotificaciones(companies)
+    val itemsNegocio: List<ItemNotif> = remember(notifsNegocio) {
+        notifsNegocio.map { n ->
+            ItemNotif(
+                tipo = "negocios",
+                titulo = when (n.tipo) {
+                    "suspendida" -> "Negocio suspendido"
+                    else -> "Membresía por vencer"
+                },
+                descripcion = n.mensaje,
+                numero = "1",
+                gradiente = brushAvisoNegocio(n.tipo),
+                empresa = n.empresa
+            )
+        }
+    }
+
+    val itemsSoporte: List<ItemNotif> = remember(soportes) {
+        soportes.map { s ->
+            val nombre = s["empresa_nombre"]?.toString()?.takeIf { it.isNotBlank() }
+                ?: s["solicitante"]?.toString() ?: "Negocio"
+            val plan = s["plan"]?.toString()
+            ItemNotif(
+                tipo = "soporte",
+                titulo = nombre,
+                descripcion = s["observaciones"]?.toString() ?: s["tipo_solicitud"]?.toString() ?: "",
+                numero = "",
+                gradiente = brushPlan(plan),
+                empresa = companies.firstOrNull { it.name.equals(nombre, ignoreCase = true) }
+            )
+        }
+    }
+
+    val visibles = remember(filtro, itemsNegocio, itemsSoporte) {
+        buildList {
+            if (filtro == "todo" || filtro == "negocios") addAll(itemsNegocio)
+            if (filtro == "todo" || filtro == "soporte") addAll(itemsSoporte)
+        }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -97,115 +167,230 @@ fun NotificationsModal(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Transparent)
-                .clickable(onClick = onDismiss, indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() })
+                // Blur claro sin oscurecer: fondo translúcido muy liviano
+                .background(Color(0x1AFFFFFF))
+                .clickable(
+                    onClick = onDismiss,
+                    indication = null,
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                )
                 .statusBarsPadding(),
-            contentAlignment = Alignment.TopEnd
+            contentAlignment = Alignment.TopCenter
         ) {
             Column(
                 modifier = Modifier
-                    .padding(top = 108.dp, end = 14.dp)
-                    .width(310.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(glassColor)
-                    .border(1.dp, if (isDark) Color(0xFF334155).copy(alpha = 0.9f) else Color.White.copy(alpha = 0.6f), RoundedCornerShape(24.dp))
+                    .fillMaxSize()
+                    .padding(top = 10.dp)
                     .clickable(enabled = false) { }
-                    .padding(16.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.NotificationsNone,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Notificaciones",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = titleColor,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        text = "${notificaciones.size}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
+                // ---- Panel principal ----
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = Color(0xFFF8F8F8),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp)
+                        .border(1.dp, gradBlancoGris, RoundedCornerShape(24.dp))
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.NotificationsNone,
+                                contentDescription = null,
+                                tint = Color(0xFF8C52FF),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Notificaciones",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFF0F172A),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                if (notificaciones.isEmpty()) {
-                    Text(
-                        text = "No hay notificaciones. Todo en orden.",
-                        fontSize = 12.sp,
-                        color = subColor,
-                        modifier = Modifier.padding(vertical = 10.dp)
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(notificaciones.size) { i ->
-                            val n = notificaciones[i]
-                            val icono = if (n.tipo == "suspendida") Icons.Default.Warning else Icons.Default.Schedule
-                            val accion = if (n.tipo == "suspendida") "Renovar" else "Ver"
-                            Surface(
-                                tonalElevation = 2.dp,
-                                shape = RoundedCornerShape(16.dp),
-                                color = (if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9)).copy(alpha = 0.9f),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onCompanyClick(n.empresa) }
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(38.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(n.color.copy(alpha = 0.15f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(icono, contentDescription = null, tint = n.color, modifier = Modifier.size(20.dp))
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = n.empresa.name,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = titleColor,
-                                            maxLines = 1
-                                        )
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = n.mensaje,
-                                            fontSize = 11.sp,
-                                            color = subColor,
-                                            maxLines = 2
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(n.color.copy(alpha = 0.12f))
-                                            .clickable { onCompanyClick(n.empresa) }
-                                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                                    ) {
-                                        Text(accion, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = n.color)
-                                    }
-                                }
+                        // ---- Tabs ----
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(
+                                Triple("negocios", "Negocios", itemsNegocio.size),
+                                Triple("soporte", "Soporte", itemsSoporte.size),
+                                Triple("todo", "Todo", itemsNegocio.size + itemsSoporte.size)
+                            ).forEach { (id, label, count) ->
+                                val activo = filtro == id
+                                TabNotif(
+                                    label = "$label  $count",
+                                    activo = activo,
+                                    onClick = { filtro = id },
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
                         }
+                    }
+                }
+
+                // ---- Lista de notificaciones ----
+                if (visibles.isEmpty()) {
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = Color(0xFFF8F8F8),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 12.dp)
+                            .border(1.dp, gradBlancoGris, RoundedCornerShape(24.dp))
+                    ) {
+                        Text(
+                            text = "No hay notificaciones en esta categoría.",
+                            fontSize = 13.sp,
+                            color = Color(0xFF64748B),
+                            modifier = Modifier.padding(20.dp)
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(visibles, key = { "${it.tipo}-${it.titulo}-${it.descripcion}" }) { item ->
+                            NotifRow(item, onCompanyClick)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabNotif(
+    label: String,
+    activo: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val grad = if (activo) {
+        listOf(Color(0xFF5CE1E6), Color(0xFF8C52FF))
+    } else {
+        listOf(Color(0xFF64748B), Color(0xFF64748B))
+    }
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        color = Color(0xFFF8F8F8),
+        border = null,
+        modifier = modifier.border(1.dp, gradBlancoGris, RoundedCornerShape(14.dp))
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 9.dp)
+        ) {
+            if (activo) {
+                Text(
+                    text = buildAnnotatedString {
+                        withStyle(SpanStyle(brush = gradTurquesaMorado)) { append(label) }
+                    },
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            } else {
+                Text(
+                    text = label,
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF64748B)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotifRow(item: ItemNotif, onCompanyClick: (CompanyEntity) -> Unit) {
+    val grad = if (item.tipo == "soporte") item.gradiente else item.gradiente
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFFF8F8F8),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, gradBlancoGris, RoundedCornerShape(16.dp))
+            .clickable(enabled = item.empresa != null) {
+                item.empresa?.let(onCompanyClick)
+            }
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Círculo con degradado
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .background(grad),
+                contentAlignment = Alignment.Center
+            ) {
+                if (item.tipo == "soporte") {
+                    Text(
+                        text = item.titulo.take(1).uppercase(),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (item.titulo.isNotBlank()) Color.White else Color.Transparent
+                    )
+                } else {
+                    Text(
+                        text = item.titulo.take(1).uppercase(),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                when (item.tipo) {
+                    "negocios" -> {
+                        Row(
+                            verticalAlignment = Alignment.Bottom,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = item.numero.ifBlank { "1" },
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFF0F172A),
+                                lineHeight = 26.sp
+                            )
+                            Text(
+                                text = item.titulo,
+                                fontSize = 12.5.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+                    }
+                    else -> {
+                        Text(
+                            text = item.titulo,
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = item.descripcion,
+                            fontSize = 12.5.sp,
+                            color = Color(0xFF64748B),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
