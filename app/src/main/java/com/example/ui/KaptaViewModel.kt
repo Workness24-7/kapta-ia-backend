@@ -24,6 +24,8 @@ import com.example.data.remote.SheetsSyncManager
 import com.example.data.remote.SyncState
 import com.example.data.remote.SheetDataResult
 import com.example.data.remote.RemoteCompany
+import com.example.ui.screens.DebtorRawOrderItem
+import com.example.ui.screens.DebtorRecord
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -437,7 +439,8 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
                                         totalAmount = totalAmount,
                                         paymentMethod = "Fiado",
                                         itemCount = quantity,
-                                        isSynced = true
+                                        isSynced = true,
+                                        tipoVenta = row.getOrNull(8)?.trim()?.takeIf { it.isNotBlank() } ?: "Normal"
                                     )
                                 )
                             }
@@ -550,7 +553,8 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
                                     cashAmount = efectivo,
                                     timestamp = rowTimestamp,
                                     itemCount = quantity,
-                                    isSynced = true
+                                    isSynced = true,
+                                    tipoVenta = row.getOrNull(21)?.trim()?.takeIf { it.isNotBlank() } ?: "Normal"
                                 )
 
                                 // FASE 2 — TRAZAR EL MODELO
@@ -1581,11 +1585,59 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
         // ponytail: si el tipo ya tiene funciones en la biblioteca, reusarlas y no gastar IA
         val existentes = _functionLibrary.value.filter { it.tipoNegocio.equals(tipoNegocio, ignoreCase = true) }
         if (existentes.isNotEmpty()) return existentes
-        return generarFuncionesConIA(
+        val generadas = generarFuncionesConIA(
             "Tipo de negocio: $tipoNegocio. Crea TODAS sus funciones clasificadas por plan: " +
             "Basico = vitales; Premium = basicas + utiles; MaxIA = todas + avanzadas a gran escala. " +
             "Cada funcion mapea a un modulo existente (ventas, gastos, deudores, inventario, facturacion, reporte, caja, usuario, cliente)."
         )
+        // ponytail: si la IA externa no responde (modelo caido, sin red, rate-limit) se usan
+        // plantillas locales deterministas para que SIEMPRE se generen funciones por plan.
+        return if (generadas.isEmpty()) generarFuncionesFallbackLocal(tipoNegocio) else generadas
+    }
+
+    private fun generarFuncionesFallbackLocal(tipoNegocio: String): List<FuncionLib> {
+        val negocio = "[$tipoNegocio] "
+        val esServicio = tipoNegocio.lowercase().let { t ->
+            t.contains("taller") || t.contains("mecánica") || t.contains("mecanica") ||
+            t.contains("moto") || t.contains("automotriz") || t.contains("vehículo") ||
+            t.contains("vehiculo") || t.contains("servicio") || t.contains("reparac")
+        }
+        val base = mutableListOf(
+            // BASICAS (vitales)
+            FuncionLib(nombre = negocio + "Registrar venta", descripcion = "Registra ventas de productos y servicios del día.", rol = "", planTier = "Basico", tipoNegocio = tipoNegocio, modulo = "ventas"),
+            FuncionLib(nombre = negocio + "Gestionar inventario", descripcion = "Administra productos, existencias y categorías.", rol = "", planTier = "Basico", tipoNegocio = tipoNegocio, modulo = "inventario"),
+            FuncionLib(nombre = negocio + "Registrar gastos", descripcion = "Controla gastos operativos y administrativos.", rol = "", planTier = "Basico", tipoNegocio = tipoNegocio, modulo = "gastos"),
+            FuncionLib(nombre = negocio + "Reportes básicos", descripcion = "Genera reportes de ventas y gastos del período.", rol = "", planTier = "Basico", tipoNegocio = tipoNegocio, modulo = "reporte"),
+            FuncionLib(nombre = negocio + "Control de caja", descripcion = "Apertura, arqueo y cierre de caja por turno.", rol = "", planTier = "Basico", tipoNegocio = tipoNegocio, modulo = "caja"),
+            // PREMIUM (utiles)
+            FuncionLib(nombre = negocio + "Cuentas por cobrar", descripcion = "Gestiona clientes fiados y saldos pendientes.", rol = "", planTier = "Premium", tipoNegocio = tipoNegocio, modulo = "deudores"),
+            FuncionLib(nombre = negocio + "Facturación", descripcion = "Emite facturas de compra y venta.", rol = "", planTier = "Premium", tipoNegocio = tipoNegocio, modulo = "facturacion"),
+            FuncionLib(nombre = negocio + "Gestión de clientes", descripcion = "Administra la cartera de clientes del negocio.", rol = "", planTier = "Premium", tipoNegocio = tipoNegocio, modulo = "cliente"),
+            FuncionLib(nombre = negocio + "Reportes avanzados", descripcion = "Reportes cruzados por producto, cliente y vendedor.", rol = "", planTier = "Premium", tipoNegocio = tipoNegocio, modulo = "reporte"),
+            // MAX IA (avanzadas)
+            FuncionLib(nombre = negocio + "Análisis predictivo IA", descripcion = "Predice demanda y ventas futuras con IA.", rol = "", planTier = "MaxIA", tipoNegocio = tipoNegocio, modulo = "reporte"),
+            FuncionLib(nombre = negocio + "Multi-sucursal síncrono", descripcion = "Sincroniza ventas e inventario entre sucursales.", rol = "", planTier = "MaxIA", tipoNegocio = tipoNegocio, modulo = "ventas"),
+            FuncionLib(nombre = negocio + "Automatización inteligente", descripcion = "Automatiza tareas recurrentes del negocio con IA.", rol = "", planTier = "MaxIA", tipoNegocio = tipoNegocio, modulo = "custom")
+        )
+        if (esServicio) {
+            base.add(FuncionLib(
+                nombre = negocio + "Mano de obra por servicio",
+                descripcion = "Cobra la mano de obra de cada mecánico o técnico por el servicio prestado, sin descontar inventario.",
+                rol = "", planTier = "Basico", tipoNegocio = tipoNegocio, modulo = "ventas"))
+            base.add(FuncionLib(
+                nombre = negocio + "Gestión de mecánicos",
+                descripcion = "Registra cada mecánico y asigna la mano de obra por servicio.",
+                rol = "", planTier = "Basico", tipoNegocio = tipoNegocio, modulo = "usuario"))
+            base.add(FuncionLib(
+                nombre = negocio + "Cobro de grúa",
+                descripcion = "Cobra servicios de grúa y remolque y registra el historial por vehículo.",
+                rol = "", planTier = "Premium", tipoNegocio = tipoNegocio, modulo = "ventas"))
+            base.add(FuncionLib(
+                nombre = negocio + "Historial de servicios por vehículo",
+                descripcion = "Guardar el historial completo de servicios realizados a cada vehículo.",
+                rol = "", planTier = "Premium", tipoNegocio = tipoNegocio, modulo = "cliente"))
+        }
+        return base
     }
 
     private fun parseFuncionesIA(content: String): List<FuncionLib> {
@@ -1985,6 +2037,7 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
         cashAmount: Double = 0.0,
         itemCount: Int = quantity,
         timestamp: Long = System.currentTimeMillis(),
+        tipoVenta: String = "Normal",
         onSuccess: () -> Unit = {}
     ) {
         viewModelScope.launch {
@@ -2004,7 +2057,8 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
                 cashAmount = finalCash,
                 timestamp = timestamp,
                 itemCount = itemCount,
-                isSynced = false
+                isSynced = false,
+                tipoVenta = tipoVenta
             )
             repository.insertSale(sale)
             syncManager.triggerImmediateSync(repository)
@@ -2030,7 +2084,8 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
                 productName = productName,
                 paymentMethod = paymentMethod,
                 transferAmount = transferAmount,
-                cashAmount = cashAmount
+                cashAmount = cashAmount,
+                usuario = _currentUser.value?.name ?: "SuperAdmin"
             )
             if (success) {
                 showToast("¡Deudor $clientName pagado y movido a Ventas!")
@@ -2106,6 +2161,7 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
         abonoAmount: Double = 0.0,
         abonoMethod: String = "",
         pendingTotal: Double,
+        tipo: String = "Normal",
         onSuccess: () -> Unit = {}
     ) {
         viewModelScope.launch {
@@ -2116,10 +2172,64 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
             val abonoEsTransferencia = abonoMethod.lowercase().contains("transfer") || abonoMethod.lowercase().contains("nequi") || abonoMethod.lowercase().contains("daviplata") || abonoMethod.lowercase().contains("tarjeta")
             val abonoTransfer = if (abonoEsTransferencia) abonoAmount else 0.0
             val abonoCash = if (!abonoEsTransferencia) abonoAmount else 0.0
-            val payload = listOf(dateStr, clientName, productName, quantity, minFlag, abonoTransfer, abonoCash, pendingTotal)
+            val payload = listOf(dateStr, clientName, productName, quantity, minFlag, abonoTransfer, abonoCash, pendingTotal, tipo)
             sheetsService.registrarDeudor(sheetName, payload)
             onSuccess()
         }
+    }
+
+    fun cargarDeudoresExistentes(sheetName: String, onResult: (List<DebtorRecord>) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val res = sheetsService.fetchBusinessData(sheetName, "Deudores")
+                if (res == null || res.rows.isEmpty()) {
+                    onResult(emptyList())
+                    return@launch
+                }
+                val porCliente = LinkedHashMap<String, MutableList<DebtorRawOrderItem>>()
+                val totales = HashMap<String, Double>()
+                val fechas = HashMap<String, String>()
+                for (row in res.rows) {
+                    val cliente = row.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() } ?: continue
+                    val producto = row.getOrNull(2)?.trim()?.takeIf { it.isNotBlank() } ?: "Venta a Crédito"
+                    val cantidad = row.getOrNull(3)?.trim()?.toIntOrNull() ?: 1
+                    val total = parseMoney(row.getOrNull(7))
+                    if (total <= 0 || cantidad <= 0) continue
+                    val abonos = parseMoney(row.getOrNull(5)) + parseMoney(row.getOrNull(6))
+                    val fechaCruda = row.getOrNull(0)?.trim() ?: ""
+                    val tipo = row.getOrNull(8)?.trim()?.takeIf { it.isNotBlank() } ?: "Normal"
+                    porCliente.getOrPut(cliente) { mutableListOf() }.add(
+                        DebtorRawOrderItem(
+                            quantity = cantidad,
+                            productName = producto,
+                            unitPrice = total / cantidad,
+                            timeStr = extraerHora(fechaCruda),
+                            tipo = tipo
+                        )
+                    )
+                    totales[cliente] = (totales[cliente] ?: 0.0) + (total - abonos).coerceAtLeast(0.0)
+                    fechas[cliente] = fechaCruda.split(" ").first()
+                }
+                onResult(porCliente.map { (nombre, ordenes) ->
+                    DebtorRecord(
+                        id = nombre.hashCode(),
+                        name = nombre,
+                        amountOwed = totales[nombre] ?: ordenes.sumOf { it.quantity * it.unitPrice },
+                        concept = "Consumo fiado",
+                        date = fechas[nombre] ?: "",
+                        orders = ordenes,
+                        tipo = ordenes.firstOrNull()?.tipo ?: "Normal"
+                    )
+                })
+            } catch (e: Exception) {
+                onResult(emptyList())
+            }
+        }
+    }
+
+    private fun extraerHora(fechaCruda: String): String {
+        val partes = fechaCruda.trim().split(" ")
+        return if (partes.size >= 2) partes[1] else ""
     }
 
     fun createOrUpdateUser(user: CompanyUserEntity, onSuccess: () -> Unit = {}) {

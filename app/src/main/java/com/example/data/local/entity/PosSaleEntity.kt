@@ -17,6 +17,7 @@ data class PosSaleEntity(
     val cashAmount: Double = 0.0,
     val timestamp: Long = System.currentTimeMillis(),
     val itemCount: Int = 1,
-    val isSynced: Boolean = false
+    val isSynced: Boolean = false,
+    val tipoVenta: String = "Normal"
 )
 

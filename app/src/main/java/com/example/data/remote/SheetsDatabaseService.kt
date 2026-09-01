@@ -718,7 +718,8 @@ class SheetsDatabaseService(
         productName: String = "",
         paymentMethod: String = "Efectivo",
         transferAmount: Double = 0.0,
-        cashAmount: Double = 0.0
+        cashAmount: Double = 0.0,
+        usuario: String = ""
     ): Boolean = withContext(Dispatchers.IO) {
         val result = executeWithRetry {
             val jsonPayload = JSONObject().apply {
@@ -736,6 +737,7 @@ class SheetsDatabaseService(
                 put("metodoPago", paymentMethod)
                 put("transferAmount", transferAmount)
                 put("cashAmount", cashAmount)
+                put("usuario", usuario)
                 put("data", JSONArray(listOf(clientName, productName, paymentMethod, transferAmount, cashAmount)))
             }
 
@@ -1130,6 +1132,7 @@ class SheetsDatabaseService(
                 val jsonPayload = JSONObject().apply {
                     put("action", "subir_foto")
                     put("datos", base64)
+                    if (!currentIdEmpresa.isNullOrBlank()) put("idEmpresa", currentIdEmpresa)
                 }
                 val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
                 val targetUrl: String = if (!webAppScriptUrl.isNullOrBlank()) webAppScriptUrl!! else APPS_SCRIPT_WEB_APP_URL

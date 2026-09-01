@@ -16,6 +16,7 @@ data class PosProductEntity(
     val category: String,
     val stock: Int = 10,
     val minStockAlert: Int = 10,
+    val isService: Boolean = false,
     val imageUrl: String = "",
     val barcode: String = "",
     val isSynced: Boolean = false

@@ -196,8 +196,9 @@ fun CreateEditCompanyScreen(
     val durationList = remember {
         listOf("15 días", "1 mes", "Mensual", "Anual", "Permanente")
     }
-    val businessTypesList = remember {
-        listOf(
+    val companies by viewModel.companies.collectAsState()
+    val businessTypesList = remember(companies) {
+        val fijos = listOf(
             "Bar",
             "Restaurante",
             "Cafetería",
@@ -207,8 +208,18 @@ fun CreateEditCompanyScreen(
             "Tienda de cosméticos",
             "Ferretería",
             "Licorería",
-            "Otro"
+            "Taller de motos",
+            "Taller mecánico",
+            "Automotriz"
         )
+        // Tipos personalizados ya creados en el sistema: el tipo de cada negocio existente
+        // se suma a esta lista, así un tipo creado con "Otro" queda disponible la próxima vez.
+        val personalizados = companies
+            .mapNotNull { it.businessType?.trim()?.takeIf { t -> t.isNotBlank() && t != "Otro" } }
+            .filter { t -> fijos.none { it.equals(t, ignoreCase = true) } }
+            .distinct()
+            .sorted()
+        (fijos + personalizados + "Otro")
     }
     // Logo image launchers
     val context = LocalContext.current
@@ -2524,6 +2535,11 @@ fun getMatrixForBusinessType(businessType: String): PlanMatrixDefinition {
             basicFeatures = listOf("Inventario", "Registrar ventas", "Caja", "Clientes", "Cuentas por cobrar", "Compras", "Venta por caja o unidad", "Promociones", "Happy Hour", "Control de lotes", "Productos Premium", "Control de turnos"),
             premiumFeatures = listOf("Facturación electrónica", "Reportes avanzados"),
             maxIaFeatures = listOf("IA para promociones", "Predicción de ventas por temporada", "IA recomienda compras", "IA detecta productos de baja rotación")
+        )
+        bType.contains("taller") || bType.contains("mecánica") || bType.contains("mecanica") || bType.contains("moto") || bType.contains("automotriz") || bType.contains("vehículo") || bType.contains("vehiculo") || bType.contains("llantas") -> PlanMatrixDefinition(
+            basicFeatures = listOf("Inventario", "Registrar ventas", "Caja", "Clientes", "Compras", "Cuentas por cobrar", "Mano de obra", "Servicios", "Mecánicos", "Repuestos", "Control de lotes", "Órdenes de trabajo"),
+            premiumFeatures = listOf("Facturación electrónica", "Reportes avanzados", "Dashboard inteligente", "Control de turnos", "Agenda de citas", "Grúa y remolque", "Historial de servicios por vehículo", "Garantías", "Varias sucursales"),
+            maxIaFeatures = listOf("IA predice demanda de repuestos", "IA recomienda servicios", "IA analiza rentabilidad de mecánicos", "Agente IA del taller")
         )
         else -> PlanMatrixDefinition(
             basicFeatures = listOf("Inventario", "Registrar ventas", "Clientes", "Cuentas por cobrar", "Compras", "Caja", "Gastos administrativos", "Reportes básicos"),

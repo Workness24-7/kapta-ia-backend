@@ -65,7 +65,7 @@ class SheetsSyncManager(
                     val prodName = sale.productName.ifBlank { "Venta a Crédito" }
                     val abonoTransfer = if (sale.paymentMethod.lowercase().contains("transfer") || sale.paymentMethod.lowercase().contains("nequi") || sale.paymentMethod.lowercase().contains("daviplata") || sale.paymentMethod.lowercase().contains("tarjeta")) sale.totalAmount else 0.0
                     val abonoCash = if (sale.transferAmount > 0.0 || sale.cashAmount > 0.0) sale.cashAmount else if (!sale.paymentMethod.lowercase().contains("transfer") && !sale.paymentMethod.lowercase().contains("nequi") && !sale.paymentMethod.lowercase().contains("daviplata") && !sale.paymentMethod.lowercase().contains("tarjeta")) sale.totalAmount else 0.0
-                    val deudorPayload = listOf(fecha, client, prodName, qty, minPriceFlag, abonoTransfer, abonoCash, sale.totalAmount)
+                    val deudorPayload = listOf(fecha, client, prodName, qty, minPriceFlag, abonoTransfer, abonoCash, sale.totalAmount, sale.tipoVenta)
                     sheetsService.registrarDeudor(sheetName, deudorPayload)
                 } else {
                     // Ventas (N:AH - 21 cols): Id_Venta, Fecha, Hora, Cliente, Id_Producto, Producto, Cantidad, Precio_Unitario, Subtotal, Descuento, Transferencia, Efectivo, Total, Usuario, Estado
@@ -99,7 +99,8 @@ class SheetsSyncManager(
                         sale.totalAmount, // Total
                         usuario,        // Usuario
                         "Activo",       // Estado
-                        "", "", "", "", "", ""
+                        "", "", "", "", "", "",
+                        sale.tipoVenta  // Tipo
                     )
                     sheetsService.registrarVenta(sheetName, ventaPayload)
                 }

@@ -98,6 +98,8 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.LocalTaxi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -179,37 +181,61 @@ private data class BusinessExpense(
 )
 
 // Debtor Item model
-private data class DebtorRecord(
+data class DebtorRecord(
     val id: Int,
     val name: String,
     val phone: String = "",
     val amountOwed: Double,
     val concept: String = "",
     val date: String,
-    val abonoAmount: Double = 0.0
+    val abonoAmount: Double = 0.0,
+    val orders: List<DebtorRawOrderItem> = emptyList(),
+    val tipo: String = "Normal"
 )
 
-private data class DebtorGroupedProduct(
+data class DebtorGroupedProduct(
     val quantity: Int,
     val name: String,
     val subtotal: Double
 )
 
-private data class DebtorRawOrderItem(
+data class DebtorRawOrderItem(
     val quantity: Int,
     val productName: String,
     val unitPrice: Double,
-    val timeStr: String
+    val timeStr: String,
+    val tipo: String = "Normal"
 )
 
-private fun getGroupedProductsForDebtor(concept: String, amountOwed: Double): List<DebtorGroupedProduct> {
-    val nombre = concept.takeIf { it.isNotBlank() } ?: "Consumo General"
-    return listOf(DebtorGroupedProduct(1, nombre, amountOwed))
+private fun getGroupedProductsForDebtor(
+    orders: List<DebtorRawOrderItem>,
+    fallbackName: String,
+    fallbackAmount: Double
+): List<DebtorGroupedProduct> {
+    if (orders.isEmpty()) {
+        return listOf(DebtorGroupedProduct(1, fallbackName.ifBlank { "Consumo General" }, fallbackAmount))
+    }
+    return orders.groupBy { it.productName.lowercase() }
+        .map { (_, items) ->
+            DebtorGroupedProduct(
+                quantity = items.sumOf { it.quantity },
+                name = items.first().productName,
+                subtotal = items.sumOf { it.quantity * it.unitPrice }
+            )
+        }
+        .sortedByDescending { it.subtotal }
 }
 
-private fun getRawOrdersForDebtor(concept: String, amountOwed: Double, dateStr: String): List<DebtorRawOrderItem> {
-    val nombre = concept.takeIf { it.isNotBlank() } ?: "Consumo Registrado"
-    return listOf(DebtorRawOrderItem(1, nombre, amountOwed, dateStr))
+private fun getRawOrdersForDebtor(
+    orders: List<DebtorRawOrderItem>,
+    fallbackName: String,
+    fallbackAmount: Double,
+    fallbackDate: String
+): List<DebtorRawOrderItem> {
+    if (orders.isEmpty()) {
+        return listOf(DebtorRawOrderItem(1, fallbackName.ifBlank { "Consumo Registrado" }, fallbackAmount, fallbackDate))
+    }
+    return orders
 }
 
 data class DebtorHistoryItem(
@@ -249,13 +275,13 @@ private fun DebtorsManagementModal(
             ) {
                 Column {
                     Text(
-                        text = "GestiÃ³n de Cuentas por Cobrar",
+                        text = "Gestión de Cuentas por Cobrar",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = "${debtorsList.size} deudores â€¢ Total pendiente: ${formatCurrency(totalDebtorsAmount)}",
+                        text = "${debtorsList.size} deudores • Total pendiente: ${formatCurrency(totalDebtorsAmount)}",
                         fontSize = 12.sp,
                         color = Color(0xFFFF453A),
                         fontWeight = FontWeight.Bold
@@ -388,7 +414,7 @@ private fun DebtorsManagementModal(
                     if (updatedTotalAbono >= debtorUpdated.amountOwed) {
                         debtorsList.removeAt(idx)
                         selectedDebtor = null
-                        onShowToast("Â¡Abono liquidÃ³ la totalidad de la deuda de ${debtorUpdated.name}!")
+                        onShowToast("¡Abono liquidó la totalidad de la deuda de ${debtorUpdated.name}!")
                     } else {
                         val newRecord = debtorUpdated.copy(abonoAmount = updatedTotalAbono)
                         debtorsList[idx] = newRecord
@@ -458,7 +484,7 @@ private fun DebtorsManagementModal(
                                 )
                             )
                             showAddDebtorDialog = false
-                            onShowToast("Deudor $newName registrado con Ã©xito")
+                            onShowToast("Deudor $newName registrado con éxito")
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
@@ -491,11 +517,11 @@ private fun DebtorDetailFloatingModal(
     val pendingBalance = (debtor.amountOwed - debtor.abonoAmount).coerceAtLeast(0.0)
 
     val groupedProducts = remember(debtor) {
-        getGroupedProductsForDebtor(debtor.concept, debtor.amountOwed)
+        getGroupedProductsForDebtor(debtor.orders, debtor.concept, debtor.amountOwed)
     }
 
     val rawOrders = remember(debtor) {
-        getRawOrdersForDebtor(debtor.concept, debtor.amountOwed, debtor.date)
+        getRawOrdersForDebtor(debtor.orders, debtor.concept, debtor.amountOwed, debtor.date)
     }
 
     Dialog(
@@ -538,7 +564,7 @@ private fun DebtorDetailFloatingModal(
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Text(
-                            text = if (isHistoryExpanded) "âŒ" else "ðŸ”„",
+                            text = if (isHistoryExpanded) "❌" else "🔄",
                             fontSize = 16.sp
                         )
                     }
@@ -646,7 +672,7 @@ private fun DebtorDetailFloatingModal(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 4. ACCIONES DINÃMICAS
+                // 4. ACCIONES DINÁMICAS
                 when (activeFlowMode) {
                     "NONE" -> {
                         Row(
@@ -687,7 +713,7 @@ private fun DebtorDetailFloatingModal(
                     "PAGO" -> {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                text = "MÃ©todo de Pago",
+                                text = "Método de Pago",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -709,7 +735,7 @@ private fun DebtorDetailFloatingModal(
                                         .weight(1f)
                                         .height(48.dp)
                                 ) {
-                                    Text("ðŸ’¸", fontSize = 22.sp)
+                                    Text("💸", fontSize = 22.sp)
                                 }
 
                                 Button(
@@ -723,7 +749,7 @@ private fun DebtorDetailFloatingModal(
                                         .weight(1f)
                                         .height(48.dp)
                                 ) {
-                                    Text("ðŸª™", fontSize = 22.sp)
+                                    Text("🪙", fontSize = 22.sp)
                                 }
                             }
 
@@ -774,7 +800,7 @@ private fun DebtorDetailFloatingModal(
                             Spacer(modifier = Modifier.height(10.dp))
 
                             Text(
-                                text = "MÃ©todo de Abono",
+                                text = "Método de Abono",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -796,7 +822,7 @@ private fun DebtorDetailFloatingModal(
                                         .weight(1f)
                                         .height(48.dp)
                                 ) {
-                                    Text("ðŸ’¸", fontSize = 22.sp)
+                                    Text("💸", fontSize = 22.sp)
                                 }
 
                                 Button(
@@ -810,7 +836,7 @@ private fun DebtorDetailFloatingModal(
                                         .weight(1f)
                                         .height(48.dp)
                                 ) {
-                                    Text("ðŸª™", fontSize = 22.sp)
+                                    Text("🪙", fontSize = 22.sp)
                                 }
                             }
 
@@ -918,7 +944,7 @@ private data class BusinessModule(
     val description: String,
     val icon: ImageVector,
     val color: Color,
-    val minPlan: String, // "BÃ¡sico", "Premium", "MAX IA"
+    val minPlan: String, // "Básico", "Premium", "MAX IA"
     val allowedBusinessTypes: List<String>? = null
 )
 
@@ -997,7 +1023,7 @@ private fun getModulesForCompany(businessType: String, plan: String, userRole: S
     val allModules = listOf(
         BusinessModule(
             title = "Reportes y Analytics Avanzados",
-            description = "MÃ©tricas en tiempo real e histogramas de rentabilidad",
+            description = "Métricas en tiempo real e histogramas de rentabilidad",
             icon = Icons.Default.BarChart,
             color = Color(0xFF4F46E5),
             minPlan = "Premium"
@@ -1007,11 +1033,11 @@ private fun getModulesForCompany(businessType: String, plan: String, userRole: S
             description = "Apertura, arqueos ciegos y cierre de caja",
             icon = Icons.Default.AccountBalanceWallet,
             color = Color(0xFF34C759),
-            minPlan = "BÃ¡sico"
+            minPlan = "Básico"
         ),
         BusinessModule(
-            title = "FacturaciÃ³n ElectrÃ³nica DIAN",
-            description = "EmisiÃ³n directa de facturas y documentos equivalentes",
+            title = "Facturación Electrónica DIAN",
+            description = "Emisión directa de facturas y documentos equivalentes",
             icon = Icons.Default.Receipt,
             color = Color(0xFF0284C7),
             minPlan = "Premium"
@@ -1022,31 +1048,47 @@ private fun getModulesForCompany(businessType: String, plan: String, userRole: S
             icon = Icons.Default.Star,
             color = Color(0xFFFF9F0A),
             minPlan = "Premium",
-            allowedBusinessTypes = listOf("Bar", "Discoteca", "Restaurante", "CafÃ©", "LicorerÃ­a")
+            allowedBusinessTypes = listOf("Bar", "Discoteca", "Restaurante", "Café", "Licorería")
         ),
         BusinessModule(
             title = "Venta por Mesa & Comandero",
-            description = "AtenciÃ³n tÃ¡ctil a mesas, barras y zonas",
+            description = "Atención táctil a mesas, barras y zonas",
             icon = Icons.Default.ShoppingCart,
             color = Color(0xFF8B5CF6),
             minPlan = "Premium",
-            allowedBusinessTypes = listOf("Bar", "Discoteca", "Restaurante", "CafÃ©")
+            allowedBusinessTypes = listOf("Bar", "Discoteca", "Restaurante", "Café")
         ),
         BusinessModule(
-            title = "DivisiÃ³n de Cuentas (Split)",
-            description = "Divide la cuenta por personas de forma Ã¡gil",
+            title = "División de Cuentas (Split)",
+            description = "Divide la cuenta por personas de forma ágil",
             icon = Icons.Default.CreditCard,
             color = Color(0xFFEC4899),
             minPlan = "Premium",
-            allowedBusinessTypes = listOf("Bar", "Discoteca", "Restaurante", "CafÃ©")
+            allowedBusinessTypes = listOf("Bar", "Discoteca", "Restaurante", "Café")
         ),
         BusinessModule(
             title = "Control de Lotes y Vencimientos",
-            description = "GestiÃ³n y alertas de rotaciÃ³n de productos perecederos",
+            description = "Gestión y alertas de rotación de productos perecederos",
             icon = Icons.Default.Inventory2,
             color = Color(0xFF059669),
-            minPlan = "BÃ¡sico",
-            allowedBusinessTypes = listOf("Supermercado", "Minimercado", "FerreterÃ­a", "Abarrotes", "LicorerÃ­a", "Boutique")
+            minPlan = "Básico",
+            allowedBusinessTypes = listOf("Supermercado", "Minimercado", "Ferretería", "Abarrotes", "Licorería", "Boutique")
+        ),
+        BusinessModule(
+            title = "Servicios y Mano de Obra",
+            description = "Cobra mano de obra por servicio sin descontar inventario (cada mecánico, técnico o profesional)",
+            icon = Icons.Default.Build,
+            color = Color(0xFFF59E0B),
+            minPlan = "Básico",
+            allowedBusinessTypes = listOf("Taller", "Mecánica", "Mecanica", "Motos", "Automotriz", "Servicio", "Reparación", "Reparacion")
+        ),
+        BusinessModule(
+            title = "Grúa y Vehículos",
+            description = "Cobra grúa, remolque y registra el historial de servicios por vehículo",
+            icon = Icons.Default.LocalTaxi,
+            color = Color(0xFF64748B),
+            minPlan = "Premium",
+            allowedBusinessTypes = listOf("Taller", "Mecánica", "Mecanica", "Motos", "Automotriz", "Grúa")
         ),
         BusinessModule(
             title = "Agente IA Kapta Assistant",
@@ -1056,8 +1098,8 @@ private fun getModulesForCompany(businessType: String, plan: String, userRole: S
             minPlan = "MAX IA"
         ),
         BusinessModule(
-            title = "PredicciÃ³n de Ventas Inteligente",
-            description = "ProyecciÃ³n de demanda y sugerencias automÃ¡ticas con IA",
+            title = "Predicción de Ventas Inteligente",
+            description = "Proyección de demanda y sugerencias automáticas con IA",
             icon = Icons.Default.TrendingUp,
             color = Color(0xFF6366F1),
             minPlan = "MAX IA"
@@ -1069,13 +1111,13 @@ private fun getModulesForCompany(businessType: String, plan: String, userRole: S
 
     return allModules.filter { mod ->
         val roleAllowed = if (isCajero) {
-            mod.title.contains("Caja", ignoreCase = true) || mod.title.contains("Mesa", ignoreCase = true) || mod.title.contains("DivisiÃ³n", ignoreCase = true)
+            mod.title.contains("Caja", ignoreCase = true) || mod.title.contains("Mesa", ignoreCase = true) || mod.title.contains("División", ignoreCase = true)
         } else true
 
         val planAllowed = when {
             isMaxIa -> true
-            isPremium -> mod.minPlan == "BÃ¡sico" || mod.minPlan == "Premium"
-            else -> mod.minPlan == "BÃ¡sico"
+            isPremium -> mod.minPlan == "Básico" || mod.minPlan == "Premium"
+            else -> mod.minPlan == "Básico"
         }
 
         val typeAllowed = if (mod.allowedBusinessTypes == null) {
@@ -1126,6 +1168,12 @@ fun TenantPosScreen(
     val userRole = currentUser?.role ?: if (isSuperAdminSession) "Administrador" else "Cajero"
     val isCajero = userRole.equals("Cajero", ignoreCase = true) || userRole.equals("Empleado", ignoreCase = true) || userRole.equals("Mesero", ignoreCase = true)
 
+    // Modo juego Bolirrana: exclusivo de bares (y afines).
+    val esBarDeBolirrana = run {
+        val t = company.businessType.lowercase()
+        t.contains("bar") || t.contains("disco") || t.contains("licor") || t.contains("fiesta")
+    }
+
     val allowedDockTabs = remember(userFunctions, isAdminUser) {
         if (isAdminUser) setOf(0, 1, 2, 3, 4)
         else {
@@ -1144,7 +1192,7 @@ fun TenantPosScreen(
         viewModel.ensureDefaultUsersForCompany(company.code, company.id)
     }
 
-    // Fixed Top Dock Navigation Index (0: Inicio, 1: Ventas, 2: Finanzas, 3: Inventario, 4: MenÃº Adicional)
+    // Fixed Top Dock Navigation Index (0: Inicio, 1: Ventas, 2: Finanzas, 3: Inventario, 4: Menú Adicional)
     var selectedDockTab by remember { mutableIntStateOf(if (isCajero) 1 else 0) }
 
     var searchPosQuery by remember { mutableStateOf("") }
@@ -1171,6 +1219,7 @@ fun TenantPosScreen(
     var showAddStockBottomSheet by remember { mutableStateOf(false) }
     var showStockConfirmationDialog by remember { mutableStateOf(false) }
     var showDebtorsModal by remember { mutableStateOf(false) }
+    var showBolirranaModal by remember { mutableStateOf(false) }
     var selectedDebtorForHistory by remember { mutableStateOf<DebtorRecord?>(null) }
     var showAdditionalMenuSheet by remember { mutableStateOf(false) }
     var showHacerInventarioModal by remember { mutableStateOf(false) }
@@ -1186,7 +1235,7 @@ fun TenantPosScreen(
 
     // Finance filter states
     val todayFormatted = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date())
-    var financesFilter by remember { mutableStateOf("Mes") } // "DÃ­a", "Mes", "Rango de fechas"
+    var financesFilter by remember { mutableStateOf("Mes") } // "Día", "Mes", "Rango de fechas"
     var financesStartDate by remember { mutableStateOf(todayFormatted) }
     var financesEndDate by remember { mutableStateOf(todayFormatted) }
 
@@ -1195,7 +1244,7 @@ fun TenantPosScreen(
     val cashSalesFlow = remember(salesFlow) {
         salesFlow.filter { sale ->
             val pm = sale.paymentMethod.lowercase()
-            !pm.contains("fiado") && !pm.contains("debe") && !pm.contains("deudor") && !pm.contains("credito") && !pm.contains("crÃ©dito")
+            !pm.contains("fiado") && !pm.contains("debe") && !pm.contains("deudor") && !pm.contains("credito") && !pm.contains("crédito")
         }
     }
 
@@ -1237,6 +1286,16 @@ fun TenantPosScreen(
     // Debtors list state
     val debtorsList = remember(company.code) {
         mutableStateListOf<DebtorRecord>()
+    }
+
+    // Seed deudores existentes desde la hoja Deudores (resumen por cliente con hora por pedido)
+    androidx.compose.runtime.LaunchedEffect(company.code) {
+        viewModel.cargarDeudoresExistentes(company.code) { cargados ->
+            if (cargados.isNotEmpty()) {
+                debtorsList.clear()
+                debtorsList.addAll(cargados)
+            }
+        }
     }
 
     // Stock addition rows inside the +Stock BottomSheet
@@ -1299,7 +1358,7 @@ fun TenantPosScreen(
             val isMaxIaPlan = company.plan.contains("MAX", ignoreCase = true) || company.plan.contains("IA", ignoreCase = true)
             val isPremiumPlan = company.plan.contains("Premium", ignoreCase = true)
 
-            // Circulo indicador del plan: BÃ¡sico verde, Premium morado, MAX IA degradado morado->naranja
+            // Circulo indicador del plan: Básico verde, Premium morado, MAX IA degradado morado->naranja
             val planCircleColor: Color = when {
                 isMaxIaPlan -> Color(0xFFA855F7)
                 isPremiumPlan -> Color(0xFFA855F7)
@@ -1463,7 +1522,7 @@ fun TenantPosScreen(
                     .fillMaxWidth()
             ) {
                 when (activeDockTab) {
-                    // BOTON 1: Inicio (Dashboard, Resumen General, Acciones RÃ¡pidas & Alertas)
+                    // BOTON 1: Inicio (Dashboard, Resumen General, Acciones Rápidas & Alertas)
                     0 -> InicioDashboardView(
                         salesToday = todaySalesAmount,
                         monthlyExpenses = totalExpensesAmount,
@@ -1479,8 +1538,10 @@ fun TenantPosScreen(
                             showAddStockBottomSheet = true
                         },
                         onQuickActionDeudores = { showDebtorsModal = true },
+                        onQuickActionBolirrana = { showBolirranaModal = true },
+                        isBar = esBarDeBolirrana,
                         onGoToFinanzasDia = {
-                            financesFilter = "DÃ­a"
+                            financesFilter = "Día"
                             selectedDockTab = 2
                         },
                         userFunctions = userFunctions,
@@ -1488,7 +1549,7 @@ fun TenantPosScreen(
                         hasCap = hasCap
                     )
 
-                    // BOTON 2: Ventas (Resumen comparativo & Ranking por categorÃ­a)
+                    // BOTON 2: Ventas (Resumen comparativo & Ranking por categoría)
                     1 -> VentasSectionView(
                         products = filteredProducts,
                         searchQuery = searchPosQuery,
@@ -1519,7 +1580,7 @@ fun TenantPosScreen(
                         salesFlow = salesFlow
                     )
 
-                    // BOTON 3: Finanzas (InformaciÃ³n financiera y control de gastos detallados)
+                    // BOTON 3: Finanzas (Información financiera y control de gastos detallados)
                     2 -> FinanzasSectionView(
                         company = company,
                         activeFilter = financesFilter,
@@ -1533,7 +1594,7 @@ fun TenantPosScreen(
                         onAddExpenseClick = { showExpenseModal = true }
                     )
 
-                    // BOTON 4: Inventario (Lista por categorÃ­a, Guardar Inventario & Hacer Inventario)
+                    // BOTON 4: Inventario (Lista por categoría, Guardar Inventario & Hacer Inventario)
                     3 -> InventarioSectionView(
                         products = productsFlow,
                         companyCode = company.code,
@@ -1564,7 +1625,7 @@ fun TenantPosScreen(
         }
 
         // -------------------------------------------------------------------------------------
-        // DOCK DE NAVEGACIÃ“N FLOTANTE PREMIUM (cÃ¡psula blanca, icono + texto, bÃºsqueda separada)
+        // DOCK DE NAVEGACIÓN FLOTANTE PREMIUM (cápsula blanca, icono + texto, búsqueda separada)
         // -------------------------------------------------------------------------------------
         val dockBg = if (isDarkMode) Color(0xFF1C1C1E) else Color.White
         val dockBorder = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)
@@ -1582,7 +1643,7 @@ fun TenantPosScreen(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Dock principal: cÃ¡psula flotante con las opciones
+            // Dock principal: cápsula flotante con las opciones
             Surface(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(50),
@@ -1608,7 +1669,7 @@ fun TenantPosScreen(
                             TopDockItem(1, "Ventas", Icons.Default.TrendingUp),
                             TopDockItem(2, "Finanzas", Icons.Default.AccountBalanceWallet),
                             TopDockItem(3, "Inventario", Icons.Default.Inventory2),
-                            TopDockItem(4, "MenÃº", Icons.Default.MoreHoriz)
+                            TopDockItem(4, "Menú", Icons.Default.MoreHoriz)
                         )
                     }
                     val topDockItems = if (isAdminUser) baseDockItems else baseDockItems.filter { it.index in allowedDockTabs }
@@ -1651,7 +1712,7 @@ fun TenantPosScreen(
                 }
             }
 
-            // BotÃ³n de bÃºsqueda circular independiente (lleva a Inicio, donde estÃ¡ el buscador)
+            // Botón de búsqueda circular independiente (lleva a Inicio, donde está el buscador)
             Surface(
                 onClick = { selectedDockTab = 0 },
                 shape = CircleShape,
@@ -1764,7 +1825,8 @@ fun TenantPosScreen(
             products = productsFlow,
             debtorsList = debtorsList,
             onClose = { showNuevaVentaView = false },
-            onPaymentSuccess = { customerName, ticketItems, totalAmount, paymentMethod, transferAmount, cashAmount ->
+            esBar = esBarDeBolirrana,
+            onPaymentSuccess = { customerName, ticketItems, totalAmount, paymentMethod, transferAmount, cashAmount, tipoVenta ->
                 val finalClient = if (customerName.isBlank()) "Cliente Mostrador" else customerName.trim()
                 val sharedTimestamp = System.currentTimeMillis()
                 val grouped = ticketItems.entries.groupBy { it.key.id }
@@ -1772,8 +1834,8 @@ fun TenantPosScreen(
                     val prod = entries.first().key
                     val qty = entries.sumOf { it.value }
                     if (qty > 0) {
-                        val newStock = (prod.stock - qty).coerceAtLeast(0)
-                        viewModel.saveOrUpdateProduct(prod.copy(stock = newStock)) {}
+                        val updated = if (prod.isService) prod else prod.copy(stock = (prod.stock - qty).coerceAtLeast(0))
+                        viewModel.saveOrUpdateProduct(updated) {}
                         val itemTotal = qty * prod.price
                         val ratio = if (totalAmount > 0) itemTotal / totalAmount else 0.0
                         val itemTransfer = transferAmount * ratio
@@ -1789,22 +1851,28 @@ fun TenantPosScreen(
                             transferAmount = itemTransfer,
                             cashAmount = itemCash,
                             itemCount = qty,
-                            timestamp = sharedTimestamp
+                            timestamp = sharedTimestamp,
+                            tipoVenta = tipoVenta
                         )
                     }
                 }
-                viewModel.showToast("Â¡Venta de ${formatCurrency(totalAmount)} pagada y registrada!")
+                viewModel.showToast(
+                    if (tipoVenta.startsWith("Normal")) "¡Venta de ${formatCurrency(totalAmount)} pagada y registrada!"
+                    else "Venta $tipoVenta: ${formatCurrency(totalAmount)} en ${tipoVenta.substringAfter("(").removeSuffix(")")} personas (${formatCurrency(totalAmount / (tipoVenta.substringAfter("(").removeSuffix(")").toIntOrNull() ?: 1))} c/u)"
+                )
                 showNuevaVentaView = false
             },
-            onDebeSuccess = { customerName, ticketItems, totalAmount, abonoAmount, abonoMethod ->
+            onDebeSuccess = { customerName, ticketItems, totalAmount, abonoAmount, abonoMethod, tipoVenta ->
                 val finalCustomer = if (customerName.isBlank()) "Cliente Fiado" else customerName.trim()
+                val orderTime = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
                 val grouped = ticketItems.entries.groupBy { it.key.id }
+                val newOrders = mutableListOf<DebtorRawOrderItem>()
                 grouped.forEach { (_, entries) ->
                     val prod = entries.first().key
                     val qty = entries.sumOf { it.value }
                     if (qty > 0) {
-                        val newStock = (prod.stock - qty).coerceAtLeast(0)
-                        viewModel.saveOrUpdateProduct(prod.copy(stock = newStock)) {}
+                        val updated = if (prod.isService) prod else prod.copy(stock = (prod.stock - qty).coerceAtLeast(0))
+                        viewModel.saveOrUpdateProduct(updated) {}
                         val itemTotal = qty * prod.price
                         val isMinPriceSelected = entries.any { it.key.minPrice > 0 || it.key.hasMinPrice }
                         viewModel.registrarDeudorDirecto(
@@ -1815,8 +1883,10 @@ fun TenantPosScreen(
                             isMinPrice = isMinPriceSelected,
                             abonoAmount = abonoAmount,
                             abonoMethod = abonoMethod,
-                            pendingTotal = itemTotal
+                            pendingTotal = itemTotal,
+                            tipo = tipoVenta
                         )
+                        newOrders.add(DebtorRawOrderItem(qty, prod.name, prod.price, orderTime, tipoVenta))
                     }
                 }
                 val existingDebtor = debtorsList.find { it.name.equals(finalCustomer, ignoreCase = true) }
@@ -1827,7 +1897,8 @@ fun TenantPosScreen(
                     debtorsList[idx] = existingDebtor.copy(
                         amountOwed = existingDebtor.amountOwed + pendingAmount,
                         abonoAmount = existingDebtor.abonoAmount + abonoAmount,
-                        date = currentDate
+                        date = currentDate,
+                        orders = existingDebtor.orders + newOrders
                     )
                 } else {
                     debtorsList.add(
@@ -1838,7 +1909,8 @@ fun TenantPosScreen(
                             amountOwed = totalAmount,
                             abonoAmount = abonoAmount,
                             concept = "Consumo fiado en Nueva Venta",
-                            date = currentDate
+                            date = currentDate,
+                            orders = newOrders
                         )
                     )
                 }
@@ -1861,8 +1933,8 @@ fun TenantPosScreen(
             var amountText by remember { mutableStateOf("") }
             var selectedSubcategory by remember { mutableStateOf("General") }
 
-            val categoriesForAdmin = listOf("Recibos & Servicios", "NÃ³mina & Sueldos", "Arriendo", "Mantenimiento", "Eventos", "General")
-            val categoriesForRecurrente = listOf("Pedidos de MercancÃ­a", "Bebidas & Licores", "Insumos Minuciosos", "Frutas & Desechables", "Empaques")
+            val categoriesForAdmin = listOf("Recibos & Servicios", "Nómina & Sueldos", "Arriendo", "Mantenimiento", "Eventos", "General")
+            val categoriesForRecurrente = listOf("Pedidos de Mercancía", "Bebidas & Licores", "Insumos Minuciosos", "Frutas & Desechables", "Empaques")
 
             Column(
                 modifier = Modifier
@@ -1870,7 +1942,7 @@ fun TenantPosScreen(
                     .padding(24.dp)
             ) {
                 Text("Registrar Nuevo Gasto", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                Text("Clasifica el gasto segÃºn su tipo operativo", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Clasifica el gasto según su tipo operativo", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -1886,7 +1958,7 @@ fun TenantPosScreen(
                     ) {
                         Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("Gasto Administrativo", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (expenseType == "Administrativo") Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("Recibos, nÃ³mina, eventos", fontSize = 10.sp, color = if (expenseType == "Administrativo") Color(0xFFDBEAFE) else MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Recibos, nómina, eventos", fontSize = 10.sp, color = if (expenseType == "Administrativo") Color(0xFFDBEAFE) else MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
 
@@ -1898,7 +1970,7 @@ fun TenantPosScreen(
                     ) {
                         Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("Gasto Recurrente", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (expenseType == "Recurrente") Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("MercancÃ­a, insumos minuciosos", fontSize = 10.sp, color = if (expenseType == "Recurrente") Color(0xFFEDE9FE) else MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Mercancía, insumos minuciosos", fontSize = 10.sp, color = if (expenseType == "Recurrente") Color(0xFFEDE9FE) else MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -1910,7 +1982,7 @@ fun TenantPosScreen(
                     value = conceptText,
                     onValueChange = { conceptText = it },
                     label = { Text("Concepto del Gasto *") },
-                    placeholder = { Text(if (expenseType == "Administrativo") "Ej. Pago recibo de energÃ­a elÃ©ctrica" else "Ej. Compra de limones y servilletas") },
+                    placeholder = { Text(if (expenseType == "Administrativo") "Ej. Pago recibo de energía eléctrica" else "Ej. Compra de limones y servilletas") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp)
@@ -1999,8 +2071,8 @@ fun TenantPosScreen(
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
-                            Text("Ingreso de Stock y MercancÃ­a", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = titleColor)
-                            Text("BÃºsqueda predictiva & adiciÃ³n mÃºltiple", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Ingreso de Stock y Mercancía", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = titleColor)
+                            Text("Búsqueda predictiva & adición múltiple", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     TextButton(onClick = { showAddStockBottomSheet = false }) {
@@ -2124,7 +2196,7 @@ fun TenantPosScreen(
                             .background(MaterialTheme.colorScheme.primaryContainer)
                             .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
                     ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = "AÃ±adir fila", tint = MaterialTheme.colorScheme.primary)
+                        Icon(imageVector = Icons.Default.Add, contentDescription = "Añadir fila", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
 
@@ -2137,7 +2209,7 @@ fun TenantPosScreen(
                         if (validRows.isNotEmpty()) {
                             showStockConfirmationDialog = true
                         } else {
-                            viewModel.showToast("Selecciona al menos un producto vÃ¡lido y su cantidad")
+                            viewModel.showToast("Selecciona al menos un producto válido y su cantidad")
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
@@ -2153,7 +2225,7 @@ fun TenantPosScreen(
     }
 
     // -------------------------------------------------------------------------------------
-    // CENTRAL CONFIRMATION DIALOG (Emergente Central de ConfirmaciÃ³n)
+    // CENTRAL CONFIRMATION DIALOG (Emergente Central de Confirmación)
     // -------------------------------------------------------------------------------------
     if (showStockConfirmationDialog) {
         val validRows = stockRows.filter { it.selectedProduct != null && (it.quantityText.toIntOrNull() ?: 0) > 0 }
@@ -2161,7 +2233,7 @@ fun TenantPosScreen(
         AlertDialog(
             onDismissRequest = { showStockConfirmationDialog = false },
             title = {
-                Text("Confirmar Ingreso de MercancÃ­a", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                Text("Confirmar Ingreso de Mercancía", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
             },
             text = {
                 Column {
@@ -2177,7 +2249,7 @@ fun TenantPosScreen(
                                 .padding(vertical = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("â€¢ ${prod.name}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                            Text("• ${prod.name}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
                             Text("+ $qty unidades", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color(0xFF34C759))
                         }
                     }
@@ -2200,7 +2272,7 @@ fun TenantPosScreen(
                         }
                         showStockConfirmationDialog = false
                         showAddStockBottomSheet = false
-                        viewModel.showToast("Â¡Stock actualizado e ingresado correctamente!")
+                        viewModel.showToast("¡Stock actualizado e ingresado correctamente!")
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759))
                 ) {
@@ -2239,7 +2311,41 @@ fun TenantPosScreen(
     }
 
     // -------------------------------------------------------------------------------------
-    // BOTON 5: (â€¢â€¢â€¢) MENÃš ADICIONAL (MÃ³dulos Avanzados del Plan)
+    // MODO JUEGO: BOLIRRANA (exclusivo bares)
+    // -------------------------------------------------------------------------------------
+    if (showBolirranaModal) {
+        BolirranaModal(
+            products = productsFlow,
+            onDismiss = { showBolirranaModal = false },
+            onToast = { msg -> viewModel.showToast(msg) },
+            onRegistrarVenta = { perdedor, desc, qty, unitPrice, total ->
+                viewModel.registerPosSale(
+                    companyCode = company.code,
+                    clientName = perdedor,
+                    productName = desc,
+                    quantity = qty,
+                    unitPrice = unitPrice,
+                    totalAmount = total,
+                    paymentMethod = "Efectivo"
+                )
+            },
+            onRegistrarDeudor = { perdedor, desc, qty, total ->
+                viewModel.registrarDeudorDirecto(
+                    companyCode = company.code,
+                    clientName = perdedor,
+                    productName = desc,
+                    quantity = qty,
+                    isMinPrice = false,
+                    abonoAmount = 0.0,
+                    abonoMethod = "",
+                    pendingTotal = total
+                )
+            }
+        )
+    }
+
+    // -------------------------------------------------------------------------------------
+    // BOTON 5: (•••) MENÚ ADICIONAL (Módulos Avanzados del Plan)
     // -------------------------------------------------------------------------------------
     if (showAdditionalMenuSheet) {
         val availableModules = getModulesForCompany(company.businessType, company.plan, userRole)
@@ -2262,8 +2368,8 @@ fun TenantPosScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text("MÃ³dulos Avanzados del Plan", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                        Text("${company.name} (${company.businessType} â€¢ Plan ${company.plan})", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Módulos Avanzados del Plan", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                        Text("${company.name} (${company.businessType} • Plan ${company.plan})", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     IconButton(onClick = { showAdditionalMenuSheet = false }) {
                         Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = Color(0xFF34C759))
@@ -2273,7 +2379,7 @@ fun TenantPosScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (visibleModules.isEmpty()) {
-                    Text("Tu perfil no tiene mÃ³dulos adicionales asignados.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Tu perfil no tiene módulos adicionales asignados.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(16.dp))
                 } else {
                 LazyColumn(modifier = Modifier.fillMaxWidth().height(340.dp)) {
@@ -2320,7 +2426,7 @@ fun TenantPosScreen(
     }
 
     // -------------------------------------------------------------------------------------
-    // INVENTORY MODAL: HACER INVENTARIO (FÃ³rmula: [Guardado + AÃ±adidos - Actual] * Precio C/U)
+    // INVENTORY MODAL: HACER INVENTARIO (Fórmula: [Guardado + Añadidos - Actual] * Precio C/U)
     // -------------------------------------------------------------------------------------
     if (showHacerInventarioModal) {
         ModalBottomSheet(
@@ -2338,7 +2444,7 @@ fun TenantPosScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text("AuditorÃ­a / Hacer Inventario", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                        Text("Auditoría / Hacer Inventario", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
                         Text("Comparativa vs Guardado ($inventorySavedDate)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     TextButton(onClick = { showHacerInventarioModal = false }) {
@@ -2372,7 +2478,7 @@ fun TenantPosScreen(
                             ) {
                                 Column {
                                     Text(prod.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground)
-                                    Text("Guardado: $baseStock | AÃ±adido: +$addedStock | Actual: $currentStock", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("Guardado: $baseStock | Añadido: +$addedStock | Actual: $currentStock", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(
@@ -2438,7 +2544,7 @@ fun TenantPosScreen(
             title = { Text("Cobrar Venta - $${totalPrice.toInt()}") },
             text = {
                 Column {
-                    Text("Selecciona el mÃ©todo de pago:")
+                    Text("Selecciona el método de pago:")
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Row(
@@ -2446,8 +2552,8 @@ fun TenantPosScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         listOf(
-                            "Efectivo" to "ðŸ’µ",
-                            "Transferencia Bancaria" to "ðŸ“²"
+                            "Efectivo" to "💵",
+                            "Transferencia Bancaria" to "📲"
                         ).forEach { (method, iconStr) ->
                             val isSelected = selectedPaymentMethod == method
                             Button(
@@ -2478,8 +2584,8 @@ fun TenantPosScreen(
                             if (qty > 0) {
                                 val prod = productsFlow.find { it.id == prodId }
                                 if (prod != null) {
-                                    val newStock = (prod.stock - qty).coerceAtLeast(0)
-                                    viewModel.saveOrUpdateProduct(prod.copy(stock = newStock)) {}
+                                    val updated = if (prod.isService) prod else prod.copy(stock = (prod.stock - qty).coerceAtLeast(0))
+                                    viewModel.saveOrUpdateProduct(updated) {}
                                     val itemTotal = qty * prod.price
                                     viewModel.registerPosSale(
                                         companyCode = company.code,
@@ -2519,7 +2625,7 @@ fun TenantPosScreen(
             userRole = userRole,
             userEmail = currentUser?.email ?: company.adminEmail.ifBlank { "admin@${company.code}.com" },
             userPhone = company.phone,
-            userLanguage = "EspaÃ±ol",
+            userLanguage = "Español",
             isDarkMode = isDarkMode,
             companyUsers = companyUsers,
             companies = listOf(company),
@@ -2537,11 +2643,11 @@ fun TenantPosScreen(
 }
 
 /**
- * Alerta de membresÃ­a segÃºn dÃ­as restantes:
- * - 0-2 dÃ­as: banner rojo fijo (suspensiÃ³n inminente).
- * - 3-5 dÃ­as: banner amarillo/naranja; tocarlo lo colapsa a una pÃ­ldora compacta.
+ * Alerta de membresía según días restantes:
+ * - 0-2 días: banner rojo fijo (suspensión inminente).
+ * - 3-5 días: banner amarillo/naranja; tocarlo lo colapsa a una píldora compacta.
  */
-// ponytail: el colapso se hace tocando el propio banner, no detectando clics fuera de Ã©l
+// ponytail: el colapso se hace tocando el propio banner, no detectando clics fuera de él
 @Composable
 private fun MembershipAlertBanner(company: CompanyEntity) {
     if (company.getEffectiveStatus().equals("Suspendido", ignoreCase = true)) return
@@ -2552,7 +2658,7 @@ private fun MembershipAlertBanner(company: CompanyEntity) {
             border = Color(0xFFDC2626),
             content = Color(0xFF991B1B),
             iconTint = Color(0xFFDC2626),
-            text = "MembresÃ­a PrÃ³xima a Vencer: en $dias ${if (dias == 1) "dÃ­a" else "dÃ­as"} se suspenderÃ¡ el Acceso Total. Para renovar contÃ¡ctanos."
+            text = "Membresía Próxima a Vencer: en $dias ${if (dias == 1) "día" else "días"} se suspenderá el Acceso Total. Para renovar contáctanos."
         )
         dias in 3..5 -> {
             var expanded by remember { mutableStateOf(true) }
@@ -2563,7 +2669,7 @@ private fun MembershipAlertBanner(company: CompanyEntity) {
                         border = Color(0xFFF59E0B),
                         content = Color(0xFF92400E),
                         iconTint = Color(0xFFF59E0B),
-                        text = "MembresÃ­a PrÃ³xima a Vencer. Para renovar contÃ¡ctanos.",
+                        text = "Membresía Próxima a Vencer. Para renovar contáctanos.",
                         onClick = { expanded = false }
                     )
                 }
@@ -2588,7 +2694,7 @@ private fun MembershipAlertBanner(company: CompanyEntity) {
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "MembresÃ­a prÃ³xima a vencer",
+                        text = "Membresía próxima a vencer",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF92400E)
@@ -2637,7 +2743,7 @@ private fun MembershipBannerRow(
 }
 
 // -------------------------------------------------------------------------------------
-// BOTON 1: ðŸ  INICIO (Dashboard Principal, Resumen General & Alertas)
+// BOTON 1: 🏠 INICIO (Dashboard Principal, Resumen General & Alertas)
 // -------------------------------------------------------------------------------------
 // Acción rápida del dashboard de inicio (tarjeta degradada premium)
 private data class AccionRapida(
@@ -2660,6 +2766,8 @@ private fun InicioDashboardView(
     onQuickActionGasto: () -> Unit,
     onQuickActionAddStock: () -> Unit,
     onQuickActionDeudores: () -> Unit,
+    onQuickActionBolirrana: () -> Unit = {},
+    isBar: Boolean = false,
     onGoToFinanzasDia: () -> Unit,
     userFunctions: List<FuncionUi> = emptyList(),
     onOpenFunction: (FuncionUi) -> Unit = {},
@@ -2683,7 +2791,7 @@ private fun InicioDashboardView(
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (hasCap("ventas")) DashboardKpiCard(
-                title = "Ventas del DÃ­a",
+                title = "Ventas del Día",
                 value = formatCurrency(salesToday),
                 subtitle = "En tiempo real (Clic)",
                 accentColor = Color(0xFF34C759),
@@ -2733,13 +2841,15 @@ private fun InicioDashboardView(
             AccionRapida("Venta", Icons.Default.ShoppingCart, Color(0xFF315AA8), Color(0xFF416FC2), onQuickActionVenta),
             AccionRapida("Gasto", Icons.Default.AccountBalanceWallet, Color(0xFF5428B8), Color(0xFF7046D4), onQuickActionGasto),
             AccionRapida("Agregar", Icons.Default.Add, Color(0xFF18A94F), Color(0xFF32C96A), onQuickActionAddStock),
-            AccionRapida("Deudores", Icons.Default.Person, Color(0xFFE58A05), Color(0xFFF2A01A), onQuickActionDeudores)
-        ).filter { accion ->
+            AccionRapida("Deudores", Icons.Default.Person, Color(0xFFE58A05), Color(0xFFF2A01A), onQuickActionDeudores),
+            if (isBar) AccionRapida("Bolirrana", Icons.Default.Star, Color(0xFF7A2A9E), Color(0xFFA03BC8), onQuickActionBolirrana) else null
+        ).filterNotNull().filter { accion ->
             when (accion.titulo) {
                 "Venta" -> hasCap("ventas")
                 "Gasto" -> hasCap("gastos")
                 "Agregar" -> hasCap("inventario")
                 "Deudores" -> hasCap("deudores")
+                "Bolirrana" -> hasCap("ventas") || hasCap("deudores")
                 else -> true
             }
         }
@@ -2762,7 +2872,7 @@ private fun InicioDashboardView(
         // ALERTAS EN INICIO: tarjetas de producto en grid responsive
         iOSSectionHeader(text = "Alertas de Stock")
         Text(
-            text = "Productos con inventario bajo o que requieren atenciÃ³n",
+            text = "Productos con inventario bajo o que requieren atención",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 18.dp)
@@ -2774,16 +2884,16 @@ private fun InicioDashboardView(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = { vistaAlertasLista = true },
-                colors = ButtonDefaults.buttonColors(containerColor = if (vistaAlertasLista) Color(0xFF4F46E5) else Color(0xFFEEF0FA)),
+                colors = ButtonDefaults.buttonColors(containerColor = if (vistaAlertasLista) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.height(36.dp)
-            ) { Text("Lista", color = if (vistaAlertasLista) Color.White else Color(0xFF334155), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            ) { Text("Lista", color = if (vistaAlertasLista) Color.White else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
             Button(
                 onClick = { vistaAlertasLista = false },
-                colors = ButtonDefaults.buttonColors(containerColor = if (!vistaAlertasLista) Color(0xFF4F46E5) else Color(0xFFEEF0FA)),
+                colors = ButtonDefaults.buttonColors(containerColor = if (!vistaAlertasLista) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.height(36.dp)
-            ) { Text("Recuadro", color = if (!vistaAlertasLista) Color.White else Color(0xFF334155), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            ) { Text("Recuadro", color = if (!vistaAlertasLista) Color.White else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
         }
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -2797,7 +2907,7 @@ private fun InicioDashboardView(
                 Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = Color(0xFF34C759))
                     Spacer(modifier = Modifier.width(10.dp))
-                    Text("Â¡Todo en orden! El inventario cuenta con suficiente stock.", fontSize = 13.sp, color = Color(0xFF166534))
+                    Text("¡Todo en orden! El inventario cuenta con suficiente stock.", fontSize = 13.sp, color = Color(0xFF166534))
                 }
             }
         } else {
@@ -2928,14 +3038,14 @@ private fun ProductAlertCard(product: PosProductEntity, onViewInventory: () -> U
     val secondaryColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
     val thumbBg = if (isDark) Color(0xFF26262B) else Color(0xFFEEF0FA)
 
-    // Estados derivados de los mismos datos de siempre (sin cambiar lÃ³gica)
+    // Estados derivados de los mismos datos de siempre (sin cambiar lógica)
     val sinStock = product.stock <= 0
     val critico = !sinStock && product.stock <= (product.minStockAlert / 2)
 
     data class Estado(val texto: String, val detalle: String, val chipBg: Color, val chipFg: Color, val icono: ImageVector?)
     val estado = when {
         sinStock -> Estado("Sin stock", "Producto agotado", if (isDark) Color(0xFF3A3A3C) else Color(0xFFE5E7EB), if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A), Icons.Default.Inventory2)
-        critico -> Estado("Stock crÃ­tico", "Quedan ${product.stock} unidades", if (isDark) Color(0xFF3B1D1D) else Color(0xFFFEECEC), if (isDark) Color(0xFFFCA5A5) else Color(0xFFB91C1C), Icons.Default.Warning)
+        critico -> Estado("Stock crítico", "Quedan ${product.stock} unidades", if (isDark) Color(0xFF3B1D1D) else Color(0xFFFEECEC), if (isDark) Color(0xFFFCA5A5) else Color(0xFFB91C1C), Icons.Default.Warning)
         else -> Estado("Stock bajo", "Quedan ${product.stock} unidades", if (isDark) Color(0xFF3A2E10) else Color(0xFFFEF3C7), if (isDark) Color(0xFFFCD34D) else Color(0xFF92400E), Icons.Default.Warning)
     }
 
@@ -3008,7 +3118,7 @@ private fun ProductAlertCard(product: PosProductEntity, onViewInventory: () -> U
             Spacer(modifier = Modifier.height(5.dp))
 
             Text(
-                text = "${estado.detalle} â¢ LÃ­mite: ${product.minStockAlert}",
+                text = "${estado.detalle} • Límite: ${product.minStockAlert}",
                 fontSize = 12.sp,
                 color = secondaryColor,
                 maxLines = 1,
@@ -3044,7 +3154,7 @@ private fun ProductAlertListItem(product: PosProductEntity, onAddStock: () -> Un
     val critico = !sinStock && product.stock <= (product.minStockAlert / 2)
     val (alertText, alertDetail) = when {
         sinStock -> "Sin stock" to "Producto agotado"
-        critico -> "Stock crÃ­tico" to "Quedan ${product.stock} unidades"
+        critico -> "Stock crítico" to "Quedan ${product.stock} unidades"
         else -> "Stock bajo" to "Quedan ${product.stock} unidades"
     }
     val alertColor = if (sinStock || critico) Color(0xFFB91C1C) else Color(0xFF92400E)
@@ -3077,7 +3187,7 @@ private fun ProductAlertListItem(product: PosProductEntity, onAddStock: () -> Un
             Spacer(modifier = Modifier.height(3.dp))
             Text(alertText, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = alertColor)
             Spacer(modifier = Modifier.height(2.dp))
-            Text("$alertDetail â¢ LÃ­mite: ${product.minStockAlert}", fontSize = 11.sp, color = secondaryColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("$alertDetail • Límite: ${product.minStockAlert}", fontSize = 11.sp, color = secondaryColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Button(
             onClick = onAddStock,
@@ -3093,7 +3203,7 @@ private fun ProductAlertListItem(product: PosProductEntity, onAddStock: () -> Un
 }
 
 // -------------------------------------------------------------------------------------
-// BOTON 2: â‡ï¸ VENTAS (Resumen Comparativo & Ranking por CategorÃ­a)
+// BOTON 2: ❇️ VENTAS (Resumen Comparativo & Ranking por Categoría)
 // -------------------------------------------------------------------------------------
 @Composable
 private fun VentasSectionView(
@@ -3146,7 +3256,7 @@ private fun VentasSectionView(
             salesFlow.filter { sale ->
                 val pm = sale.paymentMethod.lowercase()
                 val pn = sale.productName.lowercase()
-                !pm.contains("fiado") && !pm.contains("debe") && !pm.contains("deudor") && !pm.contains("credito") && !pm.contains("crÃ©dito") &&
+                !pm.contains("fiado") && !pm.contains("debe") && !pm.contains("deudor") && !pm.contains("credito") && !pm.contains("crédito") &&
                 !pm.contains("anulad") && !pm.contains("cancelad") && !pn.contains("anulad") && !pn.contains("cancelad")
             }
         }
@@ -3168,14 +3278,14 @@ private fun VentasSectionView(
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SalesComparisonCard("Ventas Hoy", formatCurrency(salesTodayVal), "Real Hoy", if (salesTodayVal > 0) "+100%" else "0%", true, Modifier.weight(1f))
-            SalesComparisonCard("Esta Semana", formatCurrency(weekVal), "Ãšltimos 7 dÃ­as", if (weekVal > 0) "+100%" else "0%", true, Modifier.weight(1f))
+            SalesComparisonCard("Esta Semana", formatCurrency(weekVal), "Últimos 7 días", if (weekVal > 0) "+100%" else "0%", true, Modifier.weight(1f))
             SalesComparisonCard("Este Mes", formatCurrency(monthVal), "Acumulado Mes", if (monthVal > 0) "+100%" else "0%", monthVal >= 0, Modifier.weight(1f))
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Ranking de Productos mÃ¡s Vendidos por CategorÃ­a
-        iOSSectionHeader(text = "Ranking de Productos MÃ¡s Vendidos")
+        // Ranking de Productos más Vendidos por Categoría
+        iOSSectionHeader(text = "Ranking de Productos Más Vendidos")
         Spacer(modifier = Modifier.height(15.dp))
 
         // Category Filter Pills (activo morado intenso, inactivo gris claro)
@@ -3185,13 +3295,13 @@ private fun VentasSectionView(
                 Surface(
                     onClick = { onCategorySelect(cat) },
                     shape = RoundedCornerShape(50),
-                    color = if (isSelected) Color(0xFF4F46E5) else Color(0xFFF1F4F9)
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
                 ) {
                     Text(
                         text = cat,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (isSelected) Color.White else Color(0xFF334155),
+                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
                     )
                 }
@@ -3238,7 +3348,7 @@ private fun VentasSectionView(
                         modifier = Modifier.padding(12.dp).fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // NÃºmero del ranking
+                        // Número del ranking
                         Text(
                             text = "${rankingList.indexOfFirst { it.first.id == prod.id } + 1}",
                             fontSize = 20.sp,
@@ -3276,7 +3386,7 @@ private fun VentasSectionView(
 
                         Spacer(modifier = Modifier.width(12.dp))
 
-                        // Nombre + informaciÃ³n de ventas
+                        // Nombre + información de ventas
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = prod.name,
@@ -3288,7 +3398,7 @@ private fun VentasSectionView(
                             )
                             Spacer(modifier = Modifier.height(3.dp))
                             Text(
-                                text = "$units Unidades â¢ ${formatCurrency(revenue)}",
+                                text = "$units Unidades • ${formatCurrency(revenue)}",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color(0xFF64748B),
@@ -3299,7 +3409,7 @@ private fun VentasSectionView(
 
                         Spacer(modifier = Modifier.width(10.dp))
 
-                        // Indicador de tendencia (cÃ­rculo verde claro)
+                        // Indicador de tendencia (círculo verde claro)
                         Box(
                             modifier = Modifier
                                 .size(38.dp)
@@ -3323,7 +3433,7 @@ private fun VentasSectionView(
             Spacer(modifier = Modifier.height(10.dp))
             Button(
                 onClick = { mostrarTodoRanking = !mostrarTodoRanking },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth().height(44.dp)
             ) {
@@ -3333,7 +3443,7 @@ private fun VentasSectionView(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // BotÃ³n Inferior: "Ver Inventario" (navy oscuro premium)
+        // Botón Inferior: "Ver Inventario" (navy oscuro premium)
         Button(
             onClick = onGoToInventory,
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A)),
@@ -3390,7 +3500,7 @@ private fun SalesComparisonCard(
 }
 
 // -------------------------------------------------------------------------------------
-// BOTON 3: ðŸ’¹ FINANZAS (Control de Gastos Detallados & Estado Financiero)
+// BOTON 3: 💹 FINANZAS (Control de Gastos Detallados & Estado Financiero)
 // -------------------------------------------------------------------------------------
 @Composable
 private fun FinanzasSectionView(
@@ -3413,7 +3523,7 @@ private fun FinanzasSectionView(
     val currentMonthFormat = java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale("es", "CO")).format(todayCal.time).replaceFirstChar { it.uppercase() }
 
     val periodLabel = when (activeFilter) {
-        "DÃ­a" -> java.text.SimpleDateFormat("d 'de' MMMM yyyy", java.util.Locale("es", "CO")).format(todayCal.time).replaceFirstChar { it.uppercase() }
+        "Día" -> java.text.SimpleDateFormat("d 'de' MMMM yyyy", java.util.Locale("es", "CO")).format(todayCal.time).replaceFirstChar { it.uppercase() }
         "Mes" -> currentMonthFormat
         else -> if (startDateStr.isNotBlank() && endDateStr.isNotBlank()) "$startDateStr hasta $endDateStr" else "Rango Personalizado"
     }
@@ -3426,7 +3536,7 @@ private fun FinanzasSectionView(
         val curMonth = todayCal.get(java.util.Calendar.MONTH)
 
         val list = when (activeFilter) {
-            "DÃ­a" -> salesList.filter { sale ->
+            "Día" -> salesList.filter { sale ->
                 val saleCal = java.util.Calendar.getInstance().apply { timeInMillis = sale.timestamp }
                 saleCal.get(java.util.Calendar.YEAR) == curYear &&
                 saleCal.get(java.util.Calendar.DAY_OF_YEAR) == curDay
@@ -3476,7 +3586,7 @@ private fun FinanzasSectionView(
     // Filter Expense Items
     val filteredExpenses = remember(activeFilter, startDateStr, endDateStr, expensesList) {
         when (activeFilter) {
-            "DÃ­a" -> expensesList.filter {
+            "Día" -> expensesList.filter {
                 it.date.equals(todayDateFormat, ignoreCase = true) ||
                 it.date.contains(todayShortFormat, ignoreCase = true)
             }
@@ -3510,7 +3620,7 @@ private fun FinanzasSectionView(
                 iOSLargeTitle(title = "Estado Financiero", subtitle = "Periodo: $periodLabel")
             }
 
-            // BOTÃ“N DESTACADO EXPORTAR A PDF
+            // BOTÓN DESTACADO EXPORTAR A PDF
             Button(
                 onClick = {
                     val pdfSales = filteredSales.map { sale ->
@@ -3552,11 +3662,11 @@ private fun FinanzasSectionView(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // FILTROS MENÃš: "DÃ­a", "Mes", "Rango de fechas"
+        // FILTROS MENÚ: "Día", "Mes", "Rango de fechas"
         iOSSegmented(
-            options = listOf("DÃ­a", "Mes", "Rango de fechas"),
-            selectedIndex = listOf("DÃ­a", "Mes", "Rango de fechas").indexOf(activeFilter),
-            onSelect = { idx -> onFilterChange(listOf("DÃ­a", "Mes", "Rango de fechas")[idx]) }
+            options = listOf("Día", "Mes", "Rango de fechas"),
+            selectedIndex = listOf("Día", "Mes", "Rango de fechas").indexOf(activeFilter),
+            onSelect = { idx -> onFilterChange(listOf("Día", "Mes", "Rango de fechas")[idx]) }
         )
 
         if (activeFilter == "Rango de fechas") {
@@ -3601,13 +3711,13 @@ private fun FinanzasSectionView(
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("Utilidad Neta (Neto)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(formatCurrency(netProfit), fontSize = 24.sp, fontWeight = FontWeight.Black, color = if (netProfit >= 0) Color(0xFF34C759) else Color(0xFFFF453A))
-                Text("CÃ¡lculo: Ventas (${formatCurrency(totalSales)}) - Gastos (${formatCurrency(totalExpenses)})", fontSize = 11.sp, color = MaterialTheme.colorScheme.outlineVariant)
+                Text("Cálculo: Ventas (${formatCurrency(totalSales)}) - Gastos (${formatCurrency(totalExpenses)})", fontSize = 11.sp, color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // SECCIÃ“N 1: DETALLE DE VENTAS
+        // SECCIÓN 1: DETALLE DE VENTAS
         iOSSectionHeader(text = "1. Ventas en el Periodo")
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -3665,7 +3775,7 @@ private fun FinanzasSectionView(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // SECCIÃ“N 2: DETALLE DE GASTOS
+        // SECCIÓN 2: DETALLE DE GASTOS
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -3731,7 +3841,7 @@ private fun FinanzasSectionView(
 }
 
 // -------------------------------------------------------------------------------------
-// BOTON 4: ðŸ“‹ INVENTARIO (Lista por CategorÃ­a, Guardar Inventario & Hacer Inventario)
+// BOTON 4: 📋 INVENTARIO (Lista por Categoría, Guardar Inventario & Hacer Inventario)
 // -------------------------------------------------------------------------------------
 @Composable
 private fun InventarioSectionView(
@@ -3846,16 +3956,16 @@ private fun InventarioSectionView(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = { vistaInventarioLista = true },
-                colors = ButtonDefaults.buttonColors(containerColor = if (vistaInventarioLista) Color(0xFF4F46E5) else Color(0xFFEEF0FA)),
+                colors = ButtonDefaults.buttonColors(containerColor = if (vistaInventarioLista) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.height(36.dp)
-            ) { Text("Lista", color = if (vistaInventarioLista) Color.White else Color(0xFF334155), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            ) { Text("Lista", color = if (vistaInventarioLista) Color.White else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
             Button(
                 onClick = { vistaInventarioLista = false },
-                colors = ButtonDefaults.buttonColors(containerColor = if (!vistaInventarioLista) Color(0xFF4F46E5) else Color(0xFFEEF0FA)),
+                colors = ButtonDefaults.buttonColors(containerColor = if (!vistaInventarioLista) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.height(36.dp)
-            ) { Text("Recuadro", color = if (!vistaInventarioLista) Color.White else Color(0xFF334155), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            ) { Text("Recuadro", color = if (!vistaInventarioLista) Color.White else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -3902,17 +4012,26 @@ private fun InventarioSectionView(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(text = prod.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
-                        Text(text = "CategorÃ­a: ${prod.category}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(text = "Categoría: ${prod.category}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
                         Spacer(modifier = Modifier.height(4.dp))
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Stock: ${prod.stock} C/U",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (prod.stock <= 15) Color(0xFFFF453A) else Color(0xFF34C759)
-                            )
+                            if (prod.isService) {
+                                Text(
+                                    text = "Servicio",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFF59E0B)
+                                )
+                            } else {
+                                Text(
+                                    text = "Stock: ${prod.stock} C/U",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (prod.stock <= 15) Color(0xFFFF453A) else Color(0xFF34C759)
+                                )
+                            }
                             if (formatText != null) {
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
@@ -3970,7 +4089,7 @@ private fun InventarioSectionView(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // BotÃ³n 1: "Guardar inventario"
+                // Botón 1: "Guardar inventario"
                 Button(
                     onClick = onSaveInventoryBaseline,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
@@ -3984,7 +4103,7 @@ private fun InventarioSectionView(
                     }
                 }
 
-                // BotÃ³n 2: "Hacer Inventario"
+                // Botón 2: "Hacer Inventario"
                 Button(
                     onClick = onHacerInventario,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
@@ -4034,7 +4153,13 @@ private fun InventoryProductCard(
             Spacer(modifier = Modifier.height(6.dp))
             Text("${formatCurrency(product.price)} C/U", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(2.dp))
-            Text("Stock: ${product.stock}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (product.stock <= 15) Color(0xFFFF453A) else Color(0xFF34C759))
+            if (product.isService) {
+                Surface(shape = RoundedCornerShape(50), color = Color(0xFFF59E0B).copy(alpha = 0.15f)) {
+                    Text("Servicio", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFF59E0B), modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp))
+                }
+            } else {
+                Text("Stock: ${product.stock}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (product.stock <= 15) Color(0xFFFF453A) else Color(0xFF34C759))
+            }
             Spacer(modifier = Modifier.height(10.dp))
             if (!isCajero) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -4232,6 +4357,7 @@ fun ProductFormBottomSheet(
     var minStockAlertText by remember { mutableStateOf(productToEdit?.minStockAlert?.toString() ?: "10") }
     var hasMinPrice by remember { mutableStateOf(productToEdit?.hasMinPrice ?: false) }
     var minPriceText by remember { mutableStateOf(productToEdit?.minPrice?.toInt()?.toString() ?: "") }
+    var isService by remember { mutableStateOf(productToEdit?.isService ?: false) }
 
     var categoryExpanded by remember { mutableStateOf(false) }
     val dynamicCategories = remember(existingCategories) {
@@ -4337,7 +4463,7 @@ fun ProductFormBottomSheet(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (imageUrl.isNotBlank()) "Cambiar Foto" else "Seleccionar de GalerÃ­a",
+                            text = if (imageUrl.isNotBlank()) "Cambiar Foto" else "Seleccionar de Galería",
                             color = MaterialTheme.colorScheme.primary,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold
@@ -4355,7 +4481,7 @@ fun ProductFormBottomSheet(
                     } else {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Toca para elegir una foto de tu galerÃ­a",
+                            text = "Toca para elegir una foto de tu galería",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -4382,8 +4508,8 @@ fun ProductFormBottomSheet(
             OutlinedTextField(
                 value = aliases,
                 onValueChange = { aliases = it },
-                label = { Text("Apodos / BÃºsqueda RÃ¡pida") },
-                placeholder = { Text("Ej. (Polas) (Cerveza frÃ­a) (Birra)") },
+                label = { Text("Apodos / Búsqueda Rápida") },
+                placeholder = { Text("Ej. (Polas) (Cerveza fría) (Birra)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp)
@@ -4392,7 +4518,7 @@ fun ProductFormBottomSheet(
             Spacer(modifier = Modifier.height(10.dp))
 
             // Dynamic Category Input Field
-            Text("CategorÃ­a", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Categoría", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(4.dp))
             Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
@@ -4401,13 +4527,13 @@ fun ProductFormBottomSheet(
                         category = it
                         categoryExpanded = true
                     },
-                    label = { Text("Escribe o selecciona categorÃ­a") },
+                    label = { Text("Escribe o selecciona categoría") },
                     placeholder = { Text("Ej. Cocteles, Entradas, Bebidas...") },
                     trailingIcon = {
                         IconButton(onClick = { categoryExpanded = !categoryExpanded }) {
                             Icon(
                                 imageVector = if (categoryExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
-                                contentDescription = "Sugerencias de categorÃ­a"
+                                contentDescription = "Sugerencias de categoría"
                             )
                         }
                     },
@@ -4473,8 +4599,8 @@ fun ProductFormBottomSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Precio MÃ­nimo de Venta", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                    Text("Restringe el precio lÃ­mite autorizado", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Precio Mínimo de Venta", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    Text("Restringe el precio límite autorizado", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(
                     checked = hasMinPrice,
@@ -4488,7 +4614,7 @@ fun ProductFormBottomSheet(
                 OutlinedTextField(
                     value = minPriceText,
                     onValueChange = { minPriceText = it },
-                    label = { Text("Precio MÃ­nimo Autorizado ($)") },
+                    label = { Text("Precio Mínimo Autorizado ($)") },
                     placeholder = { Text("5000") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
@@ -4498,7 +4624,24 @@ fun ProductFormBottomSheet(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Stock Inicial & LÃ­mite de Alerta de Stock Row
+            // Es un servicio (no descuenta stock)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Es un servicio (mano de obra)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    Text("No descuenta inventario al venderlo (mano de obra, grúa, reparación)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(
+                    checked = isService,
+                    onCheckedChange = { isService = it },
+                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFFF59E0B))
+                )
+            }
+
+            // Stock Inicial & Límite de Alerta de Stock Row
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = stockText,
@@ -4513,7 +4656,7 @@ fun ProductFormBottomSheet(
                 OutlinedTextField(
                     value = minStockAlertText,
                     onValueChange = { minStockAlertText = it },
-                    label = { Text("LÃ­mite Alerta Stock") },
+                    label = { Text("Límite Alerta Stock") },
                     placeholder = { Text("10") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f),
@@ -4522,7 +4665,7 @@ fun ProductFormBottomSheet(
             }
 
             Text(
-                text = "Notificar cuando el inventario caiga a este nÃºmero de unidades o menos",
+                text = "Notificar cuando el inventario caiga a este número de unidades o menos",
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 4.dp, top = 2.dp)
@@ -4550,6 +4693,7 @@ fun ProductFormBottomSheet(
                             imageUrl = imageUrl.trim(),
                             stock = stockVal,
                             minStockAlert = minStockVal,
+                            isService = isService,
                             hasMinPrice = hasMinPrice,
                             minPrice = if (hasMinPrice) minPriceVal else 0.0
                         )
@@ -4612,7 +4756,7 @@ private fun CartProductCard(
                 .fillMaxSize()
                 .padding(10.dp)
         ) {
-            // 1. Cabecera: FotografÃ­a del producto (ProporciÃ³n 3:1) con estrella (â­/ðŸŒŸ) en la esquina superior derecha
+            // 1. Cabecera: Fotografía del producto (Proporción 3:1) con estrella (⭐/🌟) en la esquina superior derecha
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -4656,7 +4800,7 @@ private fun CartProductCard(
                     }
                 }
 
-                // Ãcono de Estrella de Favoritos en la esquina superior derecha
+                // Ícono de Estrella de Favoritos en la esquina superior derecha
                 IconButton(
                     onClick = onToggleFavorite,
                     modifier = Modifier
@@ -4665,7 +4809,7 @@ private fun CartProductCard(
                         .size(24.dp)
                 ) {
                     Text(
-                        text = if (isFavorite) "ðŸŒŸ" else "â­",
+                        text = if (isFavorite) "🌟" else "⭐",
                         fontSize = 13.sp
                     )
                 }
@@ -4705,47 +4849,50 @@ private fun CartProductCard(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // 3. Condicional: Control [ MÃ­nimo (Off/On) ] (Solo si el producto tiene precio mÃ­nimo > 0)
-            if (hasMin) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (item.isMinPrice) Color(0xFFFEF3C7) else MaterialTheme.colorScheme.surface)
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "MÃ­nimo",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (item.isMinPrice) Color(0xFFB45309) else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Switch(
-                        checked = item.isMinPrice,
-                        onCheckedChange = { item.isMinPrice = it },
-                        modifier = Modifier.scale(0.75f),
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFFFF9F0A)
-                        )
-                    )
+            // 3. Precio c/u + interruptor de precio mínimo en línea (no altera la altura de la tarjeta)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                iOSPill(
+                    text = "${formatCurrency(item.unitPrice)} c/u",
+                    color = if (item.isMinPrice) Color(0xFFFF9F0A) else Color(0xFF34C759)
+                )
+                if (hasMin) {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = if (item.isMinPrice) Color(0xFFFEF3C7) else MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(start = 8.dp, end = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Mínimo",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (item.isMinPrice) Color(0xFFB45309) else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Switch(
+                                checked = item.isMinPrice,
+                                onCheckedChange = { item.isMinPrice = it },
+                                modifier = Modifier.scale(0.6f),
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = Color(0xFFFF9F0A)
+                                )
+                            )
+                        }
+                    }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
             }
 
-            // 4. Precio: Precio unitario ($ Valor c/u)
-            iOSPill(
-                text = "${formatCurrency(item.unitPrice)} c/u",
-                color = if (item.isMinPrice) Color(0xFFFF9F0A) else Color(0xFF34C759)
-            )
-
-            // Espaciador flexible para asegurar alineaciÃ³n inferior idÃ©ntica entre tarjetas
+            // Espaciador flexible para asegurar alineación inferior idéntica entre tarjetas
             Spacer(modifier = Modifier.weight(1f))
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 5. Pie (Siempre anclado al fondo): Selector de cantidad [ âž–  0  âž• ]
+            // 5. Pie (Siempre anclado al fondo): Selector de cantidad [ ➖  0  ➕ ]
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -4784,7 +4931,7 @@ private fun CartProductCard(
 
                 IconButton(
                     onClick = {
-                        if (item.quantity < prod.stock) {
+                        if (prod.isService || item.quantity < prod.stock) {
                             item.quantity++
                         }
                     },
@@ -4809,8 +4956,9 @@ private fun NuevaVentaView(
     products: List<PosProductEntity>,
     debtorsList: List<DebtorRecord>,
     onClose: () -> Unit,
-    onPaymentSuccess: (customerName: String, ticketItems: Map<PosProductEntity, Int>, totalAmount: Double, paymentMethod: String, transferAmount: Double, cashAmount: Double) -> Unit,
-    onDebeSuccess: (customerName: String, ticketItems: Map<PosProductEntity, Int>, totalAmount: Double, abonoAmount: Double, abonoMethod: String) -> Unit
+    onPaymentSuccess: (customerName: String, ticketItems: Map<PosProductEntity, Int>, totalAmount: Double, paymentMethod: String, transferAmount: Double, cashAmount: Double, tipoVenta: String) -> Unit,
+    onDebeSuccess: (customerName: String, ticketItems: Map<PosProductEntity, Int>, totalAmount: Double, abonoAmount: Double, abonoMethod: String, tipoVenta: String) -> Unit,
+    esBar: Boolean = false
 ) {
     var customerName by remember { mutableStateOf("") }
     var customerDropdownExpanded by remember { mutableStateOf(false) }
@@ -4822,6 +4970,18 @@ private fun NuevaVentaView(
     var showPaymentModal by remember { mutableStateOf(false) }
     var showDebeModal by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
+
+    var facturaModo by remember { mutableStateOf("Normal") }
+    var numPersonas by remember { mutableStateOf(1) }
+    var showPersonasPicker by remember { mutableStateOf(false) }
+    var showAddModo by remember { mutableStateOf(false) }
+    var nuevoModoText by remember { mutableStateOf("") }
+    val modosPrefs = remember { context.getSharedPreferences("modos_factura_$companyCode", android.content.Context.MODE_PRIVATE) }
+    var modosPersonalizados by remember {
+        mutableStateOf(modosPrefs.getString("modos", "")?.split("|")?.filter { it.isNotBlank() } ?: emptyList())
+    }
+
     var paymentTab by remember { mutableStateOf("COMPLETO") }
     var transferInput by remember { mutableStateOf("") }
     var cashInput by remember { mutableStateOf("") }
@@ -4829,7 +4989,6 @@ private fun NuevaVentaView(
     var abonoInput by remember { mutableStateOf("") }
     var abonoMethodSelection by remember { mutableStateOf("Efectivo") }
 
-    val context = LocalContext.current
     val favPrefs = remember { context.getSharedPreferences("kapta_favoritos", android.content.Context.MODE_PRIVATE) }
     val favoriteProductIds = remember {
         val saved = favPrefs.getStringSet("favs_$companyCode", emptySet())?.mapNotNull { it.toIntOrNull() } ?: emptyList()
@@ -4853,7 +5012,7 @@ private fun NuevaVentaView(
         }
     }
 
-    // Debounce de bÃºsqueda (300ms) para evitar pÃ©rdida de foco en la caja de texto
+    // Debounce de búsqueda (300ms) para evitar pérdida de foco en la caja de texto
     LaunchedEffect(productSearchQuery) {
         delay(300)
         debouncedSearchQuery = productSearchQuery
@@ -4932,7 +5091,7 @@ private fun NuevaVentaView(
                                 color = MaterialTheme.colorScheme.onBackground
                             )
                             Text(
-                                text = "Punto de Venta RÃ¡pido & Control de Stock",
+                                text = "Punto de Venta Rápido & Control de Stock",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -4943,6 +5102,140 @@ private fun NuevaVentaView(
                 }
             }
 
+            // SELECTOR DE MODO DE FACTURA (solo Bares)
+            if (esBar) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 1.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val modos = listOf("Normal", "Bolirrana", "Dados") + modosPersonalizados
+                            modos.forEach { modo ->
+                                val selected = facturaModo == modo
+                                Button(
+                                    onClick = { facturaModo = modo },
+                                    shape = RoundedCornerShape(20.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(modo, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                            if (modosPersonalizados.isNotEmpty()) {
+                                IconButton(
+                                    onClick = {
+                                        facturaModo = "Normal"
+                                        modosPersonalizados = modosPersonalizados.dropLast(1)
+                                        modosPrefs.edit().putString("modos", modosPersonalizados.joinToString("|")).apply()
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Quitar último modo", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                            Button(
+                                onClick = { showAddModo = true },
+                                shape = RoundedCornerShape(20.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                ),
+                                contentPadding = PaddingValues(10.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "Agregar modo de factura", modifier = Modifier.size(18.dp))
+                            }
+                        }
+                        if (facturaModo != "Normal") {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Personas",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                                Box {
+                                    TextButton(onClick = { showPersonasPicker = !showPersonasPicker }) {
+                                        Text("$numPersonas", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                    }
+                                    DropdownMenu(
+                                        expanded = showPersonasPicker,
+                                        onDismissRequest = { showPersonasPicker = false }
+                                    ) {
+                                        (2..10).forEach { n ->
+                                            DropdownMenuItem(
+                                                text = { Text("$n personas", fontSize = 13.sp) },
+                                                onClick = {
+                                                    numPersonas = n
+                                                    showPersonasPicker = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                                Text(
+                                    text = "• cuenta dividida en $numPersonas",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (showAddModo) {
+                AlertDialog(
+                    onDismissRequest = { showAddModo = false },
+                    title = { Text("Nuevo modo de factura") },
+                    text = {
+                        Column {
+                            Text("Escribe el nombre del juego/cuenta que maneja el bar (p. ej. 'Rana', 'Sanca', 'Chisme'). También divide la cuenta entre N personas.", fontSize = 13.sp)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = nuevoModoText,
+                                onValueChange = { nuevoModoText = it },
+                                placeholder = { Text("Nombre del modo") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val nombre = nuevoModoText.trim()
+                                if (nombre.isNotEmpty() && nombre !in modosPersonalizados) {
+                                    modosPersonalizados = modosPersonalizados + nombre
+                                    modosPrefs.edit().putString("modos", modosPersonalizados.joinToString("|")).apply()
+                                }
+                                facturaModo = if (nombre.isNotEmpty()) nombre else "Normal"
+                                nuevoModoText = ""
+                                showAddModo = false
+                            }
+                        ) { Text("Agregar") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showAddModo = false; nuevoModoText = "" }) { Text("Cancelar") }
+                    }
+                )
+            }
+
             // MAIN SCROLLABLE AREA
             Column(
                 modifier = Modifier
@@ -4951,8 +5244,7 @@ private fun NuevaVentaView(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 14.dp)
                     .padding(bottom = 120.dp)
-            ) {
-                // 1. CAMPO DE CLIENTE
+            ) {                // 1. CAMPO DE CLIENTE
                 Text(
                     text = "Cliente",
                     fontSize = 14.sp,
@@ -5040,7 +5332,7 @@ private fun NuevaVentaView(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "âš ï¸ Cliente deudor activo: ${matchedDebtor.name} registra un saldo pendiente de ${formatCurrency(matchedDebtor.amountOwed)}.",
+                                text = "⚠️ Cliente deudor activo: ${matchedDebtor.name} registra un saldo pendiente de ${formatCurrency(matchedDebtor.amountOwed)}.",
                                 fontSize = 11.sp,
                                 color = Color(0xFFB45309),
                                 fontWeight = FontWeight.SemiBold
@@ -5092,7 +5384,7 @@ private fun NuevaVentaView(
                         )
                     )
 
-                    // Overlay flotante de sugerencias de bÃºsqueda
+                    // Overlay flotante de sugerencias de búsqueda
                     if (debouncedSearchQuery.isNotBlank() && productDropdownExpanded) {
                         Surface(
                             shape = RoundedCornerShape(14.dp),
@@ -5134,7 +5426,7 @@ private fun NuevaVentaView(
                                         ) {
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(prod.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground)
-                                                Text("CategorÃ­a: ${prod.category} â€¢ Stock: ${prod.stock}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text("Categoría: ${prod.category} • Stock: ${prod.stock}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                             Text(formatCurrency(prod.price), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF34C759))
                                         }
@@ -5162,10 +5454,10 @@ private fun NuevaVentaView(
                     )
                     val activeItemCount = cartItems.filter { it.quantity > 0 }.sumOf { it.quantity }
                     if (activeItemCount > 0) {
-                        iOSPill(text = "$activeItemCount Ã­tems en orden")
+                        iOSPill(text = "$activeItemCount ítems en orden")
                     } else {
                         Text(
-                            text = "Pre-cargados (0 Ã­tems)",
+                            text = "Pre-cargados (0 ítems)",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -5308,7 +5600,7 @@ private fun NuevaVentaView(
         }
     }
 
-    // DIÃLOGO DE SELECCIÃ“N DE MÃ‰TODO DE PAGO ("Pago")
+    // DIÁLOGO DE SELECCIÓN DE MÉTODO DE PAGO ("Pago")
     if (showPaymentModal) {
         val activeMap = remember(cartItems) { cartItems.filter { it.quantity > 0 }.associate { it.product to it.quantity } }
         AlertDialog(
@@ -5334,7 +5626,7 @@ private fun NuevaVentaView(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     iOSSegmented(
-                        options = listOf("CompletÃ³", "Dividido"),
+                        options = listOf("Completó", "Dividido"),
                         selectedIndex = if (paymentTab == "COMPLETO") 0 else 1,
                         onSelect = { idx -> paymentTab = if (idx == 0) "COMPLETO" else "DIVIDIDO" }
                     )
@@ -5349,25 +5641,25 @@ private fun NuevaVentaView(
                             Button(
                                 onClick = {
                                     showPaymentModal = false
-                                    onPaymentSuccess(customerName, activeMap, totalAmount, "Efectivo", 0.0, totalAmount)
+                                    onPaymentSuccess(customerName, activeMap, totalAmount, "Efectivo", 0.0, totalAmount, if (facturaModo == "Normal") "Normal" else "$facturaModo($numPersonas)")
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.weight(1f).height(48.dp)
                             ) {
-                                Text("ðŸ’µ", fontSize = 22.sp)
+                                Text("💵", fontSize = 22.sp)
                             }
 
                             Button(
                                 onClick = {
                                     showPaymentModal = false
-                                    onPaymentSuccess(customerName, activeMap, totalAmount, "Transferencia", totalAmount, 0.0)
+                                    onPaymentSuccess(customerName, activeMap, totalAmount, "Transferencia", totalAmount, 0.0, if (facturaModo == "Normal") "Normal" else "$facturaModo($numPersonas)")
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.weight(1f).height(48.dp)
                             ) {
-                                Text("ðŸ“²", fontSize = 22.sp)
+                                Text("📲", fontSize = 22.sp)
                             }
                         }
                     } else {
@@ -5401,7 +5693,7 @@ private fun NuevaVentaView(
                     Button(
                         onClick = {
                             showPaymentModal = false
-                            onPaymentSuccess(customerName, activeMap, totalAmount, "Dividido", tVal, cVal)
+                            onPaymentSuccess(customerName, activeMap, totalAmount, "Dividido", tVal, cVal, if (facturaModo == "Normal") "Normal" else "$facturaModo($numPersonas)")
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
                         shape = RoundedCornerShape(10.dp)
@@ -5418,7 +5710,7 @@ private fun NuevaVentaView(
         )
     }
 
-    // DIÃLOGO DE REGISTRO DE DEUDOR ("Debe")
+    // DIÁLOGO DE REGISTRO DE DEUDOR ("Debe")
     if (showDebeModal) {
         val activeMap = remember(cartItems) { cartItems.filter { it.quantity > 0 }.associate { it.product to it.quantity } }
         AlertDialog(
@@ -5458,13 +5750,13 @@ private fun NuevaVentaView(
                     val abonoVal = abonoInput.toDoubleOrNull() ?: 0.0
                     if (abonoVal > 0) {
                         Spacer(modifier = Modifier.height(10.dp))
-                        Text("MÃ©todo de Abono:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Método de Abono:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(modifier = Modifier.height(4.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            listOf("Efectivo" to "ðŸ’µ", "Transferencia" to "ðŸ“²").forEach { (method, iconStr) ->
+                            listOf("Efectivo" to "💵", "Transferencia" to "📲").forEach { (method, iconStr) ->
                                 val isSelected = abonoMethodSelection == method
                                 Button(
                                     onClick = { abonoMethodSelection = method },
@@ -5498,7 +5790,7 @@ private fun NuevaVentaView(
                 Button(
                     onClick = {
                         showDebeModal = false
-                        onDebeSuccess(customerName, activeMap, totalAmount, abonoVal, method)
+                        onDebeSuccess(customerName, activeMap, totalAmount, abonoVal, method, if (facturaModo == "Normal") "Normal" else "$facturaModo($numPersonas)")
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9F0A)),
                     shape = RoundedCornerShape(10.dp)
@@ -5512,5 +5804,322 @@ private fun NuevaVentaView(
                 }
             }
         )
+    }
+}
+
+// ============================================================================
+// MODO JUEGO: BOLIRRANA (exclusivo de bares)
+// ============================================================================
+data class ChicoBolirrana(
+    val producto: String,
+    val qty: Int,
+    val multi: Int,
+    val precio: Double
+) {
+    val subtotal: Double get() = qty * precio * multi
+    val descripcion: String
+        get() = if (multi > 1) "Chico Bolirrana: ${qty}x $producto ×$multi" else "Chico Bolirrana: ${qty}x $producto"
+}
+
+// Si N perdedores comparten un chico, cada perdedor paga (subtotal / N).
+private fun partePorPerdedor(chico: ChicoBolirrana, nPerdedores: Int): Double =
+    if (nPerdedores <= 0) chico.subtotal else chico.subtotal / nPerdedores
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BolirranaModal(
+    products: List<PosProductEntity>,
+    onDismiss: () -> Unit,
+    onToast: (String) -> Unit,
+    onRegistrarVenta: (perdedor: String, descripcion: String, qty: Int, unitPrice: Double, total: Double) -> Unit,
+    onRegistrarDeudor: (perdedor: String, descripcion: String, qty: Int, total: Double) -> Unit
+) {
+    val bebidas = remember(products) {
+        products.sortedBy { it.name.lowercase() }
+    }
+    var productName by remember { mutableStateOf(bebidas.firstOrNull()?.name ?: "") }
+    var qty by remember { mutableStateOf(1) }
+    var multi by remember { mutableStateOf(1) }
+    var perdedorInput by remember { mutableStateOf("") }
+    var perdedores by remember { mutableStateOf<MutableList<String>>(mutableListOf()) }
+    var chicos by remember { mutableStateOf<MutableList<ChicoBolirrana>>(mutableListOf()) }
+    var productExpanded by remember { mutableStateOf(false) }
+    var pagarAhora by remember { mutableStateOf(false) }
+
+    val selectedProduct = bebidas.firstOrNull { it.name == productName }
+    val productoPrecio = selectedProduct?.price ?: 0.0
+
+    val totalRonda = chicos.sumOf { it.subtotal }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp)
+                .padding(bottom = 24.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Bolirrana", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    Text("Juego de apuestas entre chicos — la cuenta va a los perdedores", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(imageVector = Icons.Default.Close, contentDescription = "Cerrar", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // 1. PRODUCTO A APOSTAR
+            Text("Producto apostado (cerveza / bebida)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
+            Spacer(modifier = Modifier.height(6.dp))
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = productName,
+                    onValueChange = {},
+                    readOnly = true,
+                    trailingIcon = { Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable { productExpanded = true }
+                )
+                DropdownMenu(
+                    expanded = productExpanded,
+                    onDismissRequest = { productExpanded = false },
+                    modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+                ) {
+                    bebidas.forEach { p ->
+                        DropdownMenuItem(
+                            text = { Text("${p.name} — ${formatCurrency(p.price)}", fontSize = 13.sp) },
+                            onClick = { productName = p.name; productExpanded = false }
+                        )
+                    }
+                }
+            }
+            if (bebidas.isEmpty()) {
+                Text("No hay productos en el inventario para apostar.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 2. CANTIDAD
+            Text("Cantidad", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                IconButton(onClick = { if (qty > 1) qty-- }, modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                    Icon(imageVector = Icons.Default.Remove, contentDescription = "Menos", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text("$qty", fontSize = 20.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.width(40.dp), textAlign = TextAlign.Center)
+                IconButton(onClick = { qty++ }, modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = "Más", tint = MaterialTheme.colorScheme.primary)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("= ${formatCurrency(qty * productoPrecio)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 3. MULTIPLICADOR X1..X5
+            Text("Multiplicador de la apuesta", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(1, 2, 3, 4, 5).forEach { m ->
+                    val selected = multi == m
+                    Button(
+                        onClick = { multi = m },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                            contentColor = if (selected) Color.White else MaterialTheme.colorScheme.primary
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(40.dp)
+                    ) {
+                        Text("×$m", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 4. PERDEDORES (los que deben la cuenta)
+            Text("Perdedores (a quienes se cobra)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = perdedorInput,
+                    onValueChange = { perdedorInput = it },
+                    placeholder = { Text("Nombre del perdedor") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+                Button(
+                    onClick = {
+                        val n = perdedorInput.trim()
+                        if (n.isNotBlank() && !perdedores.any { it.equals(n, ignoreCase = true) }) {
+                            perdedores.add(n)
+                            perdedorInput = ""
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.height(54.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = "Añadir", tint = Color.White)
+                }
+            }
+            if (perdedores.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(perdedores.size) { i ->
+                        val nombre = perdedores[i]
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            modifier = Modifier.clip(RoundedCornerShape(50))
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
+                            ) {
+                                Text(nombre, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                IconButton(
+                                    onClick = { perdedores.removeAt(i) },
+                                    modifier = Modifier.size(20.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Default.Close, contentDescription = "Quitar", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 5. CONFIRMAR CHICO
+            val valorChico = qty * productoPrecio * multi
+            Button(
+                onClick = {
+                    if (productName.isBlank() || selectedProduct == null) {
+                        onToast("Elige un producto para apostar")
+                    } else if (qty <= 0) {
+                        onToast("La cantidad debe ser mayor a 0")
+                    } else if (perdedores.isEmpty()) {
+                        onToast("Agrega al menos un perdedor (a quién se cobra)")
+                    } else {
+                        chicos.add(ChicoBolirrana(productName, qty, multi, productoPrecio))
+                        onToast("Chico añadido: ${qty}x $productName ×$multi = ${formatCurrency(valorChico)}")
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7A2A9E)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().height(48.dp)
+            ) {
+                Text("Añadir chico a la ronda (${formatCurrency(valorChico)})", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+
+            // 6. LISTA DE CHICOS DE LA RONDA
+            if (chicos.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Chicos de la ronda (${chicos.size})", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                Spacer(modifier = Modifier.height(4.dp))
+                chicos.forEachIndexed { i, ch ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(ch.descripcion, fontSize = 12.sp, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.weight(1f))
+                        Text(formatCurrency(ch.subtotal), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                        IconButton(onClick = { chicos.removeAt(i) }, modifier = Modifier.size(24.dp)) {
+                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Quitar", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Total ronda", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    Text(formatCurrency(totalRonda), fontSize = 14.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // 7. PAGAR AHORA VS FIADO
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(if (pagarAhora) "Pago inmediato" else "Va a deudores (fiado)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    Text(
+                        if (pagarAhora) "Cada perdedor paga su parte en efectivo y se registra como venta"
+                        else "Si el perdedor no existe, se crea su cuenta; sino, se suma a su deuda",
+                        fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = pagarAhora,
+                    onCheckedChange = { pagarAhora = it },
+                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF34C759))
+                )
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // 8. COBRAR A PERDEDORES
+            Button(
+                onClick = {
+                    if (chicos.isEmpty()) {
+                        onToast("Añade al menos un chico a la ronda")
+                    } else {
+                        val n = perdedores.size
+                        perdedores.forEach { perdedor ->
+                            chicos.forEach { ch ->
+                                val parte = partePorPerdedor(ch, n)
+                                val unitParte = if (ch.qty > 0) parte / ch.qty else parte
+                                if (pagarAhora) {
+                                    onRegistrarVenta(perdedor, ch.descripcion, ch.qty, unitParte, parte)
+                                } else {
+                                    onRegistrarDeudor(perdedor, ch.descripcion, ch.qty, parte)
+                                }
+                            }
+                        }
+                        onToast("Bolirrana registrada para ${perdedores.joinToString(", ")} (${if (pagarAhora) "pago inmediato" else "a deudores"})")
+                        chicos.clear()
+                        onDismiss()
+                    }
+                },
+                enabled = chicos.isNotEmpty(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (pagarAhora) Color(0xFF34C759) else Color(0xFFE58A05),
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth().height(52.dp)
+            ) {
+                Text(
+                    if (pagarAhora) "Cobrar y registrar ventas (${formatCurrency(totalRonda)})"
+                    else "Pasar a deudores (${formatCurrency(totalRonda)})",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+            }
+        }
     }
 }
