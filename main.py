@@ -26,8 +26,8 @@ VERSION_API = "KAPTA-1.0.0"
 # ===================================================
 TABLAS = {
     "INVENTARIO": {"INICIO": 1, "FILA_INICIO": 3, "COLUMNAS": 13},
-    "VENTAS": {"INICIO": 14, "FILA_INICIO": 3, "COLUMNAS": 21},
-    "DEUDORES": {"INICIO": 36, "FILA_INICIO": 3, "COLUMNAS": 8},
+    "VENTAS": {"INICIO": 14, "FILA_INICIO": 3, "COLUMNAS": 22},
+    "DEUDORES": {"INICIO": 36, "FILA_INICIO": 3, "COLUMNAS": 9},
     "GASTOS": {"INICIO": 45, "FILA_INICIO": 3, "COLUMNAS": 14},
     "AUDITORIA_GASTOS": {"INICIO": 60, "FILA_INICIO": 3, "COLUMNAS": 8},
     "USUARIOS": {"INICIO": 69, "FILA_INICIO": 3, "COLUMNAS": 11},
@@ -43,9 +43,9 @@ CABECERAS = {
                "Cantidad", "Precio_Unitario", "Subtotal", "Descuento",
                "Transferencia", "Efectivo", "Total", "Usuario", "Estado",
                "Fecha_Modificacion", "Hora_Modificacion", "Modificado_Por",
-               "Fecha_Anulacion", "Hora_Anulacion", "Anulado_Por"],
+               "Fecha_Anulacion", "Hora_Anulacion", "Anulado_Por", "Tipo"],
     "DEUDORES": ["Fecha_Registro", "Nom_Cliente", "Producto", "Cantidad",
-                 "Minimo", "Transferencia", "Efectivo", "Total_Pendiente"],
+                 "Minimo", "Transferencia", "Efectivo", "Total_Pendiente", "Tipo"],
     "MOVIMIENTOS": ["Id_Movimiento", "Fecha", "Id_Producto", "Nom_Producto",
                     "Tipo", "Cantidad", "Stock_Anterior", "Stock_Nuevo",
                     "Usuario", "Observacion"],
@@ -820,6 +820,7 @@ def mover_deudor_a_ventas(empresa, fila_deudor, datos, nueva_transferencia, nuev
         _normalizar_numero(total), "", _normalizar_numero(nueva_transferencia),
         _normalizar_numero(nuevo_efectivo), _normalizar_numero(total), usuario,
         "Activo", "", "", "", "", "", "",
+        str(datos[8] or "").strip() or "Normal",
     ]
     db.guardar_fila(empresa, "ventas", fila_venta, fila_valores)
     db.borrar_fila(empresa, "deudores", fila_deudor)
