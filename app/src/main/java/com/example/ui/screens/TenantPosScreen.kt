@@ -5345,7 +5345,7 @@ private fun NuevaVentaView(
                                     )
                                 }
                                 Text(
-                                    text = "• chico ${chicoActivo(numBolirranas)} activo",
+                                    text = "• ${numBolirranas} bolirranas",
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -5778,6 +5778,13 @@ private fun NuevaVentaView(
                 // BOTONES LADO A LADO: [ Pago ] y [ Debe ] (en Bolirrana: [ ¡Jugar! ])
                 val hasActiveItems = cartItems.any { it.quantity > 0 }
                 if (facturaModo == "Bolirrana") {
+                    Text(
+                        text = "En Bolirrana $numBolirranas • próxima ronda: Chico ${chicoActivo(numBolirranas)}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
                     iOSButton(
                         text = "¡Jugar!",
                         onClick = {
