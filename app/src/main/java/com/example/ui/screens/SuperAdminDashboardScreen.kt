@@ -106,7 +106,7 @@ fun SuperAdminDashboardScreen(
     var showSoporteModal by remember { mutableStateOf(false) }
     val allUsers by viewModel.users.collectAsState()
     val companies by viewModel.companies.collectAsState()
-    val notificationCount = com.example.ui.components.construirNotificaciones(companies).size
+    val notificationCount = com.example.ui.components.construirNotificaciones(companies).size + viewModel.soportes.value.size
 
     val activeCompCode by viewModel.activeCompanyCode.collectAsState()
     LaunchedEffect(activeCompCode) {
