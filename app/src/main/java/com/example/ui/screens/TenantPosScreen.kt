@@ -1016,28 +1016,6 @@ private data class FuncionUi(
     val planTier: String
 )
 
-private fun funcionModuloToIcon(modulo: String): ImageVector = when (modulo.lowercase()) {
-    "ventas" -> Icons.Default.ShoppingCart
-    "gastos", "finanzas", "caja" -> Icons.Default.AccountBalanceWallet
-    "inventario" -> Icons.Default.Inventory2
-    "deudores" -> Icons.Default.Person
-    "facturacion" -> Icons.Default.Receipt
-    "reporte" -> Icons.Default.BarChart
-    "usuario", "cliente", "custom", "general" -> Icons.Default.AutoAwesome
-    else -> Icons.Default.Star
-}
-
-private fun funcionModuloToColor(modulo: String): Color = when (modulo.lowercase()) {
-    "ventas" -> Color(0xFF416FC2)
-    "gastos", "finanzas", "caja" -> Color(0xFF7046D4)
-    "inventario" -> Color(0xFF059669)
-    "deudores" -> Color(0xFFF2A01A)
-    "facturacion" -> Color(0xFF0284C7)
-    "reporte" -> Color(0xFF4F46E5)
-    "usuario", "cliente", "custom", "general" -> Color(0xFF7C3AED)
-    else -> Color(0xFF416FC2)
-}
-
 private fun funcionModuloToDockTab(modulo: String): Int = when (modulo.lowercase()) {
     "ventas" -> 1
     "gastos", "finanzas", "caja", "reporte" -> 2
@@ -1283,11 +1261,6 @@ fun TenantPosScreen(
     var selectedDebtorForHistory by remember { mutableStateOf<DebtorRecord?>(null) }
     var showAdditionalMenuSheet by remember { mutableStateOf(false) }
     var showHacerInventarioModal by remember { mutableStateOf(false) }
-
-    val onOpenFunction: (FuncionUi) -> Unit = { fn ->
-        if (fn.modulo.equals("deudores", ignoreCase = true)) showDebtorsModal = true
-        else selectedDockTab = funcionModuloToDockTab(fn.modulo)
-    }
 
     // Inventory baseline snapshot state
     var inventorySavedDate by remember { mutableStateOf("31/07/2026 08:00 AM") }
