@@ -27,7 +27,7 @@ VERSION_API = "KAPTA-1.0.0"
 TABLAS = {
     "INVENTARIO": {"INICIO": 1, "FILA_INICIO": 3, "COLUMNAS": 13},
     "VENTAS": {"INICIO": 14, "FILA_INICIO": 3, "COLUMNAS": 22},
-    "DEUDORES": {"INICIO": 36, "FILA_INICIO": 3, "COLUMNAS": 9},
+    "DEUDORES": {"INICIO": 36, "FILA_INICIO": 3, "COLUMNAS": 10},
     "GASTOS": {"INICIO": 45, "FILA_INICIO": 3, "COLUMNAS": 14},
     "AUDITORIA_GASTOS": {"INICIO": 60, "FILA_INICIO": 3, "COLUMNAS": 8},
     "USUARIOS": {"INICIO": 69, "FILA_INICIO": 3, "COLUMNAS": 11},
@@ -45,7 +45,7 @@ CABECERAS = {
                "Fecha_Modificacion", "Hora_Modificacion", "Modificado_Por",
                "Fecha_Anulacion", "Hora_Anulacion", "Anulado_Por", "Tipo"],
     "DEUDORES": ["Fecha_Registro", "Nom_Cliente", "Producto", "Cantidad",
-                 "Minimo", "Transferencia", "Efectivo", "Total_Pendiente", "Tipo"],
+                 "Minimo", "Transferencia", "Efectivo", "Total_Pendiente", "Tipo", "Perdedor"],
     "MOVIMIENTOS": ["Id_Movimiento", "Fecha", "Id_Producto", "Nom_Producto",
                     "Tipo", "Cantidad", "Stock_Anterior", "Stock_Nuevo",
                     "Usuario", "Observacion"],
@@ -757,6 +757,41 @@ def action_pagar_deudor(params):
     })
 
 
+def action_asignar_perdedor(params):
+    """Escribe el nombre del perdedor (col 9) de un chico/orden deudor.
+    En bolirrana una cuenta (cliente) acumula varios chicos; el perdedor se
+    asigna después, a un chico concreto. Si hay varios chicos del mismo
+    producto, se edita el primero que aún no tenga perdedor.
+    ponytail: coincidencia por cliente+producto (el app no reenvía la fila);
+    si un mismo chico necesitara edición fina, pasar tambien fecha para cotejar."""
+    clave = str(params.get("sheetName") or params.get("idEmpresa") or "").strip()
+    cliente = str(params.get("clienteNombre") or params.get("clientName") or "").strip()
+    producto = str(params.get("productoNombre") or params.get("productName") or "").strip()
+    perdedor = str(params.get("perdedor") or "").strip()
+    if not clave:
+        return respuesta_error("No se recibió sheetName.")
+    if not cliente:
+        return respuesta_error("No se recibió el nombre del cliente.")
+    if not perdedor:
+        return respuesta_error("No se recibió el nombre del perdedor.")
+    empresa = resolver_hoja(clave)
+    if not empresa:
+        return respuesta_error("No existe la hoja: " + clave)
+
+    for (n, d) in sorted(db.leer_tabla(empresa, "deudores"), key=lambda f: f[0]):
+        nom_cliente = str(d[1] or "").strip()
+        if nom_cliente.lower() != cliente.lower():
+            continue
+        if producto and str(d[2] or "").strip().lower() != producto.lower():
+            continue
+        if str(d[9] or "").strip():
+            continue
+        d[9] = perdedor
+        db.guardar_fila(empresa, "deudores", n, d)
+        return respuesta_success({"cliente": cliente, "producto": producto, "perdedor": perdedor})
+    return respuesta_error("No se encontró el chico sin perdedor para: " + cliente)
+
+
 def _to_float(v):
     try:
         num = float(v)
@@ -1207,6 +1242,7 @@ POST_ACTIONS = {
     "read": action_read,
     "obtener_todo": action_obtener_todo,
     "pagar_deudor": action_pagar_deudor,
+    "asignar_perdedor": action_asignar_perdedor,
     "eliminar_empresa": action_eliminar_empresa,
     "actualizar_contrasena": action_actualizar_contrasena,
     "eliminar_usuario": action_eliminar_usuario,
