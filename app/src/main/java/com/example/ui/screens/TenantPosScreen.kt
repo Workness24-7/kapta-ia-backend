@@ -1,4 +1,4 @@
-﻿package com.example.ui.screens
+package com.example.ui.screens
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -204,7 +204,8 @@ data class DebtorRawOrderItem(
     val productName: String,
     val unitPrice: Double,
     val timeStr: String,
-    val tipo: String = "Normal"
+    val tipo: String = "Normal",
+    val perdedor: String = ""
 )
 
 private fun getGroupedProductsForDebtor(
@@ -253,7 +254,8 @@ private fun DebtorsManagementModal(
     totalDebtorsAmount: Double,
     onDismiss: () -> Unit,
     onShowToast: (String) -> Unit,
-    onPayDebtor: (clientName: String, method: String, amount: Double) -> Unit = { _, _, _ -> }
+    onPayDebtor: (clientName: String, method: String, amount: Double) -> Unit = { _, _, _ -> },
+    onPerdedorSave: (debtor: DebtorRecord, orderIndex: Int, perdedor: String) -> Unit = { _, _, _ -> }
 ) {
     var selectedDebtor by remember { mutableStateOf<DebtorRecord?>(null) }
     var showAddDebtorDialog by remember { mutableStateOf(false) }
@@ -321,7 +323,7 @@ private fun DebtorsManagementModal(
                             onClick = { selectedDebtor = debtor },
                             shape = RoundedCornerShape(14.dp),
                             color = MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp)
@@ -422,7 +424,8 @@ private fun DebtorsManagementModal(
                         onShowToast("Abono de ${formatCurrency(newAbonoValue)} registrado para ${debtorUpdated.name}")
                     }
                 }
-            }
+            },
+            onPerdedorSave = onPerdedorSave
         )
     }
 
@@ -506,7 +509,8 @@ private fun DebtorDetailFloatingModal(
     debtor: DebtorRecord,
     onDismiss: () -> Unit,
     onPaymentDone: (DebtorRecord, String) -> Unit,
-    onAbonoDone: (debtor: DebtorRecord, abonoValue: Double) -> Unit
+    onAbonoDone: (debtor: DebtorRecord, abonoValue: Double) -> Unit,
+    onPerdedorSave: (debtor: DebtorRecord, orderIndex: Int, perdedor: String) -> Unit = { _, _, _ -> }
 ) {
     var isHistoryExpanded by remember { mutableStateOf(false) }
 
@@ -524,6 +528,11 @@ private fun DebtorDetailFloatingModal(
         getRawOrdersForDebtor(debtor.orders, debtor.concept, debtor.amountOwed, debtor.date)
     }
 
+    val esBolirrana = debtor.name.startsWith("Bolirrana", ignoreCase = true) || debtor.tipo.equals("Bolirrana", ignoreCase = true)
+    var perdedorInputs by remember {
+        mutableStateOf<List<String>>(if (esBolirrana) debtor.orders.map { it.perdedor } else emptyList())
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(dismissOnClickOutside = true, dismissOnBackPress = true)
@@ -532,7 +541,7 @@ private fun DebtorDetailFloatingModal(
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface,
             shadowElevation = 12.dp,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier
                 .fillMaxWidth(0.95f)
                 .padding(vertical = 12.dp)
@@ -605,6 +614,58 @@ private fun DebtorDetailFloatingModal(
                             color = MaterialTheme.colorScheme.onBackground
                         )
                     }
+                }
+
+                if (esBolirrana && debtor.orders.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Perdedores por chico",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    debtor.orders.forEachIndexed { i, order ->
+                        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                            Text(
+                                text = "${order.quantity}x ${order.productName} (${order.timeStr})",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            OutlinedTextField(
+                                value = perdedorInputs.getOrElse(i) { "" },
+                                onValueChange = { v ->
+                                    perdedorInputs = perdedorInputs.toMutableList().also { list ->
+                                        if (i < list.size) list[i] = v
+                                    }
+                                },
+                                placeholder = { Text("Perdió: ¿quién?") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Button(
+                        onClick = {
+                            debtor.orders.forEachIndexed { i, order ->
+                                val p = perdedorInputs.getOrElse(i) { "" }.trim()
+                                if (p.isNotEmpty() && p != order.perdedor) onPerdedorSave(debtor, i, p)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Guardar Perdedores", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Spacer(modifier = Modifier.height(10.dp))
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -892,7 +953,7 @@ private fun DebtorDetailFloatingModal(
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 3.dp)
@@ -1219,7 +1280,6 @@ fun TenantPosScreen(
     var showAddStockBottomSheet by remember { mutableStateOf(false) }
     var showStockConfirmationDialog by remember { mutableStateOf(false) }
     var showDebtorsModal by remember { mutableStateOf(false) }
-    var showBolirranaModal by remember { mutableStateOf(false) }
     var selectedDebtorForHistory by remember { mutableStateOf<DebtorRecord?>(null) }
     var showAdditionalMenuSheet by remember { mutableStateOf(false) }
     var showHacerInventarioModal by remember { mutableStateOf(false) }
@@ -1383,7 +1443,7 @@ fun TenantPosScreen(
                         )
                         .clip(RoundedCornerShape(16.dp))
                         .background(MaterialTheme.colorScheme.surface)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+                        .border(0.6.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
@@ -1435,7 +1495,7 @@ fun TenantPosScreen(
                                         Brush.linearGradient(listOf(Color(0xFFA855F7), Color(0xFFF97316)))
                                     ) else Modifier.background(planCircleColor)
                                 )
-                                .border(1.dp, Color.White.copy(alpha = 0.6f), CircleShape)
+                                .border(0.6.dp, Color.White.copy(alpha = 0.6f), CircleShape)
                         )
 
                         Spacer(modifier = Modifier.width(10.dp))
@@ -1461,7 +1521,7 @@ fun TenantPosScreen(
                                     .size(38.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.surface)
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                                    .border(0.6.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
                                     .clickable { showNotificacionesDialog = true },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -1479,7 +1539,7 @@ fun TenantPosScreen(
                                         .offset(x = 6.dp, y = (-4).dp)
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(Color(0xFFEF4444))
-                                        .border(1.dp, Color.White, RoundedCornerShape(10.dp))
+                                        .border(0.6.dp, Color.White, RoundedCornerShape(10.dp))
                                         .padding(horizontal = 5.dp, vertical = 1.dp)
                                 ) {
                                     Text(
@@ -1538,14 +1598,10 @@ fun TenantPosScreen(
                             showAddStockBottomSheet = true
                         },
                         onQuickActionDeudores = { showDebtorsModal = true },
-                        onQuickActionBolirrana = { showBolirranaModal = true },
-                        isBar = esBarDeBolirrana,
                         onGoToFinanzasDia = {
                             financesFilter = "Día"
                             selectedDockTab = 2
                         },
-                        userFunctions = userFunctions,
-                        onOpenFunction = onOpenFunction,
                         hasCap = hasCap
                     )
 
@@ -1648,7 +1704,7 @@ fun TenantPosScreen(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(50),
                 color = dockBg,
-                border = BorderStroke(1.dp, dockBorder),
+                border = BorderStroke(0.6.dp, dockBorder),
                 shadowElevation = 6.dp
             ) {
                 Row(
@@ -1717,7 +1773,7 @@ fun TenantPosScreen(
                 onClick = { selectedDockTab = 0 },
                 shape = CircleShape,
                 color = dockBg,
-                border = BorderStroke(1.dp, dockBorder),
+                border = BorderStroke(0.6.dp, dockBorder),
                 shadowElevation = 6.dp,
                 modifier = Modifier.size(56.dp)
             ) {
@@ -1863,58 +1919,71 @@ fun TenantPosScreen(
                 showNuevaVentaView = false
             },
             onDebeSuccess = { customerName, ticketItems, totalAmount, abonoAmount, abonoMethod, tipoVenta ->
-                val finalCustomer = if (customerName.isBlank()) "Cliente Fiado" else customerName.trim()
+                val isBolirrana = tipoVenta.startsWith("Bolirrana", ignoreCase = true)
+                val numGames = if (isBolirrana) tipoVenta.substringAfter("(").removeSuffix(")").toIntOrNull() ?: 1 else 1
+                val effectiveCustomer = if (customerName.isBlank()) "Cliente Fiado" else customerName.trim()
+                val gameNames = if (isBolirrana) (1..numGames).map { "Bolirrana $it" } else listOf(effectiveCustomer)
                 val orderTime = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
                 val grouped = ticketItems.entries.groupBy { it.key.id }
-                val newOrders = mutableListOf<DebtorRawOrderItem>()
+                val currentDate = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date())
+                val pendingAmount = (totalAmount - abonoAmount).coerceAtLeast(0.0)
+                val pendingPerGame = if (numGames > 0) pendingAmount / numGames else pendingAmount
+                val abonoPerGame = if (numGames > 0) abonoAmount / numGames else abonoAmount
+
                 grouped.forEach { (_, entries) ->
                     val prod = entries.first().key
                     val qty = entries.sumOf { it.value }
-                    if (qty > 0) {
-                        val updated = if (prod.isService) prod else prod.copy(stock = (prod.stock - qty).coerceAtLeast(0))
-                        viewModel.saveOrUpdateProduct(updated) {}
-                        val itemTotal = qty * prod.price
-                        val isMinPriceSelected = entries.any { it.key.minPrice > 0 || it.key.hasMinPrice }
-                        viewModel.registrarDeudorDirecto(
-                            companyCode = company.code,
-                            clientName = finalCustomer,
-                            productName = prod.name,
-                            quantity = qty,
-                            isMinPrice = isMinPriceSelected,
-                            abonoAmount = abonoAmount,
-                            abonoMethod = abonoMethod,
-                            pendingTotal = itemTotal,
-                            tipo = tipoVenta
-                        )
-                        newOrders.add(DebtorRawOrderItem(qty, prod.name, prod.price, orderTime, tipoVenta))
+                    if (qty > 0 && !prod.isService) {
+                        viewModel.saveOrUpdateProduct(prod.copy(stock = (prod.stock - qty).coerceAtLeast(0))) {}
                     }
                 }
-                val existingDebtor = debtorsList.find { it.name.equals(finalCustomer, ignoreCase = true) }
-                val currentDate = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date())
-                val pendingAmount = (totalAmount - abonoAmount).coerceAtLeast(0.0)
-                if (existingDebtor != null) {
-                    val idx = debtorsList.indexOf(existingDebtor)
-                    debtorsList[idx] = existingDebtor.copy(
-                        amountOwed = existingDebtor.amountOwed + pendingAmount,
-                        abonoAmount = existingDebtor.abonoAmount + abonoAmount,
-                        date = currentDate,
-                        orders = existingDebtor.orders + newOrders
-                    )
-                } else {
-                    debtorsList.add(
-                        DebtorRecord(
-                            id = (debtorsList.maxOfOrNull { it.id } ?: 0) + 1,
-                            name = finalCustomer,
-                            phone = "3000000000",
-                            amountOwed = totalAmount,
-                            abonoAmount = abonoAmount,
-                            concept = "Consumo fiado en Nueva Venta",
+
+                gameNames.forEach { gameName ->
+                    val gameOrders = mutableListOf<DebtorRawOrderItem>()
+                    grouped.forEach { (_, entries) ->
+                        val prod = entries.first().key
+                        val qty = entries.sumOf { it.value }
+                        if (qty > 0) {
+                            val isMinPrice = entries.any { it.key.minPrice > 0 || it.key.hasMinPrice }
+                            viewModel.registrarDeudorDirecto(
+                                companyCode = company.code,
+                                clientName = gameName,
+                                productName = prod.name,
+                                quantity = qty,
+                                isMinPrice = isMinPrice,
+                                abonoAmount = abonoPerGame,
+                                abonoMethod = abonoMethod,
+                                pendingTotal = qty * prod.price,
+                                tipo = tipoVenta
+                            )
+                            gameOrders.add(DebtorRawOrderItem(qty, prod.name, prod.price, orderTime, tipoVenta))
+                        }
+                    }
+                    val existing = debtorsList.find { it.name.equals(gameName, ignoreCase = true) }
+                    if (existing != null) {
+                        val idx = debtorsList.indexOf(existing)
+                        debtorsList[idx] = existing.copy(
+                            amountOwed = existing.amountOwed + pendingPerGame,
+                            abonoAmount = existing.abonoAmount + abonoPerGame,
                             date = currentDate,
-                            orders = newOrders
+                            orders = existing.orders + gameOrders
                         )
-                    )
+                    } else {
+                        debtorsList.add(
+                            DebtorRecord(
+                                id = (debtorsList.maxOfOrNull { it.id } ?: 0) + 1,
+                                name = gameName,
+                                phone = "3000000000",
+                                amountOwed = pendingPerGame + abonoPerGame,
+                                abonoAmount = abonoPerGame,
+                                concept = if (isBolirrana) gameName else "Consumo fiado en Nueva Venta",
+                                date = currentDate,
+                                orders = gameOrders
+                            )
+                        )
+                    }
                 }
-                viewModel.showToast("Venta fiada a $finalCustomer registrada. Stock actualizado.")
+                viewModel.showToast(if (isBolirrana) "$numGames cuentas de bolirrana creadas. Stock actualizado." else "Venta fiada a $effectiveCustomer registrada. Stock actualizado.")
                 showNuevaVentaView = false
             }
         )
@@ -2098,7 +2167,7 @@ fun TenantPosScreen(
                                 .padding(vertical = 4.dp),
                             shape = RoundedCornerShape(12.dp),
                             color = cardBg,
-                            border = BorderStroke(1.dp, cardBorder)
+                            border = BorderStroke(0.6.dp, cardBorder)
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Row(
@@ -2194,7 +2263,7 @@ fun TenantPosScreen(
                             .size(42.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primaryContainer)
-                            .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                            .border(0.6.dp, MaterialTheme.colorScheme.primary, CircleShape)
                     ) {
                         Icon(imageVector = Icons.Default.Add, contentDescription = "Añadir fila", tint = MaterialTheme.colorScheme.primary)
                     }
@@ -2306,40 +2375,26 @@ fun TenantPosScreen(
                     transferAmount = transfer,
                     cashAmount = cash
                 )
-            }
-        )
-    }
-
-    // -------------------------------------------------------------------------------------
-    // MODO JUEGO: BOLIRRANA (exclusivo bares)
-    // -------------------------------------------------------------------------------------
-    if (showBolirranaModal) {
-        BolirranaModal(
-            products = productsFlow,
-            onDismiss = { showBolirranaModal = false },
-            onToast = { msg -> viewModel.showToast(msg) },
-            onRegistrarVenta = { perdedor, desc, qty, unitPrice, total ->
-                viewModel.registerPosSale(
-                    companyCode = company.code,
-                    clientName = perdedor,
-                    productName = desc,
-                    quantity = qty,
-                    unitPrice = unitPrice,
-                    totalAmount = total,
-                    paymentMethod = "Efectivo"
-                )
             },
-            onRegistrarDeudor = { perdedor, desc, qty, total ->
-                viewModel.registrarDeudorDirecto(
-                    companyCode = company.code,
-                    clientName = perdedor,
-                    productName = desc,
-                    quantity = qty,
-                    isMinPrice = false,
-                    abonoAmount = 0.0,
-                    abonoMethod = "",
-                    pendingTotal = total
-                )
+            onPerdedorSave = { debtor, orderIndex, perdedor ->
+                val order = debtor.orders.getOrNull(orderIndex)
+                if (order != null && perdedor.isNotBlank()) {
+                    viewModel.asignarPerdedorDeudor(
+                        companyCode = company.code,
+                        clientName = debtor.name,
+                        productName = order.productName,
+                        perdedor = perdedor
+                    ) {
+                        val idx = debtorsList.indexOfFirst { it.id == debtor.id }
+                        if (idx != -1) {
+                            val updatedOrders = debtor.orders.mapIndexed { i, o ->
+                                if (i == orderIndex) o.copy(perdedor = perdedor) else o
+                            }
+                            debtorsList[idx] = debtor.copy(orders = updatedOrders)
+                        }
+                        viewModel.showToast("Perdedor asignado: $perdedor")
+                    }
+                }
             }
         )
     }
@@ -2394,7 +2449,7 @@ fun TenantPosScreen(
                                 },
                             shape = RoundedCornerShape(12.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant)
                         ) {
                             Row(
                                 modifier = Modifier.padding(14.dp),
@@ -2469,7 +2524,7 @@ fun TenantPosScreen(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             shape = RoundedCornerShape(10.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant)
                         ) {
                             Row(
                                 modifier = Modifier.padding(12.dp).fillMaxWidth(),
@@ -2504,7 +2559,7 @@ fun TenantPosScreen(
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = Color(0xFFFEF2F2),
-                    border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+                    border = BorderStroke(0.6.dp, Color(0xFFFCA5A5)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -2681,7 +2736,7 @@ private fun MembershipAlertBanner(company: CompanyEntity) {
                         .padding(horizontal = 12.dp, vertical = 4.dp)
                         .clip(RoundedCornerShape(20.dp))
                         .background(Color(0xFFFFF7E0))
-                        .border(1.dp, Color(0xFFF59E0B), RoundedCornerShape(20.dp))
+                        .border(0.6.dp, Color(0xFFF59E0B), RoundedCornerShape(20.dp))
                         .clickable { expanded = true }
                         .padding(horizontal = 12.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -2766,11 +2821,7 @@ private fun InicioDashboardView(
     onQuickActionGasto: () -> Unit,
     onQuickActionAddStock: () -> Unit,
     onQuickActionDeudores: () -> Unit,
-    onQuickActionBolirrana: () -> Unit = {},
-    isBar: Boolean = false,
     onGoToFinanzasDia: () -> Unit,
-    userFunctions: List<FuncionUi> = emptyList(),
-    onOpenFunction: (FuncionUi) -> Unit = {},
     hasCap: (String) -> Boolean = { true }
 ) {
     Column(
@@ -2780,11 +2831,6 @@ private fun InicioDashboardView(
             .padding(horizontal = 16.dp, vertical = 14.dp)
             .padding(bottom = 90.dp)
     ) {
-        if (userFunctions.isNotEmpty()) {
-            FuncionesDock(funciones = userFunctions, onOpen = onOpenFunction)
-            Spacer(modifier = Modifier.height(18.dp))
-        }
-
         // RESUMEN GENERAL (4 KPI Cards)
         iOSLargeTitle(title = "Resumen General del Negocio")
         Spacer(modifier = Modifier.height(10.dp))
@@ -2841,15 +2887,13 @@ private fun InicioDashboardView(
             AccionRapida("Venta", Icons.Default.ShoppingCart, Color(0xFF315AA8), Color(0xFF416FC2), onQuickActionVenta),
             AccionRapida("Gasto", Icons.Default.AccountBalanceWallet, Color(0xFF5428B8), Color(0xFF7046D4), onQuickActionGasto),
             AccionRapida("Agregar", Icons.Default.Add, Color(0xFF18A94F), Color(0xFF32C96A), onQuickActionAddStock),
-            AccionRapida("Deudores", Icons.Default.Person, Color(0xFFE58A05), Color(0xFFF2A01A), onQuickActionDeudores),
-            if (isBar) AccionRapida("Bolirrana", Icons.Default.Star, Color(0xFF7A2A9E), Color(0xFFA03BC8), onQuickActionBolirrana) else null
+            AccionRapida("Deudores", Icons.Default.Person, Color(0xFFE58A05), Color(0xFFF2A01A), onQuickActionDeudores)
         ).filterNotNull().filter { accion ->
             when (accion.titulo) {
                 "Venta" -> hasCap("ventas")
                 "Gasto" -> hasCap("gastos")
                 "Agregar" -> hasCap("inventario")
                 "Deudores" -> hasCap("deudores")
-                "Bolirrana" -> hasCap("ventas") || hasCap("deudores")
                 else -> true
             }
         }
@@ -2902,7 +2946,7 @@ private fun InicioDashboardView(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)),
-                border = BorderStroke(1.dp, Color(0xFFBBF7D0))
+                border = BorderStroke(0.6.dp, Color(0xFFBBF7D0))
             ) {
                 Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = Color(0xFF34C759))
@@ -2945,91 +2989,6 @@ private fun InicioDashboardView(
 }
 
 @Composable
-private fun FuncionesDock(
-    funciones: List<FuncionUi>,
-    onOpen: (FuncionUi) -> Unit
-) {
-    val isDark = LocalIsDarkMode.current
-    var showAll by remember { mutableStateOf(false) }
-    val visible = funciones.take(4)
-    val hasMore = funciones.size > 4
-    Text(
-        text = "Funciones",
-        fontSize = 13.sp,
-        fontWeight = FontWeight.Bold,
-        color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
-        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
-    )
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        visible.forEach { fn -> FuncionChip(fn = fn, onClick = { onOpen(fn) }) }
-        if (hasMore) {
-            FuncionChip(fn = FuncionUi("Ver más", "", "general", ""), onClick = { showAll = true }, overflow = true)
-        }
-    }
-    if (showAll) {
-        AlertDialog(
-            onDismissRequest = { showAll = false },
-            confirmButton = { TextButton(onClick = { showAll = false }) { Text("Cerrar") } },
-            text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    funciones.forEach { fn ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showAll = false; onOpen(fn) }
-                                .padding(vertical = 12.dp, horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(imageVector = funcionModuloToIcon(fn.modulo), contentDescription = null, tint = funcionModuloToColor(fn.modulo), modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text(fn.nombre, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color.White else Color(0xFF0F172A))
-                                if (fn.descripcion.isNotBlank()) {
-                                    Text(fn.descripcion, fontSize = 12.sp, color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B), maxLines = 1)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        )
-    }
-}
-
-@Composable
-private fun FuncionChip(fn: FuncionUi, onClick: () -> Unit, overflow: Boolean = false) {
-    val accent = if (overflow) Color(0xFF64748B) else funcionModuloToColor(fn.modulo)
-    Surface(
-        modifier = Modifier.clickable { onClick() },
-        shape = RoundedCornerShape(14.dp),
-        color = accent.copy(alpha = 0.12f),
-        border = BorderStroke(1.dp, accent.copy(alpha = 0.35f))
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = if (overflow) Icons.Default.MoreHoriz else funcionModuloToIcon(fn.modulo),
-                contentDescription = null,
-                tint = accent,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                if (overflow) "Ver más" else fn.nombre,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = accent
-            )
-        }
-    }
-}
-
-@Composable
 private fun ProductAlertCard(product: PosProductEntity, onViewInventory: () -> Unit) {
     val isDark = LocalIsDarkMode.current
     val cardBg = if (isDark) Color(0xFF1C1C1E) else Color.White
@@ -3060,7 +3019,7 @@ private fun ProductAlertCard(product: PosProductEntity, onViewInventory: () -> U
             )
             .clip(RoundedCornerShape(20.dp))
             .background(cardBg)
-            .border(1.dp, cardBorder, RoundedCornerShape(20.dp))
+            .border(0.6.dp, cardBorder, RoundedCornerShape(20.dp))
     ) {
         Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
             // Imagen del producto arriba
@@ -3164,7 +3123,7 @@ private fun ProductAlertListItem(product: PosProductEntity, onAddStock: () -> Un
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(cardBg)
-            .border(1.dp, cardBorder, RoundedCornerShape(14.dp))
+            .border(0.6.dp, cardBorder, RoundedCornerShape(14.dp))
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -3342,7 +3301,7 @@ private fun VentasSectionView(
                         ),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = BorderStroke(1.dp, Color(0xFFE5E7EB))
+                    border = BorderStroke(0.6.dp, Color(0xFFE5E7EB))
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp).fillMaxWidth(),
@@ -3364,7 +3323,7 @@ private fun VentasSectionView(
                                 .size(64.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(Color(0xFFF8FAFC))
-                                .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(12.dp)),
+                                .border(0.6.dp, Color(0xFFE5E7EB), RoundedCornerShape(12.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             if (prod.imageUrl.isNotBlank()) {
@@ -3728,7 +3687,7 @@ private fun FinanzasSectionView(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
@@ -3804,7 +3763,7 @@ private fun FinanzasSectionView(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp).fillMaxWidth(),
@@ -3913,7 +3872,7 @@ private fun InventarioSectionView(
                 OutlinedButton(
                     onClick = { importLauncher.launch("*/*") },
                     shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                    border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.primary)
                 ) {
                     Text("Carga Masiva", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
@@ -4236,7 +4195,7 @@ private fun DashboardKpiCard(
                                 )
                             )
                         )
-                        .border(1.dp, accentColor.copy(alpha = 0.25f), RoundedCornerShape(10.dp)),
+                        .border(0.6.dp, accentColor.copy(alpha = 0.25f), RoundedCornerShape(10.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -4453,7 +4412,7 @@ fun ProductFormBottomSheet(
                         onClick = { imagePickerLauncher.launch("image/*") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                        border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.primary)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Image,
@@ -4975,8 +4934,17 @@ private fun NuevaVentaView(
     var facturaModo by remember { mutableStateOf("Normal") }
     var numPersonas by remember { mutableStateOf(1) }
     var showPersonasPicker by remember { mutableStateOf(false) }
+    var numBolirranas by remember { mutableStateOf(1) }
     var showAddModo by remember { mutableStateOf(false) }
     var nuevoModoText by remember { mutableStateOf("") }
+
+    fun tipoVentaLabel(): String {
+        return when (facturaModo) {
+            "Bolirrana" -> "Bolirrana($numBolirranas)"
+            "Normal" -> "Normal"
+            else -> "$facturaModo($numPersonas)"
+        }
+    }
     val modosPrefs = remember { context.getSharedPreferences("modos_factura_$companyCode", android.content.Context.MODE_PRIVATE) }
     var modosPersonalizados by remember {
         mutableStateOf(modosPrefs.getString("modos", "")?.split("|")?.filter { it.isNotBlank() } ?: emptyList())
@@ -5194,6 +5162,43 @@ private fun NuevaVentaView(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
+                            if (facturaModo == "Bolirrana") {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Juegos de bolirrana",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onBackground
+                                    )
+                                    Surface(
+                                        onClick = {
+                                            if (numBolirranas > 1) numBolirranas--
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant
+                                    ) {
+                                        Text("−", modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Text("$numBolirranas", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                    Surface(
+                                        onClick = { numBolirranas++ },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant
+                                    ) {
+                                        Text("+", modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Text(
+                                        text = "• $numBolirranas cuentas deudoras",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -5317,7 +5322,7 @@ private fun NuevaVentaView(
                     Surface(
                         shape = RoundedCornerShape(10.dp),
                         color = Color(0xFFFEF3C7),
-                        border = BorderStroke(1.dp, Color(0xFFFCD34D)),
+                        border = BorderStroke(0.6.dp, Color(0xFFFCD34D)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -5390,7 +5395,7 @@ private fun NuevaVentaView(
                             shape = RoundedCornerShape(14.dp),
                             color = Color.White,
                             shadowElevation = 8.dp,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 56.dp)
@@ -5547,7 +5552,7 @@ private fun NuevaVentaView(
                 .fillMaxWidth(),
             color = MaterialTheme.colorScheme.surface,
             shadowElevation = 12.dp,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Column(
                 modifier = Modifier
@@ -5641,7 +5646,7 @@ private fun NuevaVentaView(
                             Button(
                                 onClick = {
                                     showPaymentModal = false
-                                    onPaymentSuccess(customerName, activeMap, totalAmount, "Efectivo", 0.0, totalAmount, if (facturaModo == "Normal") "Normal" else "$facturaModo($numPersonas)")
+                                    onPaymentSuccess(customerName, activeMap, totalAmount, "Efectivo", 0.0, totalAmount, tipoVentaLabel())
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
                                 shape = RoundedCornerShape(12.dp),
@@ -5653,7 +5658,7 @@ private fun NuevaVentaView(
                             Button(
                                 onClick = {
                                     showPaymentModal = false
-                                    onPaymentSuccess(customerName, activeMap, totalAmount, "Transferencia", totalAmount, 0.0, if (facturaModo == "Normal") "Normal" else "$facturaModo($numPersonas)")
+                                    onPaymentSuccess(customerName, activeMap, totalAmount, "Transferencia", totalAmount, 0.0, tipoVentaLabel())
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                 shape = RoundedCornerShape(12.dp),
@@ -5693,7 +5698,7 @@ private fun NuevaVentaView(
                     Button(
                         onClick = {
                             showPaymentModal = false
-                            onPaymentSuccess(customerName, activeMap, totalAmount, "Dividido", tVal, cVal, if (facturaModo == "Normal") "Normal" else "$facturaModo($numPersonas)")
+                            onPaymentSuccess(customerName, activeMap, totalAmount, "Dividido", tVal, cVal, tipoVentaLabel())
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
                         shape = RoundedCornerShape(10.dp)
@@ -5790,7 +5795,7 @@ private fun NuevaVentaView(
                 Button(
                     onClick = {
                         showDebeModal = false
-                        onDebeSuccess(customerName, activeMap, totalAmount, abonoVal, method, if (facturaModo == "Normal") "Normal" else "$facturaModo($numPersonas)")
+                        onDebeSuccess(customerName, activeMap, totalAmount, abonoVal, method, tipoVentaLabel())
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9F0A)),
                     shape = RoundedCornerShape(10.dp)
@@ -5807,319 +5812,3 @@ private fun NuevaVentaView(
     }
 }
 
-// ============================================================================
-// MODO JUEGO: BOLIRRANA (exclusivo de bares)
-// ============================================================================
-data class ChicoBolirrana(
-    val producto: String,
-    val qty: Int,
-    val multi: Int,
-    val precio: Double
-) {
-    val subtotal: Double get() = qty * precio * multi
-    val descripcion: String
-        get() = if (multi > 1) "Chico Bolirrana: ${qty}x $producto ×$multi" else "Chico Bolirrana: ${qty}x $producto"
-}
-
-// Si N perdedores comparten un chico, cada perdedor paga (subtotal / N).
-private fun partePorPerdedor(chico: ChicoBolirrana, nPerdedores: Int): Double =
-    if (nPerdedores <= 0) chico.subtotal else chico.subtotal / nPerdedores
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun BolirranaModal(
-    products: List<PosProductEntity>,
-    onDismiss: () -> Unit,
-    onToast: (String) -> Unit,
-    onRegistrarVenta: (perdedor: String, descripcion: String, qty: Int, unitPrice: Double, total: Double) -> Unit,
-    onRegistrarDeudor: (perdedor: String, descripcion: String, qty: Int, total: Double) -> Unit
-) {
-    val bebidas = remember(products) {
-        products.sortedBy { it.name.lowercase() }
-    }
-    var productName by remember { mutableStateOf(bebidas.firstOrNull()?.name ?: "") }
-    var qty by remember { mutableStateOf(1) }
-    var multi by remember { mutableStateOf(1) }
-    var perdedorInput by remember { mutableStateOf("") }
-    var perdedores by remember { mutableStateOf<MutableList<String>>(mutableListOf()) }
-    var chicos by remember { mutableStateOf<MutableList<ChicoBolirrana>>(mutableListOf()) }
-    var productExpanded by remember { mutableStateOf(false) }
-    var pagarAhora by remember { mutableStateOf(false) }
-
-    val selectedProduct = bebidas.firstOrNull { it.name == productName }
-    val productoPrecio = selectedProduct?.price ?: 0.0
-
-    val totalRonda = chicos.sumOf { it.subtotal }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp)
-                .padding(bottom = 24.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text("Bolirrana", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                    Text("Juego de apuestas entre chicos — la cuenta va a los perdedores", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                IconButton(onClick = onDismiss) {
-                    Icon(imageVector = Icons.Default.Close, contentDescription = "Cerrar", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            // 1. PRODUCTO A APOSTAR
-            Text("Producto apostado (cerveza / bebida)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
-            Spacer(modifier = Modifier.height(6.dp))
-            Box(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = productName,
-                    onValueChange = {},
-                    readOnly = true,
-                    trailingIcon = { Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable { productExpanded = true }
-                )
-                DropdownMenu(
-                    expanded = productExpanded,
-                    onDismissRequest = { productExpanded = false },
-                    modifier = Modifier.background(MaterialTheme.colorScheme.surface)
-                ) {
-                    bebidas.forEach { p ->
-                        DropdownMenuItem(
-                            text = { Text("${p.name} — ${formatCurrency(p.price)}", fontSize = 13.sp) },
-                            onClick = { productName = p.name; productExpanded = false }
-                        )
-                    }
-                }
-            }
-            if (bebidas.isEmpty()) {
-                Text("No hay productos en el inventario para apostar.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // 2. CANTIDAD
-            Text("Cantidad", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                IconButton(onClick = { if (qty > 1) qty-- }, modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
-                    Icon(imageVector = Icons.Default.Remove, contentDescription = "Menos", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Text("$qty", fontSize = 20.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.width(40.dp), textAlign = TextAlign.Center)
-                IconButton(onClick = { qty++ }, modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = "Más", tint = MaterialTheme.colorScheme.primary)
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("= ${formatCurrency(qty * productoPrecio)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // 3. MULTIPLICADOR X1..X5
-            Text("Multiplicador de la apuesta", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(1, 2, 3, 4, 5).forEach { m ->
-                    val selected = multi == m
-                    Button(
-                        onClick = { multi = m },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                            contentColor = if (selected) Color.White else MaterialTheme.colorScheme.primary
-                        ),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.weight(1f).height(40.dp)
-                    ) {
-                        Text("×$m", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // 4. PERDEDORES (los que deben la cuenta)
-            Text("Perdedores (a quienes se cobra)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = perdedorInput,
-                    onValueChange = { perdedorInput = it },
-                    placeholder = { Text("Nombre del perdedor") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
-                Button(
-                    onClick = {
-                        val n = perdedorInput.trim()
-                        if (n.isNotBlank() && !perdedores.any { it.equals(n, ignoreCase = true) }) {
-                            perdedores.add(n)
-                            perdedorInput = ""
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.height(54.dp)
-                ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = "Añadir", tint = Color.White)
-                }
-            }
-            if (perdedores.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(perdedores.size) { i ->
-                        val nombre = perdedores[i]
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            modifier = Modifier.clip(RoundedCornerShape(50))
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
-                            ) {
-                                Text(nombre, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                IconButton(
-                                    onClick = { perdedores.removeAt(i) },
-                                    modifier = Modifier.size(20.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Default.Close, contentDescription = "Quitar", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 5. CONFIRMAR CHICO
-            val valorChico = qty * productoPrecio * multi
-            Button(
-                onClick = {
-                    if (productName.isBlank() || selectedProduct == null) {
-                        onToast("Elige un producto para apostar")
-                    } else if (qty <= 0) {
-                        onToast("La cantidad debe ser mayor a 0")
-                    } else if (perdedores.isEmpty()) {
-                        onToast("Agrega al menos un perdedor (a quién se cobra)")
-                    } else {
-                        chicos.add(ChicoBolirrana(productName, qty, multi, productoPrecio))
-                        onToast("Chico añadido: ${qty}x $productName ×$multi = ${formatCurrency(valorChico)}")
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7A2A9E)),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().height(48.dp)
-            ) {
-                Text("Añadir chico a la ronda (${formatCurrency(valorChico)})", color = Color.White, fontWeight = FontWeight.Bold)
-            }
-
-            // 6. LISTA DE CHICOS DE LA RONDA
-            if (chicos.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Chicos de la ronda (${chicos.size})", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                Spacer(modifier = Modifier.height(4.dp))
-                chicos.forEachIndexed { i, ch ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(ch.descripcion, fontSize = 12.sp, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.weight(1f))
-                        Text(formatCurrency(ch.subtotal), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                        IconButton(onClick = { chicos.removeAt(i) }, modifier = Modifier.size(24.dp)) {
-                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Quitar", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Total ronda", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                    Text(formatCurrency(totalRonda), fontSize = 14.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            // 7. PAGAR AHORA VS FIADO
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(if (pagarAhora) "Pago inmediato" else "Va a deudores (fiado)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                    Text(
-                        if (pagarAhora) "Cada perdedor paga su parte en efectivo y se registra como venta"
-                        else "Si el perdedor no existe, se crea su cuenta; sino, se suma a su deuda",
-                        fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Switch(
-                    checked = pagarAhora,
-                    onCheckedChange = { pagarAhora = it },
-                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF34C759))
-                )
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            // 8. COBRAR A PERDEDORES
-            Button(
-                onClick = {
-                    if (chicos.isEmpty()) {
-                        onToast("Añade al menos un chico a la ronda")
-                    } else {
-                        val n = perdedores.size
-                        perdedores.forEach { perdedor ->
-                            chicos.forEach { ch ->
-                                val parte = partePorPerdedor(ch, n)
-                                val unitParte = if (ch.qty > 0) parte / ch.qty else parte
-                                if (pagarAhora) {
-                                    onRegistrarVenta(perdedor, ch.descripcion, ch.qty, unitParte, parte)
-                                } else {
-                                    onRegistrarDeudor(perdedor, ch.descripcion, ch.qty, parte)
-                                }
-                            }
-                        }
-                        onToast("Bolirrana registrada para ${perdedores.joinToString(", ")} (${if (pagarAhora) "pago inmediato" else "a deudores"})")
-                        chicos.clear()
-                        onDismiss()
-                    }
-                },
-                enabled = chicos.isNotEmpty(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (pagarAhora) Color(0xFF34C759) else Color(0xFFE58A05),
-                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp)
-            ) {
-                Text(
-                    if (pagarAhora) "Cobrar y registrar ventas (${formatCurrency(totalRonda)})"
-                    else "Pasar a deudores (${formatCurrency(totalRonda)})",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
-                )
-            }
-        }
-    }
-}

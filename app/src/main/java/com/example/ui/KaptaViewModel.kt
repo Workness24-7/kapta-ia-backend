@@ -2162,6 +2162,7 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
         abonoMethod: String = "",
         pendingTotal: Double,
         tipo: String = "Normal",
+        perdedor: String = "",
         onSuccess: () -> Unit = {}
     ) {
         viewModelScope.launch {
@@ -2172,8 +2173,24 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
             val abonoEsTransferencia = abonoMethod.lowercase().contains("transfer") || abonoMethod.lowercase().contains("nequi") || abonoMethod.lowercase().contains("daviplata") || abonoMethod.lowercase().contains("tarjeta")
             val abonoTransfer = if (abonoEsTransferencia) abonoAmount else 0.0
             val abonoCash = if (!abonoEsTransferencia) abonoAmount else 0.0
-            val payload = listOf(dateStr, clientName, productName, quantity, minFlag, abonoTransfer, abonoCash, pendingTotal, tipo)
+            val payload = listOf(dateStr, clientName, productName, quantity, minFlag, abonoTransfer, abonoCash, pendingTotal, tipo, perdedor)
             sheetsService.registrarDeudor(sheetName, payload)
+            onSuccess()
+        }
+    }
+
+    fun asignarPerdedorDeudor(
+        companyCode: String,
+        clientName: String,
+        productName: String,
+        perdedor: String,
+        onSuccess: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val company = repository.getCompanyByCode(companyCode)
+            val sheetName = company?.name ?: companyCode
+            if (perdedor.isBlank()) return@launch
+            sheetsService.asignarPerdedor(sheetName, clientName, productName, perdedor)
             onSuccess()
         }
     }
@@ -2198,13 +2215,15 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
                     val abonos = parseMoney(row.getOrNull(5)) + parseMoney(row.getOrNull(6))
                     val fechaCruda = row.getOrNull(0)?.trim() ?: ""
                     val tipo = row.getOrNull(8)?.trim()?.takeIf { it.isNotBlank() } ?: "Normal"
+                    val perdedor = row.getOrNull(9)?.trim() ?: ""
                     porCliente.getOrPut(cliente) { mutableListOf() }.add(
                         DebtorRawOrderItem(
                             quantity = cantidad,
                             productName = producto,
                             unitPrice = total / cantidad,
                             timeStr = extraerHora(fechaCruda),
-                            tipo = tipo
+                            tipo = tipo,
+                            perdedor = perdedor
                         )
                     )
                     totales[cliente] = (totales[cliente] ?: 0.0) + (total - abonos).coerceAtLeast(0.0)

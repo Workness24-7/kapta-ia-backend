@@ -233,7 +233,7 @@ fun UserProfileModal(
                 color = modalBgColor,
                 shadowElevation = 24.dp,
                 tonalElevation = 2.dp,
-                border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color.White.copy(alpha = 0.8f)),
+                border = BorderStroke(0.6.dp, if (isDark) Color(0xFF334155) else Color.White.copy(alpha = 0.8f)),
                 modifier = Modifier
                     .widthIn(max = 390.dp)
                     .fillMaxWidth()
@@ -350,7 +350,7 @@ fun UserProfileModal(
                                     .shadow(elevation = 3.dp, shape = RoundedCornerShape(8.dp))
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(if (isDark) Color(0xFF1E293B) else Color.White)
-                                    .border(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
+                                    .border(0.6.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
                                     .padding(horizontal = 7.dp, vertical = 2.dp),
                                 contentAlignment = Alignment.Center
                             ) {

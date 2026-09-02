@@ -267,7 +267,7 @@ fun CompanyLoginScreen(
                     Surface(
                         shape = RoundedCornerShape(50),
                         color = secondaryBrandColor.copy(alpha = 0.12f),
-                        border = BorderStroke(1.dp, secondaryBrandColor.copy(alpha = 0.35f)),
+                        border = BorderStroke(0.6.dp, secondaryBrandColor.copy(alpha = 0.35f)),
                         modifier = Modifier.padding(top = 6.dp)
                     ) {
                         Text(

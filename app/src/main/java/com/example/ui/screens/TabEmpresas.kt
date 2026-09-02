@@ -238,7 +238,7 @@ fun TabEmpresas(
                     .shadow(elevation = 12.dp, shape = RoundedCornerShape(28.dp))
                     .clip(RoundedCornerShape(28.dp))
                     .background(MaterialTheme.colorScheme.surface)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(28.dp))
+                    .border(0.6.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(28.dp))
                     .padding(20.dp)
             ) {
                 Column {
@@ -338,7 +338,7 @@ fun TabEmpresas(
                     .shadow(elevation = 24.dp, shape = RoundedCornerShape(32.dp))
                     .clip(RoundedCornerShape(32.dp))
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
-                    .border(1.dp, Color.White.copy(alpha = if (isDarkMode) 0.12f else 0.55f), RoundedCornerShape(32.dp))
+                    .border(0.6.dp, Color.White.copy(alpha = if (isDarkMode) 0.12f else 0.55f), RoundedCornerShape(32.dp))
                     .padding(vertical = 10.dp)
             ) {
                 Column(
@@ -873,7 +873,7 @@ fun CompanyListItemCard(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                            .border(0.6.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
                             .clickable { onVer() }
                             .padding(horizontal = 14.dp, vertical = 9.dp),
                         contentAlignment = Alignment.Center
@@ -900,7 +900,7 @@ fun CompanyListItemCard(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                            .border(0.6.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
                             .clickable { onEditar() }
                             .padding(horizontal = 14.dp, vertical = 9.dp),
                         contentAlignment = Alignment.Center
@@ -927,7 +927,7 @@ fun CompanyListItemCard(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
                             .background(Color(0xFF25D366).copy(alpha = 0.14f))
-                            .border(1.dp, Color(0xFF25D366), RoundedCornerShape(12.dp))
+                            .border(0.6.dp, Color(0xFF25D366), RoundedCornerShape(12.dp))
                             .clickable {
                                 val numero = company.phone.filter { it.isDigit() }
                                 val full = if (numero.length == 10) "57$numero" else numero
@@ -1245,7 +1245,7 @@ private fun MetricIconChip(
                         .size(7.dp)
                         .clip(CircleShape)
                         .background(iconColor)
-                        .border(1.dp, Color.White, CircleShape)
+                        .border(0.6.dp, Color.White, CircleShape)
                 )
             }
             Spacer(modifier = Modifier.width(6.dp))

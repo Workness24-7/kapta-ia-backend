@@ -567,7 +567,7 @@ private fun SearchCompanyCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(16.dp)),
+            .border(0.6.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF1E293B) else Color.White)
     ) {
@@ -699,7 +699,7 @@ private fun SearchUserCard(user: CompanyUserEntity, company: CompanyEntity?) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(14.dp)),
+            .border(0.6.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(14.dp)),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF1E293B) else Color.White)
     ) {

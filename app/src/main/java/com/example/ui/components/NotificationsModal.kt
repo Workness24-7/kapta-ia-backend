@@ -190,7 +190,7 @@ fun NotificationsModal(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp)
-                        .border(1.dp, gradBlancoGris, RoundedCornerShape(24.dp))
+                        .border(0.6.dp, gradBlancoGris, RoundedCornerShape(24.dp))
                 ) {
                     Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -241,7 +241,7 @@ fun NotificationsModal(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 12.dp, vertical = 12.dp)
-                            .border(1.dp, gradBlancoGris, RoundedCornerShape(24.dp))
+                            .border(0.6.dp, gradBlancoGris, RoundedCornerShape(24.dp))
                     ) {
                         Text(
                             text = "No hay notificaciones en esta categoría.",
@@ -285,7 +285,7 @@ private fun TabNotif(
         shape = RoundedCornerShape(14.dp),
         color = Color(0xFFF8F8F8),
         border = null,
-        modifier = modifier.border(1.dp, gradBlancoGris, RoundedCornerShape(14.dp))
+        modifier = modifier.border(0.6.dp, gradBlancoGris, RoundedCornerShape(14.dp))
     ) {
         Box(
             contentAlignment = Alignment.Center,
@@ -319,7 +319,7 @@ private fun NotifRow(item: ItemNotif, onCompanyClick: (CompanyEntity) -> Unit) {
         color = Color(0xFFF8F8F8),
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, gradBlancoGris, RoundedCornerShape(16.dp))
+            .border(0.6.dp, gradBlancoGris, RoundedCornerShape(16.dp))
             .clickable(enabled = item.empresa != null) {
                 item.empresa?.let(onCompanyClick)
             }

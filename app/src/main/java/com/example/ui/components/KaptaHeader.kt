@@ -44,7 +44,7 @@ fun Kapta3DPinLogo(
     Surface(
         shape = RoundedCornerShape(10.dp),
         color = Color.Transparent,
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)),
+        border = BorderStroke(0.6.dp, Color.White.copy(alpha = 0.5f)),
         shadowElevation = 6.dp,
         modifier = Modifier.size(size)
     ) {
@@ -131,7 +131,7 @@ fun KaptaLogoHeader(
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = Color(0xFFFEF3C7),
-                border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f))
+                border = BorderStroke(0.6.dp, Color(0xFFF59E0B).copy(alpha = 0.5f))
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),

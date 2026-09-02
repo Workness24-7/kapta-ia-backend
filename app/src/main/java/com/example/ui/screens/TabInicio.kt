@@ -940,7 +940,7 @@ fun AppLogoHeaderWidget(
             )
             .clip(RoundedCornerShape(24.dp))
             .background(Color(0xFFF8F8F8))
-            .border(1.dp, dockBorderBrush, RoundedCornerShape(24.dp))
+            .border(0.6.dp, dockBorderBrush, RoundedCornerShape(24.dp))
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Row(
@@ -972,7 +972,7 @@ fun AppLogoHeaderWidget(
                         )
                         .clip(CircleShape)
                         .background(Color(0xFFF8F8F8))
-                        .border(1.dp, notifBorderBrush, CircleShape)
+                        .border(0.6.dp, notifBorderBrush, CircleShape)
                         .clickable { onNotificationClick() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -1111,28 +1111,32 @@ private fun GradientSummaryCard(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    val cardShape = RoundedCornerShape(24.dp)
+    val accent = borderColors.getOrElse(1) { MaterialTheme.colorScheme.primary }
+    val borderBrush = Brush.linearGradient(
+        listOf(
+            Color.White,
+            accent.copy(alpha = 0.20f),
+            MaterialTheme.colorScheme.outlineVariant
+        )
+    )
     BoxWithConstraints(
         modifier = modifier
-            .defaultMinSize(minHeight = 122.dp)
-            .shadow(2.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.06f))
-            .clip(RoundedCornerShape(24.dp))
+            .shadow(
+                elevation = 6.dp,
+                shape = cardShape,
+                ambientColor = Color.Black.copy(alpha = 0.04f),
+                spotColor = accent.copy(alpha = 0.20f)
+            )
+            .clip(cardShape)
             .clickable { onClick() }
     ) {
-        val wpx = maxWidth.value * LocalDensity.current.density
-        val hpx = maxHeight.value * LocalDensity.current.density
-        val borderBrush = Brush.linearGradient(
-            colorStops = arrayOf(0f to borderColors[0], 1f to borderColors[1]),
-            start = Offset(0f, 0f),
-            end = Offset(wpx, hpx)
-        )
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(borderBrush)
-                .padding(2.dp)
-                .clip(RoundedCornerShape(22.dp))
-                .background(Color(0xFFF8F8F8))
-                .padding(12.dp)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+                .border(0.8.dp, borderBrush, cardShape)
+                .padding(14.dp)
         ) {
             Row(modifier = Modifier.fillMaxSize()) {
                 // Columna izquierda (60%): contenido de la tarjeta.

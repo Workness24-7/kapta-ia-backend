@@ -132,7 +132,7 @@ fun RedirectionLoginScreen(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(18.dp))
                                     .background(Color.White.copy(alpha = 0.25f))
-                                    .border(1.dp, Color.White.copy(alpha = 0.60f), RoundedCornerShape(18.dp))
+                                    .border(0.6.dp, Color.White.copy(alpha = 0.60f), RoundedCornerShape(18.dp))
                                     .clickable { countryDropdownExpanded = !countryDropdownExpanded }
                             ) {
                                 Row(
@@ -171,7 +171,7 @@ fun RedirectionLoginScreen(
                                         .padding(top = 8.dp)
                                         .clip(RoundedCornerShape(18.dp))
                                         .background(Color.White)
-                                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(18.dp))
+                                        .border(0.6.dp, Color(0xFFE2E8F0), RoundedCornerShape(18.dp))
                                 ) {
                                     countries.forEachIndexed { index, item ->
                                         Row(
@@ -228,7 +228,7 @@ fun RedirectionLoginScreen(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(18.dp))
                             .background(Color.White.copy(alpha = 0.25f))
-                            .border(1.dp, Color.White.copy(alpha = 0.60f), RoundedCornerShape(18.dp))
+                            .border(0.6.dp, Color.White.copy(alpha = 0.60f), RoundedCornerShape(18.dp))
                     ) {
                         Row(
                             modifier = Modifier
@@ -285,7 +285,7 @@ fun RedirectionLoginScreen(
                         Surface(
                             shape = RoundedCornerShape(14.dp),
                             color = Color(0xFFFEE2E2),
-                            border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+                            border = BorderStroke(0.6.dp, Color(0xFFFCA5A5)),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 10.dp)

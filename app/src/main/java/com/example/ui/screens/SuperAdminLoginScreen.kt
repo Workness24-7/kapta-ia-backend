@@ -405,7 +405,7 @@ fun SuperAdminLoginScreen(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(16.dp))
                             .background(Color(0xFFEFF6FF).copy(alpha = 0.80f))
-                            .border(1.dp, Color(0xFFDBEAFE), RoundedCornerShape(16.dp))
+                            .border(0.6.dp, Color(0xFFDBEAFE), RoundedCornerShape(16.dp))
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {

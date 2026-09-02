@@ -247,7 +247,7 @@ fun SuperAdminDashboardScreen(
                             .shadow(8.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.10f))
                             .clip(CircleShape)
                             .background(Color(0xFFF8F8F8))
-                            .border(1.dp, searchBorderBrush, CircleShape)
+                            .border(0.6.dp, searchBorderBrush, CircleShape)
                             .padding(7.dp)
                             .clickable { showGlobalSearchModal = true },
                         contentAlignment = Alignment.Center
@@ -333,7 +333,7 @@ private fun FloatingDockBar(
             .shadow(8.dp, RoundedCornerShape(50), ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.10f))
             .clip(RoundedCornerShape(50))
             .background(Color(0xFFF8F8F8))
-            .border(1.dp, borderBrush, RoundedCornerShape(50))
+            .border(0.6.dp, borderBrush, RoundedCornerShape(50))
             .padding(horizontal = 10.dp, vertical = 7.dp)
     ) {
         Row(

@@ -382,7 +382,7 @@ fun CreateEditCompanyScreen(
                     Surface(
                         shape = CircleShape,
                         color = Color.White.copy(alpha = 0.50f),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.80f)),
+                        border = BorderStroke(0.6.dp, Color.White.copy(alpha = 0.80f)),
                         modifier = Modifier
                             .size(36.dp)
                             .clickable { onBack() }
@@ -402,7 +402,7 @@ fun CreateEditCompanyScreen(
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = Color.White.copy(alpha = 0.40f),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.60f)),
+                        border = BorderStroke(0.6.dp, Color.White.copy(alpha = 0.60f)),
                         modifier = Modifier.clickable { onBack() }
                     ) {
                         Text(
@@ -453,7 +453,7 @@ fun CreateEditCompanyScreen(
                                 .weight(1f)
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(Color.White.copy(alpha = 0.20f))
-                                .border(1.dp, Color.White.copy(alpha = 0.60f), RoundedCornerShape(16.dp))
+                                .border(0.6.dp, Color.White.copy(alpha = 0.60f), RoundedCornerShape(16.dp))
                                 .clickable { logoPickerLauncher.launch("image/*") }
                                 .padding(12.dp),
                             contentAlignment = Alignment.Center
@@ -466,7 +466,7 @@ fun CreateEditCompanyScreen(
                                         modifier = Modifier
                                             .size(44.dp)
                                             .clip(RoundedCornerShape(10.dp))
-                                            .border(1.dp, Color.White, RoundedCornerShape(10.dp)),
+                                            .border(0.6.dp, Color.White, RoundedCornerShape(10.dp)),
                                         contentScale = ContentScale.Crop
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
@@ -488,7 +488,7 @@ fun CreateEditCompanyScreen(
                                 .weight(1f)
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(Color.White.copy(alpha = 0.20f))
-                                .border(1.dp, Color.White.copy(alpha = 0.60f), RoundedCornerShape(16.dp))
+                                .border(0.6.dp, Color.White.copy(alpha = 0.60f), RoundedCornerShape(16.dp))
                                 .clickable { listIconPickerLauncher.launch("image/*") }
                                 .padding(12.dp),
                             contentAlignment = Alignment.Center
@@ -501,7 +501,7 @@ fun CreateEditCompanyScreen(
                                         modifier = Modifier
                                             .size(44.dp)
                                             .clip(CircleShape)
-                                            .border(1.dp, Color.White, CircleShape),
+                                            .border(0.6.dp, Color.White, CircleShape),
                                         contentScale = ContentScale.Crop
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
@@ -523,7 +523,7 @@ fun CreateEditCompanyScreen(
                         Surface(
                             shape = RoundedCornerShape(14.dp),
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
+                            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
                             modifier = Modifier.padding(top = 10.dp).fillMaxWidth()
                         ) {
                             Row(
@@ -548,7 +548,7 @@ fun CreateEditCompanyScreen(
                         Surface(
                             shape = RoundedCornerShape(14.dp),
                             color = primaryColorParsed.copy(alpha = 0.12f),
-                            border = BorderStroke(1.dp, primaryColorParsed.copy(alpha = 0.40f)),
+                            border = BorderStroke(0.6.dp, primaryColorParsed.copy(alpha = 0.40f)),
                             modifier = Modifier.padding(top = 10.dp).fillMaxWidth()
                         ) {
                             Row(
@@ -600,7 +600,7 @@ fun CreateEditCompanyScreen(
                         Surface(
                             shape = RoundedCornerShape(14.dp),
                             color = Color.White.copy(alpha = 0.40f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
                             modifier = Modifier.padding(top = 10.dp).fillMaxWidth()
                         ) {
                             Row(
@@ -1113,7 +1113,7 @@ fun CreateEditCompanyScreen(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                                .border(0.6.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
                                 .padding(10.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1135,7 +1135,7 @@ fun CreateEditCompanyScreen(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
                             .background(Color.White.copy(alpha = 0.22f))
-                            .border(1.dp, Color.White.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
+                            .border(0.6.dp, Color.White.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
                             .padding(12.dp)
                     ) {
                         Column {
@@ -1220,7 +1220,7 @@ fun CreateEditCompanyScreen(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(18.dp))
                             .background(Color.White.copy(alpha = 0.25f))
-                            .border(1.dp, Color.White.copy(alpha = 0.60f), RoundedCornerShape(18.dp))
+                            .border(0.6.dp, Color.White.copy(alpha = 0.60f), RoundedCornerShape(18.dp))
                             .padding(14.dp)
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1354,7 +1354,7 @@ fun CreateEditCompanyScreen(
                         Surface(
                             shape = RoundedCornerShape(14.dp),
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.40f)),
+                            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.40f)),
                             modifier = Modifier.clickable { showOtherModulesSheet = true }
                         ) {
                             Text(
@@ -1370,7 +1370,7 @@ fun CreateEditCompanyScreen(
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                        border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -1475,7 +1475,7 @@ fun CreateEditCompanyScreen(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(16.dp))
                             .background(Color.White.copy(alpha = 0.20f))
-                            .border(1.dp, Color.White.copy(alpha = 0.50f), RoundedCornerShape(16.dp))
+                            .border(0.6.dp, Color.White.copy(alpha = 0.50f), RoundedCornerShape(16.dp))
                             .clickable { showOtherModulesSheet = true }
                             .padding(12.dp)
                     ) {
@@ -1518,7 +1518,7 @@ fun CreateEditCompanyScreen(
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = MaterialTheme.colorScheme.primaryContainer,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.primary)
                         ) {
                             Text(
                                 text = "IA",
@@ -1543,7 +1543,7 @@ fun CreateEditCompanyScreen(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(Color.White.copy(alpha = 0.25f))
-                                .border(1.dp, Color.White.copy(alpha = 0.60f), RoundedCornerShape(16.dp))
+                                .border(0.6.dp, Color.White.copy(alpha = 0.60f), RoundedCornerShape(16.dp))
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Row(
@@ -1778,7 +1778,7 @@ fun CreateEditCompanyScreen(
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
                                     color = primaryColorParsed.copy(alpha = 0.15f),
-                                    border = BorderStroke(1.dp, primaryColorParsed.copy(alpha = 0.40f))
+                                    border = BorderStroke(0.6.dp, primaryColorParsed.copy(alpha = 0.40f))
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -1803,7 +1803,7 @@ fun CreateEditCompanyScreen(
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
                                     color = secondaryColorParsed.copy(alpha = 0.12f),
-                                    border = BorderStroke(1.dp, secondaryColorParsed.copy(alpha = 0.30f))
+                                    border = BorderStroke(0.6.dp, secondaryColorParsed.copy(alpha = 0.30f))
                                 ) {
                                     Text(
                                         text = "KAPTA IA",
@@ -1871,7 +1871,7 @@ fun CreateEditCompanyScreen(
                                     .height(38.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(Color.White)
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                                    .border(0.6.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
                                     .padding(horizontal = 10.dp),
                                 contentAlignment = Alignment.CenterStart
                             ) {
@@ -1888,7 +1888,7 @@ fun CreateEditCompanyScreen(
                                     .height(38.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(Color.White)
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                                    .border(0.6.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
                                     .padding(horizontal = 10.dp),
                                 contentAlignment = Alignment.CenterStart
                             ) {
@@ -1931,10 +1931,10 @@ fun CreateEditCompanyScreen(
                     ) {
                         Text(text = "Paleta Activa:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(primaryColorParsed).border(1.dp, Color.White, CircleShape))
-                            Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(secondaryColorParsed).border(1.dp, Color.White, CircleShape))
-                            Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(tertiaryColorParsed).border(1.dp, Color.White, CircleShape))
-                            Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(neutralColorParsed).border(1.dp, Color.White, CircleShape))
+                            Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(primaryColorParsed).border(0.6.dp, Color.White, CircleShape))
+                            Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(secondaryColorParsed).border(0.6.dp, Color.White, CircleShape))
+                            Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(tertiaryColorParsed).border(0.6.dp, Color.White, CircleShape))
+                            Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(neutralColorParsed).border(0.6.dp, Color.White, CircleShape))
                         }
                     }
                 }
@@ -2066,7 +2066,7 @@ fun CreateEditCompanyScreen(
                             .padding(vertical = 8.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .background(Color.White)
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                            .border(0.6.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
                             .clickable {
                                 enabledModulesMap = enabledModulesMap.toMutableMap().apply {
                                     put(mod.title, !isChecked)
@@ -2159,7 +2159,7 @@ fun CreateEditCompanyScreen(
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = if (isSelected) roleColor else Color.White,
-                            border = BorderStroke(1.dp, if (isSelected) roleColor else MaterialTheme.colorScheme.outlineVariant),
+                            border = BorderStroke(0.6.dp, if (isSelected) roleColor else MaterialTheme.colorScheme.outlineVariant),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(38.dp)
