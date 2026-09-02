@@ -81,6 +81,7 @@ import com.example.ui.KaptaViewModel
 import com.example.ui.components.GlobalSearchModal
 import com.example.ui.components.KaptaLogoHeader
 import com.example.ui.components.SuperAdminScaffold
+import kotlinx.coroutines.delay
 import com.example.ui.components.UserProfileModal
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,6 +116,11 @@ fun SuperAdminDashboardScreen(
     }
     LaunchedEffect(Unit) {
         viewModel.cargarSoportes()
+        // Poll periódico para que las solicitudes de soporte del POS lleguen a notificaciones.
+        while (true) {
+            delay(15000)
+            viewModel.cargarSoportes()
+        }
     }
 
     if (showNotificationsModal) {

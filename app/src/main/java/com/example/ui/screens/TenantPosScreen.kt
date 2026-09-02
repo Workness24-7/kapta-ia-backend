@@ -1718,7 +1718,7 @@ fun TenantPosScreen(
                         onQuickActionGasto = { showExpenseModal = true },
                         isCajero = isCajero,
                         isDemoTenant = isDemoTenant,
-                        salesToday = totalSalesAmount,
+                        salesToday = todaySalesAmount,
                         salesFlow = salesFlow
                     )
 
@@ -3371,7 +3371,7 @@ private fun VentasSectionView(
         val curMonth = todayCal.get(java.util.Calendar.MONTH)
 
         val startOfWeek = java.util.Calendar.getInstance().apply {
-            add(java.util.Calendar.DAY_OF_YEAR, -7)
+            set(java.util.Calendar.DAY_OF_WEEK, java.util.Calendar.MONDAY)
             set(java.util.Calendar.HOUR_OF_DAY, 0)
             set(java.util.Calendar.MINUTE, 0)
             set(java.util.Calendar.SECOND, 0)
@@ -3404,7 +3404,7 @@ private fun VentasSectionView(
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SalesComparisonCard("Ventas Hoy", formatCurrency(salesTodayVal), "Real Hoy", if (salesTodayVal > 0) "+100%" else "0%", true, Modifier.weight(1f))
-            SalesComparisonCard("Esta Semana", formatCurrency(weekVal), "Últimos 7 días", if (weekVal > 0) "+100%" else "0%", true, Modifier.weight(1f))
+            SalesComparisonCard("Esta Semana", formatCurrency(weekVal), "Desde inicio de semana", if (weekVal > 0) "+100%" else "0%", true, Modifier.weight(1f))
             SalesComparisonCard("Este Mes", formatCurrency(monthVal), "Acumulado Mes", if (monthVal > 0) "+100%" else "0%", monthVal >= 0, Modifier.weight(1f))
         }
 
@@ -3835,8 +3835,8 @@ private fun FinanzasSectionView(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Utilidad Neta (Neto)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(formatCurrency(netProfit), fontSize = 24.sp, fontWeight = FontWeight.Black, color = if (netProfit >= 0) Color(0xFF34C759) else Color(0xFFFF453A))
+                Text("Utilidad Neta (Neto)", fontSize = 12.sp, color = Color(0xFF34C759), fontWeight = FontWeight.SemiBold)
+                Text(formatCurrency(netProfit), fontSize = 24.sp, fontWeight = FontWeight.Black, color = Color(0xFF34C759))
                 Text("Cálculo: Ventas (${formatCurrency(totalSales)}) - Gastos (${formatCurrency(totalExpenses)})", fontSize = 11.sp, color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
