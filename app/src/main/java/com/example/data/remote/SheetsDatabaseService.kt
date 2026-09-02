@@ -815,6 +815,53 @@ class SheetsDatabaseService(
         result ?: false
     }
 
+    suspend fun dividirChico(
+        sheetName: String,
+        bolirranaName: String,
+        chico: Int,
+        personas: List<String>
+    ): Boolean = withContext(Dispatchers.IO) {
+        val result = executeWithRetry {
+            val jsonPayload = JSONObject().apply {
+                val effectiveSheet = if (!currentIdEmpresa.isNullOrBlank()) currentIdEmpresa!! else sheetName
+                put("action", "dividir_chico")
+                put("sheetName", effectiveSheet)
+                if (!currentIdEmpresa.isNullOrBlank()) {
+                    put("idEmpresa", currentIdEmpresa)
+                }
+                put("clienteNombre", bolirranaName)
+                put("clientName", bolirranaName)
+                put("chico", chico)
+                put("partes", JSONArray(personas))
+            }
+
+            val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
+            val targetUrl: String = if (!webAppScriptUrl.isNullOrBlank()) webAppScriptUrl!! else APPS_SCRIPT_WEB_APP_URL
+            val request = Request.Builder()
+                .url(targetUrl)
+                .post(body)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (response.code == 429) throw RateLimitException("429 Rate Limit")
+                val responseStr = response.body?.string() ?: ""
+                Log.d(TAG, "dividirChico response code ${response.code}: $responseStr")
+                val isSuccessJson = try {
+                    val json = JSONObject(responseStr)
+                    val status = json.optString("status")
+                    val isSuccess = json.optBoolean("success", false)
+                    val message = json.optString("message").lowercase()
+                    status.equals("success", ignoreCase = true) || isSuccess ||
+                            message.contains("exito") || message.contains("ok")
+                } catch (_: Exception) {
+                    responseStr.lowercase().contains("success") || responseStr.lowercase().contains("ok") || responseStr.lowercase().contains("exito")
+                }
+                response.isSuccessful && (isSuccessJson || responseStr.isBlank())
+            }
+        }
+        result ?: false
+    }
+
     suspend fun registrarSoporte(
         sheetName: String,
         tipoSolicitud: String,

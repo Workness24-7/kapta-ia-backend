@@ -2163,6 +2163,7 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
         pendingTotal: Double,
         tipo: String = "Normal",
         perdedor: String = "",
+        chico: Int = 0,
         onSuccess: () -> Unit = {}
     ) {
         viewModelScope.launch {
@@ -2173,8 +2174,31 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
             val abonoEsTransferencia = abonoMethod.lowercase().contains("transfer") || abonoMethod.lowercase().contains("nequi") || abonoMethod.lowercase().contains("daviplata") || abonoMethod.lowercase().contains("tarjeta")
             val abonoTransfer = if (abonoEsTransferencia) abonoAmount else 0.0
             val abonoCash = if (!abonoEsTransferencia) abonoAmount else 0.0
-            val payload = listOf(dateStr, clientName, productName, quantity, minFlag, abonoTransfer, abonoCash, pendingTotal, tipo, perdedor)
+            val payload = listOf(dateStr, clientName, productName, quantity, minFlag, abonoTransfer, abonoCash, pendingTotal, tipo, perdedor, chico)
             sheetsService.registrarDeudor(sheetName, payload)
+            onSuccess()
+        }
+    }
+
+    fun dividirChico(
+        companyCode: String,
+        bolirranaName: String,
+        chico: Int,
+        personas: List<String>,
+        onSuccess: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val company = repository.getCompanyByCode(companyCode)
+            val sheetName = company?.name ?: companyCode
+            val limpios = personas.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+            if (limpios.isEmpty()) return@launch
+            val ok = sheetsService.dividirChico(
+                sheetName = sheetName,
+                bolirranaName = bolirranaName,
+                chico = chico,
+                personas = limpios
+            )
+            if (ok) showToast("Chico $chico de $bolirranaName dividido entre ${limpios.size} personas")
             onSuccess()
         }
     }
@@ -2216,6 +2240,7 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
                     val fechaCruda = row.getOrNull(0)?.trim() ?: ""
                     val tipo = row.getOrNull(8)?.trim()?.takeIf { it.isNotBlank() } ?: "Normal"
                     val perdedor = row.getOrNull(9)?.trim() ?: ""
+                    val chico = row.getOrNull(10)?.trim()?.toIntOrNull() ?: 0
                     porCliente.getOrPut(cliente) { mutableListOf() }.add(
                         DebtorRawOrderItem(
                             quantity = cantidad,
@@ -2223,7 +2248,8 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
                             unitPrice = total / cantidad,
                             timeStr = extraerHora(fechaCruda),
                             tipo = tipo,
-                            perdedor = perdedor
+                            perdedor = perdedor,
+                            chico = chico
                         )
                     )
                     totales[cliente] = (totales[cliente] ?: 0.0) + (total - abonos).coerceAtLeast(0.0)

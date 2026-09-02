@@ -205,7 +205,8 @@ data class DebtorRawOrderItem(
     val unitPrice: Double,
     val timeStr: String,
     val tipo: String = "Normal",
-    val perdedor: String = ""
+    val perdedor: String = "",
+    val chico: Int = 0
 )
 
 private fun getGroupedProductsForDebtor(
@@ -255,7 +256,9 @@ private fun DebtorsManagementModal(
     onDismiss: () -> Unit,
     onShowToast: (String) -> Unit,
     onPayDebtor: (clientName: String, method: String, amount: Double) -> Unit = { _, _, _ -> },
-    onPerdedorSave: (debtor: DebtorRecord, orderIndex: Int, perdedor: String) -> Unit = { _, _, _ -> }
+    onPerdedorSave: (debtor: DebtorRecord, orderIndex: Int, perdedor: String) -> Unit = { _, _, _ -> },
+    onDividirChico: (bolirranaName: String, chico: Int, personas: List<String>) -> Unit = { _, _, _ -> },
+    allCustomerNames: List<String> = emptyList()
 ) {
     var selectedDebtor by remember { mutableStateOf<DebtorRecord?>(null) }
     var showAddDebtorDialog by remember { mutableStateOf(false) }
@@ -425,7 +428,9 @@ private fun DebtorsManagementModal(
                     }
                 }
             },
-            onPerdedorSave = onPerdedorSave
+            onPerdedorSave = onPerdedorSave,
+            onDividirChico = onDividirChico,
+            allCustomerNames = allCustomerNames
         )
     }
 
@@ -510,7 +515,9 @@ private fun DebtorDetailFloatingModal(
     onDismiss: () -> Unit,
     onPaymentDone: (DebtorRecord, String) -> Unit,
     onAbonoDone: (debtor: DebtorRecord, abonoValue: Double) -> Unit,
-    onPerdedorSave: (debtor: DebtorRecord, orderIndex: Int, perdedor: String) -> Unit = { _, _, _ -> }
+    onPerdedorSave: (debtor: DebtorRecord, orderIndex: Int, perdedor: String) -> Unit = { _, _, _ -> },
+    onDividirChico: (bolirranaName: String, chico: Int, personas: List<String>) -> Unit = { _, _, _ -> },
+    allCustomerNames: List<String> = emptyList()
 ) {
     var isHistoryExpanded by remember { mutableStateOf(false) }
 
@@ -529,9 +536,13 @@ private fun DebtorDetailFloatingModal(
     }
 
     val esBolirrana = debtor.name.startsWith("Bolirrana", ignoreCase = true) || debtor.tipo.equals("Bolirrana", ignoreCase = true)
-    var perdedorInputs by remember {
-        mutableStateOf<List<String>>(if (esBolirrana) debtor.orders.map { it.perdedor } else emptyList())
-    }
+
+    // Navegación bolirrana: chico seleccionado, personas a dividir (autocompletar desde deudores).
+    var selectedChico by remember { mutableStateOf<Int?>(null) }
+    var addPersonName by remember { mutableStateOf("") }
+    var addPersonSuggestions by remember { mutableStateOf<List<String>>(emptyList()) }
+    var personasToDivide by remember { mutableStateOf<List<String>>(emptyList()) }
+    var showPersonDropdown by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -620,48 +631,149 @@ private fun DebtorDetailFloatingModal(
                     Spacer(modifier = Modifier.height(12.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = "Perdedores por chico",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    debtor.orders.forEachIndexed { i, order ->
-                        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                            Text(
-                                text = "${order.quantity}x ${order.productName} (${order.timeStr})",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
+
+                    if (selectedChico == null) {
+                        // Nivel 1: lista de chicos/rondas de la bolirrana.
+                        Text(
+                            text = "Chicos / Rondas",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        val chicos = debtor.orders.groupBy { it.chico }.toSortedMap()
+                        chicos.forEach { (chico, _) ->
+                            val subtotal = debtor.orders.filter { it.chico == chico }.sumOf { it.quantity * it.unitPrice }
+                            Surface(
+                                onClick = { selectedChico = chico },
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp).fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Chico $chico", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
+                                    Text(formatCurrency(subtotal), fontWeight = FontWeight.Black, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
+                                }
+                            }
+                        }
+                    } else {
+                        // Nivel 2: resumen de productos del chico + "¿Quién Paga?".
+                        val chico = selectedChico!!
+                        val chicoOrders = debtor.orders.filter { it.chico == chico }
+                        val chicoTotal = chicoOrders.sumOf { it.quantity * it.unitPrice }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = { selectedChico = null }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Text(" Bolirranas", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+                            Text("Chico $chico • ${formatCurrency(chicoTotal)}", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        chicoOrders.groupBy { it.productName }.forEach { (name, items) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Text(
+                                    text = "${items.sumOf { it.quantity }}x $name",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    modifier = Modifier.weight(1f).padding(end = 8.dp)
+                                )
+                                Text(
+                                    text = formatCurrency(items.sumOf { it.quantity * it.unitPrice }),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Form de personas a dividir (autocompletar sin interrumpir escritura).
+                        personasToDivide.forEach { p ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(p, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.weight(1f))
+                                IconButton(onClick = { personasToDivide = personasToDivide.filterNot { it == p } }, modifier = Modifier.size(28.dp)) {
+                                    Icon(Icons.Default.Close, contentDescription = "Quitar", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+
+                        Box(modifier = Modifier.fillMaxWidth()) {
                             OutlinedTextField(
-                                value = perdedorInputs.getOrElse(i) { "" },
-                                onValueChange = { v ->
-                                    perdedorInputs = perdedorInputs.toMutableList().also { list ->
-                                        if (i < list.size) list[i] = v
-                                    }
+                                value = addPersonName,
+                                onValueChange = {
+                                    addPersonName = it
+                                    showPersonDropdown = true
+                                    addPersonSuggestions = allCustomerNames.filter { n -> n.startsWith(it.trim(), ignoreCase = true) && n !in personasToDivide }.take(5)
                                 },
-                                placeholder = { Text("Perdió: ¿quién?") },
+                                placeholder = { Text("Escribe persona a cargar parte") },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(10.dp)
                             )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Button(
-                        onClick = {
-                            debtor.orders.forEachIndexed { i, order ->
-                                val p = perdedorInputs.getOrElse(i) { "" }.trim()
-                                if (p.isNotEmpty() && p != order.perdedor) onPerdedorSave(debtor, i, p)
+                            DropdownMenu(
+                                expanded = showPersonDropdown && addPersonSuggestions.isNotEmpty(),
+                                onDismissRequest = { showPersonDropdown = false }
+                            ) {
+                                addPersonSuggestions.forEach { suggestion ->
+                                    DropdownMenuItem(
+                                        text = { Text(suggestion, fontSize = 13.sp) },
+                                        onClick = {
+                                            personasToDivide = personasToDivide + suggestion
+                                            addPersonName = ""
+                                            showPersonDropdown = false
+                                        }
+                                    )
+                                }
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Guardar Perdedores", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    val name = addPersonName.trim()
+                                    if (name.isNotEmpty() && name !in personasToDivide) {
+                                        personasToDivide = personasToDivide + name
+                                        addPersonName = ""
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) { Text("+ Agregar", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+
+                            Button(
+                                onClick = {
+                                    onDividirChico(debtor.name, chico, personasToDivide)
+                                    personasToDivide = emptyList()
+                                    addPersonName = ""
+                                    selectedChico = null
+                                },
+                                enabled = personasToDivide.isNotEmpty(),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) { Text("¿Quién Paga?", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White) }
+                        }
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -1891,17 +2003,13 @@ fun TenantPosScreen(
                 )
                 showNuevaVentaView = false
             },
-            onDebeSuccess = { customerName, ticketItems, totalAmount, abonoAmount, abonoMethod, tipoVenta ->
+            onDebeSuccess = { customerName, ticketItems, totalAmount, abonoAmount, abonoMethod, tipoVenta, chico ->
                 val isBolirrana = tipoVenta.startsWith("Bolirrana", ignoreCase = true)
-                val numGames = if (isBolirrana) tipoVenta.substringAfter("(").removeSuffix(")").toIntOrNull() ?: 1 else 1
-                val effectiveCustomer = if (customerName.isBlank()) "Cliente Fiado" else customerName.trim()
-                val gameNames = if (isBolirrana) (1..numGames).map { "Bolirrana $it" } else listOf(effectiveCustomer)
                 val orderTime = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
                 val grouped = ticketItems.entries.groupBy { it.key.id }
                 val currentDate = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date())
+                val effectiveCustomer = if (customerName.isBlank()) "Cliente Fiado" else customerName.trim()
                 val pendingAmount = (totalAmount - abonoAmount).coerceAtLeast(0.0)
-                val pendingPerGame = if (numGames > 0) pendingAmount / numGames else pendingAmount
-                val abonoPerGame = if (numGames > 0) abonoAmount / numGames else abonoAmount
 
                 grouped.forEach { (_, entries) ->
                     val prod = entries.first().key
@@ -1911,8 +2019,9 @@ fun TenantPosScreen(
                     }
                 }
 
-                gameNames.forEach { gameName ->
-                    val gameOrders = mutableListOf<DebtorRawOrderItem>()
+                if (isBolirrana) {
+                    // Bolirrana: la mesa acumula chicos; cada registro lleva su número de chico.
+                    val bolirranaName = customerName
                     grouped.forEach { (_, entries) ->
                         val prod = entries.first().key
                         val qty = entries.sumOf { it.value }
@@ -1920,44 +2029,109 @@ fun TenantPosScreen(
                             val isMinPrice = entries.any { it.key.minPrice > 0 || it.key.hasMinPrice }
                             viewModel.registrarDeudorDirecto(
                                 companyCode = company.code,
-                                clientName = gameName,
+                                clientName = bolirranaName,
                                 productName = prod.name,
                                 quantity = qty,
                                 isMinPrice = isMinPrice,
-                                abonoAmount = abonoPerGame,
-                                abonoMethod = abonoMethod,
+                                abonoAmount = 0.0,
+                                abonoMethod = "",
                                 pendingTotal = qty * prod.price,
-                                tipo = tipoVenta
+                                tipo = tipoVenta,
+                                chico = chico
                             )
-                            gameOrders.add(DebtorRawOrderItem(qty, prod.name, prod.price, orderTime, tipoVenta))
                         }
                     }
-                    val existing = debtorsList.find { it.name.equals(gameName, ignoreCase = true) }
+                    val existing = debtorsList.find { it.name.equals(bolirranaName, ignoreCase = true) }
+                    val newOrders = grouped.values.filter { it.sumOf { e -> e.value } > 0 }.map { entries ->
+                        val prod = entries.first().key
+                        DebtorRawOrderItem(
+                            quantity = entries.sumOf { e -> e.value },
+                            productName = prod.name,
+                            unitPrice = prod.price,
+                            timeStr = orderTime,
+                            tipo = tipoVenta,
+                            chico = chico
+                        )
+                    }
                     if (existing != null) {
                         val idx = debtorsList.indexOf(existing)
                         debtorsList[idx] = existing.copy(
-                            amountOwed = existing.amountOwed + pendingPerGame,
-                            abonoAmount = existing.abonoAmount + abonoPerGame,
+                            amountOwed = existing.amountOwed + pendingAmount,
                             date = currentDate,
-                            orders = existing.orders + gameOrders
+                            orders = existing.orders + newOrders
                         )
                     } else {
                         debtorsList.add(
                             DebtorRecord(
                                 id = (debtorsList.maxOfOrNull { it.id } ?: 0) + 1,
-                                name = gameName,
+                                name = bolirranaName,
                                 phone = "3000000000",
-                                amountOwed = pendingPerGame + abonoPerGame,
-                                abonoAmount = abonoPerGame,
-                                concept = if (isBolirrana) gameName else "Consumo fiado en Nueva Venta",
+                                amountOwed = pendingAmount + abonoAmount,
+                                abonoAmount = abonoAmount,
+                                concept = bolirranaName,
                                 date = currentDate,
-                                orders = gameOrders
+                                orders = newOrders,
+                                tipo = "Bolirrana"
                             )
                         )
                     }
+                    viewModel.showToast("Chico $chico de $bolirranaName registrado. Stock actualizado.")
+                    showNuevaVentaView = false
+                } else {
+                    grouped.forEach { (_, entries) ->
+                        val prod = entries.first().key
+                        val qty = entries.sumOf { it.value }
+                        if (qty > 0) {
+                            val isMinPrice = entries.any { it.key.minPrice > 0 || it.key.hasMinPrice }
+                            viewModel.registrarDeudorDirecto(
+                                companyCode = company.code,
+                                clientName = effectiveCustomer,
+                                productName = prod.name,
+                                quantity = qty,
+                                isMinPrice = isMinPrice,
+                                abonoAmount = abonoAmount,
+                                abonoMethod = abonoMethod,
+                                pendingTotal = qty * prod.price,
+                                tipo = tipoVenta
+                            )
+                        }
+                    }
+                    val existing = debtorsList.find { it.name.equals(effectiveCustomer, ignoreCase = true) }
+                    val orders = grouped.values.filter { it.sumOf { e -> e.value } > 0 }.map { entries ->
+                        val prod = entries.first().key
+                        DebtorRawOrderItem(
+                            quantity = entries.sumOf { e -> e.value },
+                            productName = prod.name,
+                            unitPrice = prod.price,
+                            timeStr = orderTime,
+                            tipo = tipoVenta
+                        )
+                    }
+                    if (existing != null) {
+                        val idx = debtorsList.indexOf(existing)
+                        debtorsList[idx] = existing.copy(
+                            amountOwed = existing.amountOwed + pendingAmount,
+                            abonoAmount = existing.abonoAmount + abonoAmount,
+                            date = currentDate,
+                            orders = existing.orders + orders
+                        )
+                    } else {
+                        debtorsList.add(
+                            DebtorRecord(
+                                id = (debtorsList.maxOfOrNull { it.id } ?: 0) + 1,
+                                name = effectiveCustomer,
+                                phone = "3000000000",
+                                amountOwed = pendingAmount + abonoAmount,
+                                abonoAmount = abonoAmount,
+                                concept = "Consumo fiado en Nueva Venta",
+                                date = currentDate,
+                                orders = orders
+                            )
+                        )
+                    }
+                    viewModel.showToast("Venta fiada a $effectiveCustomer registrada. Stock actualizado.")
+                    showNuevaVentaView = false
                 }
-                viewModel.showToast(if (isBolirrana) "$numGames cuentas de bolirrana creadas. Stock actualizado." else "Venta fiada a $effectiveCustomer registrada. Stock actualizado.")
-                showNuevaVentaView = false
             }
         )
     }
@@ -2338,6 +2512,7 @@ fun TenantPosScreen(
             totalDebtorsAmount = totalDebtorsAmount,
             onDismiss = { showDebtorsModal = false },
             onShowToast = { msg -> viewModel.showToast(msg) },
+            allCustomerNames = debtorsList.map { it.name },
             onPayDebtor = { clientName, method, amount ->
                 val transfer = if (method.contains("Transfer", ignoreCase = true)) amount else 0.0
                 val cash = if (method.contains("Efectivo", ignoreCase = true)) amount else 0.0
@@ -2366,6 +2541,17 @@ fun TenantPosScreen(
                             debtorsList[idx] = debtor.copy(orders = updatedOrders)
                         }
                         viewModel.showToast("Perdedor asignado: $perdedor")
+                    }
+                }
+            },
+            onDividirChico = { bolirranaName, chico, personas ->
+                viewModel.dividirChico(companyCode = company.code, bolirranaName = bolirranaName, chico = chico, personas = personas) {
+                    // Recargar deudores para reflejar las nuevas cuentas divididas.
+                    viewModel.cargarDeudoresExistentes(company.code) { cargados ->
+                        if (cargados.isNotEmpty()) {
+                            debtorsList.clear()
+                            debtorsList.addAll(cargados)
+                        }
                     }
                 }
             }
@@ -4889,7 +5075,7 @@ private fun NuevaVentaView(
     debtorsList: List<DebtorRecord>,
     onClose: () -> Unit,
     onPaymentSuccess: (customerName: String, ticketItems: Map<PosProductEntity, Int>, totalAmount: Double, paymentMethod: String, transferAmount: Double, cashAmount: Double, tipoVenta: String) -> Unit,
-    onDebeSuccess: (customerName: String, ticketItems: Map<PosProductEntity, Int>, totalAmount: Double, abonoAmount: Double, abonoMethod: String, tipoVenta: String) -> Unit,
+    onDebeSuccess: (customerName: String, ticketItems: Map<PosProductEntity, Int>, totalAmount: Double, abonoAmount: Double, abonoMethod: String, tipoVenta: String, chico: Int) -> Unit,
     esBar: Boolean = false
 ) {
     var customerName by remember { mutableStateOf("") }
@@ -4907,20 +5093,38 @@ private fun NuevaVentaView(
     var facturaModo by remember { mutableStateOf("Normal") }
     var numPersonas by remember { mutableStateOf(1) }
     var showPersonasPicker by remember { mutableStateOf(false) }
-    var numBolirranas by remember { mutableStateOf(1) }
     var showAddModo by remember { mutableStateOf(false) }
     var nuevoModoText by remember { mutableStateOf("") }
 
-    fun tipoVentaLabel(): String {
-        return when (facturaModo) {
-            "Bolirrana" -> "Bolirrana($numBolirranas)"
-            "Normal" -> "Normal"
-            else -> "$facturaModo($numPersonas)"
-        }
-    }
     val modosPrefs = remember { context.getSharedPreferences("modos_factura_$companyCode", android.content.Context.MODE_PRIVATE) }
     var modosPersonalizados by remember {
         mutableStateOf(modosPrefs.getString("modos", "")?.split("|")?.filter { it.isNotBlank() } ?: emptyList())
+    }
+
+    // Bolirranas: mesas/espacios físicos de juego, cada una una cuenta deudora.
+    // El selector "1 2 +" agrega la siguiente bolirrana; configuración persistida por negocio.
+    var numBolirranas by remember {
+        mutableStateOf(modosPrefs.getInt("bolirranas", 1).coerceAtLeast(1))
+    }
+    // Chico/ronda actual por bolirrana + último momento de actividad (reset tras 20 min).
+    fun chicoActivo(bolirranaId: Int): Int {
+        val ultima = modosPrefs.getLong("ultima_$bolirranaId", 0L)
+        val guardado = modosPrefs.getInt("chico_$bolirranaId", 1)
+        val inactivo = System.currentTimeMillis() - ultima > 20 * 60 * 1000L
+        return if (inactivo || ultima == 0L) 1 else guardado
+    }
+    fun registrarActividadBolirrana(bolirranaId: Int, chico: Int) {
+        modosPrefs.edit()
+            .putInt("chico_$bolirranaId", chico + 1)
+            .putLong("ultima_$bolirranaId", System.currentTimeMillis())
+            .apply()
+    }
+
+    fun tipoVentaLabel(): String {
+        return when (facturaModo) {
+            "Normal" -> "Normal"
+            else -> "$facturaModo($numPersonas)"
+        }
     }
 
     var paymentTab by remember { mutableStateOf("COMPLETO") }
@@ -5096,7 +5300,59 @@ private fun NuevaVentaView(
                                 Icon(Icons.Default.Add, contentDescription = "Agregar modo de factura", modifier = Modifier.size(18.dp))
                             }
                         }
-                        if (facturaModo != "Normal") {
+                        if (facturaModo == "Bolirrana") {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Bolirrana",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                                (1..numBolirranas).forEach { b ->
+                                    Surface(
+                                        onClick = { numBolirranas = b },
+                                        shape = RoundedCornerShape(20.dp),
+                                        color = if (b == numBolirranas) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                                    ) {
+                                        Text(
+                                            text = "$b",
+                                            color = if (b == numBolirranas) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                                Surface(
+                                    onClick = {
+                                        numBolirranas++
+                                        modosPrefs.edit().putInt("bolirranas", numBolirranas).apply()
+                                    },
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                ) {
+                                    Text(
+                                        text = "+",
+                                        color = Color.White,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "• chico ${chicoActivo(numBolirranas)} activo",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        } else if (facturaModo == "Normal") {
+                            // Sin selector de personas en modo Normal.
+                        } else {
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -5134,43 +5390,6 @@ private fun NuevaVentaView(
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                            }
-                            if (facturaModo == "Bolirrana") {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Text(
-                                        text = "Juegos de bolirrana",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onBackground
-                                    )
-                                    Surface(
-                                        onClick = {
-                                            if (numBolirranas > 1) numBolirranas--
-                                        },
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = MaterialTheme.colorScheme.surfaceVariant
-                                    ) {
-                                        Text("−", modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                    Text("$numBolirranas", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                                    Surface(
-                                        onClick = { numBolirranas++ },
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = MaterialTheme.colorScheme.surfaceVariant
-                                    ) {
-                                        Text("+", modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                    Text(
-                                        text = "• $numBolirranas cuentas deudoras",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
                             }
                         }
                     }
@@ -5222,7 +5441,8 @@ private fun NuevaVentaView(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 14.dp)
                     .padding(bottom = 120.dp)
-            ) {                // 1. CAMPO DE CLIENTE
+            ) {                // 1. CAMPO DE CLIENTE (oculto en modo Bolirrana: la mesa es la cuenta)
+                if (facturaModo != "Bolirrana") {
                 Text(
                     text = "Cliente",
                     fontSize = 14.sp,
@@ -5320,6 +5540,7 @@ private fun NuevaVentaView(
                 }
 
                 Spacer(modifier = Modifier.height(18.dp))
+                }
 
                 // 2. BUSCADOR DE PRODUCTOS
                 Text(
@@ -5554,8 +5775,24 @@ private fun NuevaVentaView(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // BOTONES LADO A LADO: [ Pago ] y [ Debe ]
+                // BOTONES LADO A LADO: [ Pago ] y [ Debe ] (en Bolirrana: [ ¡Jugar! ])
                 val hasActiveItems = cartItems.any { it.quantity > 0 }
+                if (facturaModo == "Bolirrana") {
+                    iOSButton(
+                        text = "¡Jugar!",
+                        onClick = {
+                            val active = cartItems.filter { it.quantity > 0 }.associate { it.product to it.quantity }
+                            if (active.isNotEmpty()) {
+                                val chico = chicoActivo(numBolirranas)
+                                onDebeSuccess("Bolirrana $numBolirranas", active, totalAmount, 0.0, "", "Bolirrana($numBolirranas)", chico)
+                                registrarActividadBolirrana(numBolirranas, chico)
+                                cartItems.forEach { it.quantity = 0 }
+                            }
+                        },
+                        enabled = hasActiveItems,
+                        modifier = Modifier.fillMaxWidth().height(50.dp)
+                    )
+                } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -5573,6 +5810,7 @@ private fun NuevaVentaView(
                         enabled = hasActiveItems,
                         modifier = Modifier.weight(1f).height(50.dp)
                     )
+                }
                 }
             }
         }
@@ -5768,7 +6006,7 @@ private fun NuevaVentaView(
                 Button(
                     onClick = {
                         showDebeModal = false
-                        onDebeSuccess(customerName, activeMap, totalAmount, abonoVal, method, tipoVentaLabel())
+                        onDebeSuccess(customerName, activeMap, totalAmount, abonoVal, method, tipoVentaLabel(), 0)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9F0A)),
                     shape = RoundedCornerShape(10.dp)
