@@ -5116,6 +5116,8 @@ private fun NuevaVentaView(
     var numBolirranas by remember {
         mutableStateOf(modosPrefs.getInt("bolirranas", 1).coerceAtLeast(1))
     }
+    // Bolirrana elegida manualmente para ESTE pedido (null = ninguna, se elige un chip por pedido).
+    var bolirranaSeleccionada by remember { mutableStateOf<Int?>(null) }
     // Chico/ronda actual por bolirrana + último momento de actividad (reset tras 20 min).
     fun chicoActivo(bolirranaId: Int): Int {
         val ultima = modosPrefs.getLong("ultima_$bolirranaId", 0L)
@@ -5325,13 +5327,13 @@ private fun NuevaVentaView(
                                 )
                                 (1..numBolirranas).forEach { b ->
                                     Surface(
-                                        onClick = { numBolirranas = b },
+                                        onClick = { bolirranaSeleccionada = b },
                                         shape = RoundedCornerShape(20.dp),
-                                        color = if (b == numBolirranas) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                                        color = if (b == bolirranaSeleccionada) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
                                     ) {
                                         Text(
                                             text = "$b",
-                                            color = if (b == numBolirranas) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            color = if (b == bolirranaSeleccionada) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold,
                                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
@@ -5342,6 +5344,7 @@ private fun NuevaVentaView(
                                     onClick = {
                                         numBolirranas++
                                         modosPrefs.edit().putInt("bolirranas", numBolirranas).apply()
+                                        bolirranaSeleccionada = numBolirranas
                                     },
                                     shape = RoundedCornerShape(20.dp),
                                     color = MaterialTheme.colorScheme.primary
@@ -5355,7 +5358,7 @@ private fun NuevaVentaView(
                                     )
                                 }
                                 Text(
-                                    text = "• ${numBolirranas} bolirranas",
+                                    text = "• $numBolirranas bolirranas creadas",
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -5812,25 +5815,28 @@ private fun NuevaVentaView(
                 // BOTONES LADO A LADO: [ Pago ] y [ Debe ] (en Bolirrana: [ ¡Jugar! ])
                 val hasActiveItems = cartItems.any { it.quantity > 0 }
                 if (facturaModo == "Bolirrana") {
+                    val mesa = bolirranaSeleccionada
                     Text(
-                        text = "En Bolirrana $numBolirranas • próxima ronda: Chico ${chicoActivo(numBolirranas)}",
+                        text = if (mesa == null) "Selecciona la bolirrana (mesa) para este pedido"
+                                else "En Bolirrana $mesa • próxima ronda: Chico ${chicoActivo(mesa)}",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (mesa == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 6.dp)
                     )
                     iOSButton(
                         text = "¡Jugar!",
                         onClick = {
                             val active = cartItems.filter { it.quantity > 0 }.associate { it.product to it.quantity }
-                            if (active.isNotEmpty()) {
-                                val chico = chicoActivo(numBolirranas)
-                                onDebeSuccess(listOf("Bolirrana $numBolirranas"), active, totalAmount, 0.0, "", "Bolirrana($numBolirranas)", chico)
-                                registrarActividadBolirrana(numBolirranas, chico)
+                            if (mesa != null && active.isNotEmpty()) {
+                                val chico = chicoActivo(mesa)
+                                onDebeSuccess(listOf("Bolirrana $mesa"), active, totalAmount, 0.0, "", "Bolirrana($mesa)", chico)
+                                registrarActividadBolirrana(mesa, chico)
                                 cartItems.forEach { it.quantity = 0 }
+                                bolirranaSeleccionada = null
                             }
                         },
-                        enabled = hasActiveItems,
+                        enabled = hasActiveItems && mesa != null,
                         modifier = Modifier.fillMaxWidth().height(50.dp)
                     )
                 } else {
