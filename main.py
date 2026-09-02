@@ -27,7 +27,7 @@ VERSION_API = "KAPTA-1.0.0"
 TABLAS = {
     "INVENTARIO": {"INICIO": 1, "FILA_INICIO": 3, "COLUMNAS": 13},
     "VENTAS": {"INICIO": 14, "FILA_INICIO": 3, "COLUMNAS": 22},
-    "DEUDORES": {"INICIO": 36, "FILA_INICIO": 3, "COLUMNAS": 10},
+    "DEUDORES": {"INICIO": 36, "FILA_INICIO": 3, "COLUMNAS": 11},
     "GASTOS": {"INICIO": 45, "FILA_INICIO": 3, "COLUMNAS": 14},
     "AUDITORIA_GASTOS": {"INICIO": 60, "FILA_INICIO": 3, "COLUMNAS": 8},
     "USUARIOS": {"INICIO": 69, "FILA_INICIO": 3, "COLUMNAS": 11},
@@ -45,7 +45,7 @@ CABECERAS = {
                "Fecha_Modificacion", "Hora_Modificacion", "Modificado_Por",
                "Fecha_Anulacion", "Hora_Anulacion", "Anulado_Por", "Tipo"],
     "DEUDORES": ["Fecha_Registro", "Nom_Cliente", "Producto", "Cantidad",
-                 "Minimo", "Transferencia", "Efectivo", "Total_Pendiente", "Tipo", "Perdedor"],
+                 "Minimo", "Transferencia", "Efectivo", "Total_Pendiente", "Tipo", "Perdedor", "Chico"],
     "MOVIMIENTOS": ["Id_Movimiento", "Fecha", "Id_Producto", "Nom_Producto",
                     "Tipo", "Cantidad", "Stock_Anterior", "Stock_Nuevo",
                     "Usuario", "Observacion"],
@@ -792,6 +792,68 @@ def action_asignar_perdedor(params):
     return respuesta_error("No se encontró el chico sin perdedor para: " + cliente)
 
 
+def action_dividir_chico(params):
+    """Divide el total pendiente de un chico (col 10) de una bolirrana entre
+    varias personas: crea (o recarga) una cuenta deudora por persona con su
+    parte y borra las filas del chico de la cuenta bolirrana.
+    partes = [nombre1, nombre2, ...] -> reparto equitativo del total del chico.
+    ponytail: reparto equitativo; si se necesitara importe por persona, pasar
+    partes como [{"nombre": x, "monto": y}]."""
+    clave = str(params.get("sheetName") or params.get("idEmpresa") or "").strip()
+    bolirrana = str(params.get("clienteNombre") or params.get("clientName") or "").strip()
+    partes = params.get("partes") or []
+    if isinstance(partes, str):
+        try:
+            partes = json.loads(partes)
+        except (json.JSONDecodeError, TypeError):
+            partes = []
+    try:
+        chico = int(params.get("chico") or 0)
+    except (TypeError, ValueError):
+        chico = 0
+    nombres = [str(p.get("nombre") if isinstance(p, dict) else p or "").strip()
+               for p in partes if p]
+    nombres = [n for n in nombres if n]
+    if not clave:
+        return respuesta_error("No se recibió sheetName.")
+    if not bolirrana:
+        return respuesta_error("No se recibió el nombre de la bolirrana.")
+    if chico <= 0:
+        return respuesta_error("No se recibió el número de chico.")
+    if not nombres:
+        return respuesta_error("No se recibieron personas para dividir.")
+    empresa = resolver_hoja(clave)
+    if not empresa:
+        return respuesta_error("No existe la hoja: " + clave)
+
+    filas_chico = []
+    for (n, d) in sorted(db.leer_tabla(empresa, "deudores"), key=lambda f: f[0]):
+        if str(d[1] or "").strip().lower() != bolirrana.lower():
+            continue
+        if str(d[10] if len(d) > 10 else "").strip() != str(chico):
+            continue
+        filas_chico.append((n, d))
+    if not filas_chico:
+        return respuesta_error("No se encontró el chico " + str(chico) + " de " + bolirrana)
+
+    total = sum(_to_float(d[7]) for (_, d) in filas_chico)
+    share = (total / len(nombres)) if len(nombres) else 0
+    fecha = str(filas_chico[0][1][0] or "").strip()
+    producto = str(filas_chico[0][1][2] or "").strip() or bolirrana
+    for persona in nombres:
+        fila_nueva = db.siguiente_fila_libre(empresa, "deudores", TABLAS["DEUDORES"]["FILA_INICIO"])
+        datos = [fecha, persona, producto + " (Chico " + str(chico) + ")", "1",
+                 "1", 0, 0, _normalizar_numero(share), "Bolirrana", "", chico]
+        db.guardar_fila(empresa, "deudores", fila_nueva,
+                        [str(x) if x is not None else "" for x in datos])
+    for (n, _) in filas_chico:
+        db.borrar_fila(empresa, "deudores", n)
+    return respuesta_success({
+        "bolirrana": bolirrana, "chico": chico, "total": _normalizar_numero(total),
+        "personas": nombres, "parte": _normalizar_numero(share),
+    })
+
+
 def _to_float(v):
     try:
         num = float(v)
@@ -1243,6 +1305,7 @@ POST_ACTIONS = {
     "obtener_todo": action_obtener_todo,
     "pagar_deudor": action_pagar_deudor,
     "asignar_perdedor": action_asignar_perdedor,
+    "dividir_chico": action_dividir_chico,
     "eliminar_empresa": action_eliminar_empresa,
     "actualizar_contrasena": action_actualizar_contrasena,
     "eliminar_usuario": action_eliminar_usuario,
@@ -1320,7 +1383,8 @@ async def endpoint(request: Request):
                              "registrar_inventario", "registrar_venta",
                              "registrar_deudor", "registrar_gasto", "crear_usuario",
                              "pagar_deudor", "obtener_todo", "eliminar_empresa",
-                             "eliminar_usuario", "reportes", "ping"],
+                             "eliminar_usuario", "reportes", "ping",
+                             "asignar_perdedor", "dividir_chico"],
             })
         return respuesta_error("Acción GET no válida: " + action)
 

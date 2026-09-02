@@ -23,7 +23,7 @@ CABECERAS = {
                "Fecha_Modificacion", "Hora_Modificacion", "Modificado_Por",
                "Fecha_Anulacion", "Hora_Anulacion", "Anulado_Por", "Tipo"],
     "deudores": ["Fecha_Registro", "Nom_Cliente", "Producto", "Cantidad",
-                 "Minimo", "Transferencia", "Efectivo", "Total_Pendiente", "Tipo", "Perdedor"],
+                 "Minimo", "Transferencia", "Efectivo", "Total_Pendiente", "Tipo", "Perdedor", "Chico"],
     "movimientos": ["Id_Movimiento", "Fecha", "Id_Producto", "Nom_Producto",
                     "Tipo", "Cantidad", "Stock_Anterior", "Stock_Nuevo",
                     "Usuario", "Observacion"],
