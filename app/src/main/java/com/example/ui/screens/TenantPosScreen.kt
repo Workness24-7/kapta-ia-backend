@@ -58,6 +58,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.InputChip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
@@ -2330,14 +2333,21 @@ fun TenantPosScreen(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // Numeric Quantity input (Compact)
+                                    // Numeric Quantity input (Compact) — selecciona todo al enfocar para reemplazar el 10
+                                    var qtyFocused by remember(rowItem.id) { mutableStateOf(false) }
+                                    val qtyValue = remember(rowItem.quantityText, qtyFocused) {
+                                        if (qtyFocused) TextFieldValue(rowItem.quantityText, TextRange(0, rowItem.quantityText.length))
+                                        else TextFieldValue(rowItem.quantityText)
+                                    }
                                     OutlinedTextField(
-                                        value = rowItem.quantityText,
-                                        onValueChange = { rowItem.quantityText = it },
+                                        value = qtyValue,
+                                        onValueChange = { qtyFocused = true; rowItem.quantityText = it.text },
                                         placeholder = { Text("Cant.", fontSize = 12.sp) },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         singleLine = true,
-                                        modifier = Modifier.width(75.dp),
+                                        modifier = Modifier
+                                            .width(75.dp)
+                                            .onFocusChanged { qtyFocused = it.isFocused },
                                         shape = RoundedCornerShape(10.dp)
                                     )
 
@@ -2365,26 +2375,33 @@ fun TenantPosScreen(
                                                     prod.aliases.contains(rowItem.searchQuery, ignoreCase = true)
                                         }
 
-                                        DropdownMenu(
-                                            expanded = dropdownExpanded && matchingProducts.isNotEmpty(),
-                                            onDismissRequest = { dropdownExpanded = false },
-                                            modifier = Modifier.fillMaxWidth(0.80f)
-                                        ) {
-                                            matchingProducts.take(6).forEach { prod ->
-                                                DropdownMenuItem(
-                                                    text = {
-                                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                                            Text(prod.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                                            Spacer(modifier = Modifier.width(6.dp))
-                                                            Text("(Stock: ${prod.stock})", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+Box(modifier = Modifier.fillMaxWidth().offset(y = 48.dp)) {
+                                            if (dropdownExpanded && matchingProducts.isNotEmpty()) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    color = MaterialTheme.colorScheme.surface,
+                                                    border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Column(modifier = Modifier.padding(4.dp)) {
+                                                        matchingProducts.take(6).forEach { prod ->
+                                                            Text(
+                                                                "${prod.name} (Stock: ${prod.stock})",
+                                                                fontSize = 13.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = MaterialTheme.colorScheme.onSurface,
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .clickable {
+                                                                        rowItem.selectedProduct = prod
+                                                                        rowItem.searchQuery = prod.name
+                                                                        dropdownExpanded = false
+                                                                    }
+                                                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                                                            )
                                                         }
-                                                    },
-                                                    onClick = {
-                                                        rowItem.selectedProduct = prod
-                                                        rowItem.searchQuery = prod.name
-                                                        dropdownExpanded = false
                                                     }
-                                                )
+                                                }
                                             }
                                         }
                                     }
