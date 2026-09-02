@@ -57,6 +57,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.InputChip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
@@ -2003,12 +2004,11 @@ fun TenantPosScreen(
                 )
                 showNuevaVentaView = false
             },
-            onDebeSuccess = { customerName, ticketItems, totalAmount, abonoAmount, abonoMethod, tipoVenta, chico ->
+            onDebeSuccess = { customerNames, ticketItems, totalAmount, abonoAmount, abonoMethod, tipoVenta, chico ->
                 val isBolirrana = tipoVenta.startsWith("Bolirrana", ignoreCase = true)
                 val orderTime = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
                 val grouped = ticketItems.entries.groupBy { it.key.id }
                 val currentDate = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date())
-                val effectiveCustomer = if (customerName.isBlank()) "Cliente Fiado" else customerName.trim()
                 val pendingAmount = (totalAmount - abonoAmount).coerceAtLeast(0.0)
 
                 grouped.forEach { (_, entries) ->
@@ -2021,7 +2021,7 @@ fun TenantPosScreen(
 
                 if (isBolirrana) {
                     // Bolirrana: la mesa acumula chicos; cada registro lleva su número de chico.
-                    val bolirranaName = customerName
+                    val bolirranaName = customerNames.first().trim()
                     grouped.forEach { (_, entries) ->
                         val prod = entries.first().key
                         val qty = entries.sumOf { it.value }
@@ -2078,58 +2078,66 @@ fun TenantPosScreen(
                     viewModel.showToast("Chico $chico de $bolirranaName registrado. Stock actualizado.")
                     showNuevaVentaView = false
                 } else {
-                    grouped.forEach { (_, entries) ->
-                        val prod = entries.first().key
-                        val qty = entries.sumOf { it.value }
-                        if (qty > 0) {
-                            val isMinPrice = entries.any { it.key.minPrice > 0 || it.key.hasMinPrice }
-                            viewModel.registrarDeudorDirecto(
-                                companyCode = company.code,
-                                clientName = effectiveCustomer,
+                    val clientes = customerNames.map { it.trim() }.filter { it.isNotBlank() }
+                    val finalClientes = if (clientes.isEmpty()) listOf("Cliente Fiado") else clientes
+                    val perClientPending = if (finalClientes.size > 0) pendingAmount / finalClientes.size else pendingAmount
+                    val perClientAbono = if (finalClientes.size > 0) abonoAmount / finalClientes.size else abonoAmount
+
+                    finalClientes.forEach { clientName ->
+                        grouped.forEach { (_, entries) ->
+                            val prod = entries.first().key
+                            val qty = entries.sumOf { it.value }
+                            if (qty > 0) {
+                                val isMinPrice = entries.any { it.key.minPrice > 0 || it.key.hasMinPrice }
+                                viewModel.registrarDeudorDirecto(
+                                    companyCode = company.code,
+                                    clientName = clientName,
+                                    productName = prod.name,
+                                    quantity = qty,
+                                    isMinPrice = isMinPrice,
+                                    abonoAmount = perClientAbono,
+                                    abonoMethod = if (perClientAbono > 0) abonoMethod else "",
+                                    pendingTotal = qty * prod.price,
+                                    tipo = tipoVenta
+                                )
+                            }
+                        }
+                        val orders = grouped.values.filter { it.sumOf { e -> e.value } > 0 }.map { entries ->
+                            val prod = entries.first().key
+                            DebtorRawOrderItem(
+                                quantity = entries.sumOf { e -> e.value },
                                 productName = prod.name,
-                                quantity = qty,
-                                isMinPrice = isMinPrice,
-                                abonoAmount = abonoAmount,
-                                abonoMethod = abonoMethod,
-                                pendingTotal = qty * prod.price,
+                                unitPrice = prod.price,
+                                timeStr = orderTime,
                                 tipo = tipoVenta
                             )
                         }
-                    }
-                    val existing = debtorsList.find { it.name.equals(effectiveCustomer, ignoreCase = true) }
-                    val orders = grouped.values.filter { it.sumOf { e -> e.value } > 0 }.map { entries ->
-                        val prod = entries.first().key
-                        DebtorRawOrderItem(
-                            quantity = entries.sumOf { e -> e.value },
-                            productName = prod.name,
-                            unitPrice = prod.price,
-                            timeStr = orderTime,
-                            tipo = tipoVenta
-                        )
-                    }
-                    if (existing != null) {
-                        val idx = debtorsList.indexOf(existing)
-                        debtorsList[idx] = existing.copy(
-                            amountOwed = existing.amountOwed + pendingAmount,
-                            abonoAmount = existing.abonoAmount + abonoAmount,
-                            date = currentDate,
-                            orders = existing.orders + orders
-                        )
-                    } else {
-                        debtorsList.add(
-                            DebtorRecord(
-                                id = (debtorsList.maxOfOrNull { it.id } ?: 0) + 1,
-                                name = effectiveCustomer,
-                                phone = "3000000000",
-                                amountOwed = pendingAmount + abonoAmount,
-                                abonoAmount = abonoAmount,
-                                concept = "Consumo fiado en Nueva Venta",
+                        val existing = debtorsList.find { it.name.equals(clientName, ignoreCase = true) }
+                        if (existing != null) {
+                            val idx = debtorsList.indexOf(existing)
+                            debtorsList[idx] = existing.copy(
+                                amountOwed = existing.amountOwed + perClientPending,
+                                abonoAmount = existing.abonoAmount + perClientAbono,
                                 date = currentDate,
-                                orders = orders
+                                orders = existing.orders + orders
                             )
-                        )
+                        } else {
+                            debtorsList.add(
+                                DebtorRecord(
+                                    id = (debtorsList.maxOfOrNull { it.id } ?: 0) + 1,
+                                    name = clientName,
+                                    phone = "3000000000",
+                                    amountOwed = perClientPending + perClientAbono,
+                                    abonoAmount = perClientAbono,
+                                    concept = "Consumo fiado en Nueva Venta",
+                                    date = currentDate,
+                                    orders = orders
+                                )
+                            )
+                        }
                     }
-                    viewModel.showToast("Venta fiada a $effectiveCustomer registrada. Stock actualizado.")
+                    val toastSuffix = if (finalClientes.size > 1) " (cuenta dividida)" else ""
+                    viewModel.showToast("Venta fiada a ${finalClientes.joinToString(", ")} registrada$toastSuffix. Stock actualizado.")
                     showNuevaVentaView = false
                 }
             }
@@ -5075,11 +5083,13 @@ private fun NuevaVentaView(
     debtorsList: List<DebtorRecord>,
     onClose: () -> Unit,
     onPaymentSuccess: (customerName: String, ticketItems: Map<PosProductEntity, Int>, totalAmount: Double, paymentMethod: String, transferAmount: Double, cashAmount: Double, tipoVenta: String) -> Unit,
-    onDebeSuccess: (customerName: String, ticketItems: Map<PosProductEntity, Int>, totalAmount: Double, abonoAmount: Double, abonoMethod: String, tipoVenta: String, chico: Int) -> Unit,
+    onDebeSuccess: (customerNames: List<String>, ticketItems: Map<PosProductEntity, Int>, totalAmount: Double, abonoAmount: Double, abonoMethod: String, tipoVenta: String, chico: Int) -> Unit,
     esBar: Boolean = false
 ) {
     var customerName by remember { mutableStateOf("") }
     var customerDropdownExpanded by remember { mutableStateOf(false) }
+    // Modos multi-cliente (Dados): acumular varios clientes a repartir.
+    var selectedClients by remember { mutableStateOf<List<String>>(emptyList()) }
 
     var productSearchQuery by remember { mutableStateOf("") }
     var debouncedSearchQuery by remember { mutableStateOf("") }
@@ -5122,7 +5132,7 @@ private fun NuevaVentaView(
 
     fun tipoVentaLabel(): String {
         return when (facturaModo) {
-            "Normal" -> "Normal"
+            "Normal", "Dados" -> facturaModo
             else -> "$facturaModo($numPersonas)"
         }
     }
@@ -5350,8 +5360,8 @@ private fun NuevaVentaView(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                        } else if (facturaModo == "Normal") {
-                            // Sin selector de personas en modo Normal.
+                        } else if (facturaModo == "Normal" || facturaModo == "Dados") {
+                            // Sin selector de personas en Normal/Dados: se escribe el cliente directo.
                         } else {
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(
@@ -5444,12 +5454,29 @@ private fun NuevaVentaView(
             ) {                // 1. CAMPO DE CLIENTE (oculto en modo Bolirrana: la mesa es la cuenta)
                 if (facturaModo != "Bolirrana") {
                 Text(
-                    text = "Cliente",
+                    text = if (facturaModo == "Dados") "Cliente(s) — selecciona varios para repartir" else "Cliente",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Spacer(modifier = Modifier.height(6.dp))
+
+                if (facturaModo == "Dados" && selectedClients.isNotEmpty()) {
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(selectedClients) { cli ->
+                            InputChip(
+                                selected = false,
+                                onClick = { selectedClients = selectedClients.filterNot { it == cli } },
+                                label = { Text(cli, fontSize = 13.sp) },
+                                trailingIcon = { Icon(Icons.Default.Close, contentDescription = "Quitar", modifier = Modifier.size(16.dp)) }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
                 Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
@@ -5501,7 +5528,14 @@ private fun NuevaVentaView(
                                     }
                                 },
                                 onClick = {
-                                    customerName = debtor.name
+                                    if (facturaModo == "Dados") {
+                                        if (debtor.name !in selectedClients) {
+                                            selectedClients = selectedClients + debtor.name
+                                        }
+                                        customerName = ""
+                                    } else {
+                                        customerName = debtor.name
+                                    }
                                     customerDropdownExpanded = false
                                 }
                             )
@@ -5791,7 +5825,7 @@ private fun NuevaVentaView(
                             val active = cartItems.filter { it.quantity > 0 }.associate { it.product to it.quantity }
                             if (active.isNotEmpty()) {
                                 val chico = chicoActivo(numBolirranas)
-                                onDebeSuccess("Bolirrana $numBolirranas", active, totalAmount, 0.0, "", "Bolirrana($numBolirranas)", chico)
+                                onDebeSuccess(listOf("Bolirrana $numBolirranas"), active, totalAmount, 0.0, "", "Bolirrana($numBolirranas)", chico)
                                 registrarActividadBolirrana(numBolirranas, chico)
                                 cartItems.forEach { it.quantity = 0 }
                             }
@@ -5956,6 +5990,15 @@ private fun NuevaVentaView(
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (facturaModo == "Dados" && selectedClients.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Cuenta dividida entre: ${selectedClients.joinToString(", ")}",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF7C3AED)
+                        )
+                    }
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text("Abono Inicial (Opcional):", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
@@ -6013,7 +6056,10 @@ private fun NuevaVentaView(
                 Button(
                     onClick = {
                         showDebeModal = false
-                        onDebeSuccess(customerName, activeMap, totalAmount, abonoVal, method, tipoVentaLabel(), 0)
+                        val clientes = if (facturaModo == "Dados") {
+                            selectedClients.takeIf { it.isNotEmpty() } ?: listOf(customerName)
+                        } else listOf(customerName)
+                        onDebeSuccess(clientes, activeMap, totalAmount, abonoVal, method, tipoVentaLabel(), 0)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9F0A)),
                     shape = RoundedCornerShape(10.dp)
