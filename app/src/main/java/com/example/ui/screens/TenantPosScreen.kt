@@ -1454,6 +1454,53 @@ fun TenantPosScreen(
     }
     val hasCap: (String) -> Boolean = { cap -> isAdminUser || userCapabilities.contains(cap) }
 
+    // Secciones granulares ("Funciones" al crear usuario). Sin secciones explícitas se
+    // derivan del acceso previo para no cambiarle la vista a usuarios ya creados.
+    val sec = remember(currentUser, allowedDockTabs, userCapabilities, isAdminUser, isCajero, isMesero) {
+        com.example.ui.components.decodeSecciones(currentUser?.assignedFunctionsJson)
+            ?: if (isAdminUser) com.example.ui.components.UserSecciones()
+            else com.example.ui.components.UserSecciones(
+                resumen = buildSet {
+                    if (hasCap("ventas")) add("ventas")
+                    if (hasCap("gastos")) add("gastos")
+                    if (hasCap("deudores")) add("deudores")
+                    if (hasCap("clientes")) add("clientes")
+                },
+                acciones = buildSet {
+                    if (hasCap("ventas")) add("venta")
+                    if (hasCap("gastos")) add("gasto")
+                    if (hasCap("inventario") && !isMesero) add("agregar")
+                    if (hasCap("deudores")) add("deudores")
+                },
+                alertas = true,
+                ventasResumen = if (1 in allowedDockTabs) setOf("hoy", "semana", "mes") else emptySet(),
+                ventasRanking = 1 in allowedDockTabs,
+                ventasVerMas = 1 in allowedDockTabs,
+                ventasVerInventario = 1 in allowedDockTabs,
+                finPdf = 2 in allowedDockTabs,
+                finFiltros = if (2 in allowedDockTabs) setOf("dia", "mes", "rango") else emptySet(),
+                finVentas = 2 in allowedDockTabs,
+                finGastos = 2 in allowedDockTabs,
+                finRegistrar = 2 in allowedDockTabs,
+                invCarga = 3 in allowedDockTabs && !isCajero,
+                invMovimientos = 3 in allowedDockTabs && !isCajero,
+                invCrear = 3 in allowedDockTabs && !isCajero,
+                invEditar = 3 in allowedDockTabs && !isCajero,
+                invEliminar = 3 in allowedDockTabs && !isCajero,
+                invGuardar = 3 in allowedDockTabs && !isCajero,
+                invHacer = 3 in allowedDockTabs && !isCajero,
+                invLectura = isCajero
+            )
+    }
+    // Lectura anula edición en inventario.
+    val invCarga = sec.invCarga && !sec.invLectura
+    val invMovimientos = sec.invMovimientos && !sec.invLectura
+    val invCrear = sec.invCrear && !sec.invLectura
+    val invEditar = sec.invEditar && !sec.invLectura
+    val invEliminar = sec.invEliminar && !sec.invLectura
+    val invGuardar = sec.invGuardar && !sec.invLectura
+    val invHacer = sec.invHacer && !sec.invLectura
+
     androidx.compose.runtime.LaunchedEffect(company.code, company.id) {
         viewModel.ensureDefaultProductsForCompany(company.code)
         viewModel.ensureDefaultUsersForCompany(company.code, company.id)
@@ -1810,7 +1857,10 @@ fun TenantPosScreen(
                             }
                         },
                         hasCap = hasCap,
-                        isMesero = isMesero
+                        isMesero = isMesero,
+                        resumenSel = sec.resumen,
+                        accionesSel = sec.acciones,
+                        alertasOn = sec.alertas
                     )
 
                     // BOTON 2: Ventas (Resumen comparativo & Ranking por categoría)
@@ -1841,7 +1891,11 @@ fun TenantPosScreen(
                         isCajero = isCajero,
                         isDemoTenant = isDemoTenant,
                         salesToday = todaySalesAmount,
-                        salesFlow = salesFlow
+                        salesFlow = salesFlow,
+                        ventasResumenSel = sec.ventasResumen,
+                        rankingOn = sec.ventasRanking,
+                        verMasOn = sec.ventasVerMas,
+                        verInventarioOn = sec.ventasVerInventario
                     )
 
                     // BOTON 3: Finanzas (Información financiera y control de gastos detallados)
@@ -1855,7 +1909,12 @@ fun TenantPosScreen(
                         onEndDateChange = { financesEndDate = it },
                         salesList = cashSalesFlow,
                         expensesList = expensesList,
-                        onAddExpenseClick = { showExpenseModal = true }
+                        onAddExpenseClick = { showExpenseModal = true },
+                        pdfOn = sec.finPdf,
+                        filtrosSel = sec.finFiltros,
+                        finVentasOn = sec.finVentas,
+                        finGastosOn = sec.finGastos,
+                        finRegistrarOn = sec.finRegistrar
                     )
 
                     // BOTON 4: Inventario (Lista por categoría, Guardar Inventario & Hacer Inventario)
@@ -1883,7 +1942,15 @@ fun TenantPosScreen(
                             viewModel.showToast("Base de inventario guardada exitosamente")
                         },
                         onHacerInventario = { showHacerInventarioModal = true },
-                        isCajero = isCajero
+                        isCajero = isCajero,
+                        invCarga = invCarga,
+                        invMovimientos = invMovimientos,
+                        invCrear = invCrear,
+                        invEditar = invEditar,
+                        invEliminar = invEliminar,
+                        invGuardar = invGuardar,
+                        invHacer = invHacer,
+                        invLectura = sec.invLectura
                     )
                 }
             }
@@ -3153,7 +3220,10 @@ private fun InicioDashboardView(
     onQuickActionDeudores: () -> Unit,
     onGoToFinanzasDia: () -> Unit,
     hasCap: (String) -> Boolean = { true },
-    isMesero: Boolean = false
+    isMesero: Boolean = false,
+    resumenSel: Set<String> = setOf("ventas", "gastos", "deudores", "clientes"),
+    accionesSel: Set<String> = setOf("venta", "gasto", "agregar", "deudores"),
+    alertasOn: Boolean = true
 ) {
     Column(
         modifier = Modifier
@@ -3162,89 +3232,108 @@ private fun InicioDashboardView(
             .padding(horizontal = 16.dp, vertical = 14.dp)
             .padding(bottom = 90.dp)
     ) {
-        // RESUMEN GENERAL (4 KPI Cards)
-        iOSLargeTitle(title = "Resumen General del Negocio")
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (hasCap("ventas")) DashboardKpiCard(
-                title = "Ventas del Día",
-                value = formatCurrency(salesToday),
-                subtitle = "En tiempo real (Clic)",
-                accentColor = Color(0xFF34C759),
-                icon = Icons.Default.TrendingUp,
-                onClick = onGoToFinanzasDia,
-                modifier = Modifier.weight(1f)
-            )
-            if (hasCap("gastos")) DashboardKpiCard(
-                title = "Gastos del Mes",
-                value = formatCurrency(monthlyExpenses),
-                subtitle = "Total acumulado",
-                accentColor = Color(0xFFFF453A),
-                icon = Icons.Default.AccountBalanceWallet,
-                modifier = Modifier.weight(1f)
-            )
+        // RESUMEN GENERAL (reajuste proporcionado: máx 2 por línea, la impar se estira).
+        val tarjetasResumen = listOf("ventas", "gastos", "deudores", "clientes").filter { key ->
+            key in resumenSel && hasCap(key)
         }
+        if (tarjetasResumen.isNotEmpty()) {
+            iOSLargeTitle(title = "Resumen General del Negocio")
+            Spacer(modifier = Modifier.height(10.dp))
 
-        Spacer(modifier = Modifier.height(10.dp))
+            tarjetasResumen.chunked(2).forEach { fila ->
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    fila.forEach { key ->
+                        when (key) {
+                            "ventas" -> DashboardKpiCard(
+                                title = "Ventas del Día",
+                                value = formatCurrency(salesToday),
+                                subtitle = "En tiempo real (Clic)",
+                                accentColor = Color(0xFF34C759),
+                                icon = Icons.Default.TrendingUp,
+                                onClick = onGoToFinanzasDia,
+                                modifier = Modifier.weight(1f)
+                            )
+                            "gastos" -> DashboardKpiCard(
+                                title = "Gastos del Mes",
+                                value = formatCurrency(monthlyExpenses),
+                                subtitle = "Total acumulado",
+                                accentColor = Color(0xFFFF453A),
+                                icon = Icons.Default.AccountBalanceWallet,
+                                modifier = Modifier.weight(1f)
+                            )
+                            "deudores" -> DashboardKpiCard(
+                                title = "Deudores",
+                                value = "$debtorsCount personas",
+                                subtitle = "Total: ${formatCurrency(debtorsAmount)} (Clic)",
+                                accentColor = Color(0xFFFF9F0A),
+                                icon = Icons.Default.Person,
+                                onClick = onQuickActionDeudores,
+                                modifier = Modifier.weight(1f)
+                            )
+                            "clientes" -> DashboardKpiCard(
+                                title = "Clientes Activos",
+                                value = "$activeClientsCount personas",
+                                subtitle = "En establecimiento",
+                                accentColor = MaterialTheme.colorScheme.primary,
+                                icon = Icons.Default.ShoppingCart,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+            }
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (hasCap("deudores")) DashboardKpiCard(
-                title = "Deudores",
-                value = "$debtorsCount personas",
-                subtitle = "Total: ${formatCurrency(debtorsAmount)} (Clic)",
-                accentColor = Color(0xFFFF9F0A),
-                icon = Icons.Default.Person,
-                onClick = onQuickActionDeudores,
-                modifier = Modifier.weight(1f)
-            )
-            if (hasCap("clientes")) DashboardKpiCard(
-                title = "Clientes Activos",
-                value = "$activeClientsCount personas",
-                subtitle = "En establecimiento",
-                accentColor = MaterialTheme.colorScheme.primary,
-                icon = Icons.Default.ShoppingCart,
-                modifier = Modifier.weight(1f)
-            )
+            Spacer(modifier = Modifier.height(10.dp))
         }
-
-        Spacer(modifier = Modifier.height(20.dp))
 
         // ACCIONES RÁPIDAS EN INICIO (tarjetas premium degradadas)
-        iOSSectionHeader(text = "Acciones Rápidas")
-        Spacer(modifier = Modifier.height(10.dp))
-
         val accionesRapidas = listOf(
             AccionRapida("Venta", Icons.Default.ShoppingCart, Color(0xFF315AA8), Color(0xFF416FC2), onQuickActionVenta),
             AccionRapida("Gasto", Icons.Default.AccountBalanceWallet, Color(0xFF5428B8), Color(0xFF7046D4), onQuickActionGasto),
             AccionRapida("Agregar", Icons.Default.Add, Color(0xFF18A94F), Color(0xFF32C96A), onQuickActionAddStock),
             AccionRapida("Deudores", Icons.Default.Person, Color(0xFFE58A05), Color(0xFFF2A01A), onQuickActionDeudores)
         ).filterNotNull().filter { accion ->
-            if (isMesero && accion.titulo == "Agregar") false
-            else when (accion.titulo) {
-                "Venta" -> hasCap("ventas")
-                "Gasto" -> hasCap("gastos")
-                "Agregar" -> hasCap("inventario")
-                "Deudores" -> hasCap("deudores")
-                else -> true
+            val clave = when (accion.titulo) {
+                "Venta" -> "venta"
+                "Gasto" -> "gasto"
+                "Agregar" -> "agregar"
+                "Deudores" -> "deudores"
+                else -> ""
             }
+            clave in accionesSel && (
+                if (isMesero && accion.titulo == "Agregar") false
+                else when (accion.titulo) {
+                    "Venta" -> hasCap("ventas")
+                    "Gasto" -> hasCap("gastos")
+                    "Agregar" -> hasCap("inventario")
+                    "Deudores" -> hasCap("deudores")
+                    else -> true
+                }
+            )
         }
 
-        // Fila única 1x4 en cualquier ancho
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            accionesRapidas.forEach { accion ->
-                QuickActionCard(
-                    title = accion.titulo,
-                    icon = accion.icono,
-                    gradient = listOf(accion.desde, accion.hasta),
-                    onClick = accion.accion,
-                    modifier = Modifier.weight(1f)
-                )
+        if (accionesRapidas.isNotEmpty()) {
+            iOSSectionHeader(text = "Acciones Rápidas")
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Fila única en cualquier ancho (reajuste proporcionado por peso).
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                accionesRapidas.forEach { accion ->
+                    QuickActionCard(
+                        title = accion.titulo,
+                        icon = accion.icono,
+                        gradient = listOf(accion.desde, accion.hasta),
+                        onClick = accion.accion,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
+
+            Spacer(modifier = Modifier.height(22.dp))
         }
 
-        Spacer(modifier = Modifier.height(22.dp))
-
+        if (alertasOn) {
         // ALERTAS EN INICIO: tarjetas de producto en grid responsive
         iOSSectionHeader(text = "Alertas de Stock")
         Text(
@@ -3317,6 +3406,7 @@ private fun InicioDashboardView(
                 }
             }
         }
+        } // alertasOn
     }
 }
 
@@ -3517,7 +3607,11 @@ private fun VentasSectionView(
     isCajero: Boolean = false,
     isDemoTenant: Boolean = false,
     salesToday: Double = 0.0,
-    salesFlow: List<PosSaleEntity> = emptyList()
+    salesFlow: List<PosSaleEntity> = emptyList(),
+    ventasResumenSel: Set<String> = setOf("hoy", "semana", "mes"),
+    rankingOn: Boolean = true,
+    verMasOn: Boolean = true,
+    verInventarioOn: Boolean = true
 ) {
     Column(
         modifier = Modifier
@@ -3567,15 +3661,27 @@ private fun VentasSectionView(
         val todayFormattedStr = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(todayCal.time)
         android.util.Log.d("KAPTA_DIAG", "DASHBOARD: fecha_actual=$todayFormattedStr, cantidad_ventas=${cashSales.size}, ventas_del_dia=$salesTodayVal")
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SalesComparisonCard("Ventas Hoy", formatCurrency(salesTodayVal), "Real Hoy", if (salesTodayVal > 0) "+100%" else "0%", true, Modifier.weight(1f))
-            SalesComparisonCard("Esta Semana", formatCurrency(weekVal), "Desde inicio de semana", if (weekVal > 0) "+100%" else "0%", true, Modifier.weight(1f))
-            SalesComparisonCard("Este Mes", formatCurrency(monthVal), "Acumulado Mes", if (monthVal > 0) "+100%" else "0%", monthVal >= 0, Modifier.weight(1f))
+        // Comparativas de Ventas (reajuste proporcionado: máx 3 por línea, la impar se estira).
+        val tarjetasVentas = listOf("hoy", "semana", "mes").filter { it in ventasResumenSel }
+        if (tarjetasVentas.isNotEmpty()) {
+            tarjetasVentas.chunked(3).forEach { fila ->
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    fila.forEach { key ->
+                        when (key) {
+                            "hoy" -> SalesComparisonCard("Ventas Hoy", formatCurrency(salesTodayVal), "Real Hoy", if (salesTodayVal > 0) "+100%" else "0%", true, Modifier.weight(1f))
+                            "semana" -> SalesComparisonCard("Esta Semana", formatCurrency(weekVal), "Desde inicio de semana", if (weekVal > 0) "+100%" else "0%", true, Modifier.weight(1f))
+                            "mes" -> SalesComparisonCard("Este Mes", formatCurrency(monthVal), "Acumulado Mes", if (monthVal > 0) "+100%" else "0%", monthVal >= 0, Modifier.weight(1f))
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
-
         // Ranking de Productos más Vendidos por Categoría
+        if (rankingOn) {
         iOSSectionHeader(text = "Ranking de Productos Más Vendidos")
         Spacer(modifier = Modifier.height(15.dp))
 
@@ -3720,7 +3826,7 @@ private fun VentasSectionView(
             }
         }
 
-        if (rankingList.size > 5) {
+        if (verMasOn && rankingList.size > 5) {
             Spacer(modifier = Modifier.height(10.dp))
             Button(
                 onClick = { mostrarTodoRanking = !mostrarTodoRanking },
@@ -3731,7 +3837,9 @@ private fun VentasSectionView(
                 Text(if (mostrarTodoRanking) "Ver menos" else "Ver más", color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
+        } // rankingOn
 
+        if (verInventarioOn) {
         Spacer(modifier = Modifier.height(24.dp))
 
         // Botón Inferior: "Ver Inventario" (navy oscuro premium)
@@ -3747,6 +3855,7 @@ private fun VentasSectionView(
                 Text("Ver Inventario Completo", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
             }
         }
+        } // verInventarioOn
     }
 }
 
@@ -3804,7 +3913,12 @@ private fun FinanzasSectionView(
     onEndDateChange: (String) -> Unit,
     salesList: List<PosSaleEntity>,
     expensesList: List<BusinessExpense>,
-    onAddExpenseClick: () -> Unit
+    onAddExpenseClick: () -> Unit,
+    pdfOn: Boolean = true,
+    filtrosSel: Set<String> = setOf("dia", "mes", "rango"),
+    finVentasOn: Boolean = true,
+    finGastosOn: Boolean = true,
+    finRegistrarOn: Boolean = true
 ) {
     val context = LocalContext.current
 
@@ -3912,6 +4026,7 @@ private fun FinanzasSectionView(
             }
 
             // BOTÓN DESTACADO EXPORTAR A PDF
+            if (pdfOn) {
             Button(
                 onClick = {
                     val pdfSales = filteredSales.map { sale ->
@@ -3949,16 +4064,26 @@ private fun FinanzasSectionView(
                     Text("Exportar a PDF", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
+            } // pdfOn
         }
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // FILTROS MENÚ: "Día", "Mes", "Rango de fechas"
+        // FILTROS MENÚ (configurables por usuario: Día, Mes, Rango de fechas)
+        val filtrosOpts = listOf("dia" to "Día", "mes" to "Mes", "rango" to "Rango de fechas")
+            .filter { it.first in filtrosSel }
+        androidx.compose.runtime.LaunchedEffect(filtrosOpts) {
+            if (filtrosOpts.isNotEmpty() && filtrosOpts.none { it.second == activeFilter }) {
+                onFilterChange(filtrosOpts.first().second)
+            }
+        }
+        if (filtrosOpts.isNotEmpty()) {
         iOSSegmented(
-            options = listOf("Día", "Mes", "Rango de fechas"),
-            selectedIndex = listOf("Día", "Mes", "Rango de fechas").indexOf(activeFilter),
-            onSelect = { idx -> onFilterChange(listOf("Día", "Mes", "Rango de fechas")[idx]) }
+            options = filtrosOpts.map { it.second },
+            selectedIndex = filtrosOpts.map { it.second }.indexOf(activeFilter).coerceAtLeast(0),
+            onSelect = { idx -> onFilterChange(filtrosOpts.map { it.second }[idx]) }
         )
+        }
 
         if (activeFilter == "Rango de fechas") {
             Spacer(modifier = Modifier.height(10.dp))
@@ -4010,8 +4135,9 @@ private fun FinanzasSectionView(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // SECCIÓN 1: DETALLE DE VENTAS
-        iOSSectionHeader(text = "1. Ventas en el Periodo")
+        // SECCIÓN 1: VENTAS
+        if (finVentasOn) {
+        iOSSectionHeader(text = "1. Ventas")
         Spacer(modifier = Modifier.height(8.dp))
 
         if (filteredSales.isEmpty()) {
@@ -4065,16 +4191,19 @@ private fun FinanzasSectionView(
                 }
             }
         }
+        } // finVentasOn
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // SECCIÓN 2: DETALLE DE GASTOS
+        // SECCIÓN 2: GASTOS
+        if (finGastosOn) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            iOSSectionHeader(text = "2. Gastos en el Periodo")
+            iOSSectionHeader(text = "2. Gastos")
+            if (finRegistrarOn) {
             Button(
                 onClick = onAddExpenseClick,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
@@ -4084,6 +4213,7 @@ private fun FinanzasSectionView(
             ) {
                 Text("+ Registrar Gasto", fontSize = 11.sp, color = Color.White)
             }
+            } // finRegistrarOn
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -4130,6 +4260,7 @@ private fun FinanzasSectionView(
                 }
             }
         }
+        } // finGastosOn
     }
 }
 
@@ -4149,7 +4280,15 @@ private fun InventarioSectionView(
     onDeleteProduct: (Int) -> Unit,
     onSaveInventoryBaseline: () -> Unit,
     onHacerInventario: () -> Unit,
-    isCajero: Boolean = false
+    isCajero: Boolean = false,
+    invCarga: Boolean = true,
+    invMovimientos: Boolean = true,
+    invCrear: Boolean = true,
+    invEditar: Boolean = true,
+    invEliminar: Boolean = true,
+    invGuardar: Boolean = true,
+    invHacer: Boolean = true,
+    invLectura: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val importLauncher = rememberLauncherForActivityResult(
@@ -4195,18 +4334,19 @@ private fun InventarioSectionView(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 iOSLargeTitle(
-                    title = if (isCajero) "Inventario de Productos (Solo Lectura)" else "Inventario de Productos",
+                    title = if (invLectura) "Inventario de Productos (Solo Lectura)" else "Inventario de Productos",
                     subtitle = "Stock Actual y Precio C/U"
                 )
             }
         }
 
-        if (!isCajero) {
+        if (invCarga || invMovimientos || invCrear) {
             Spacer(modifier = Modifier.height(10.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
             ) {
+                if (invCarga) {
                 OutlinedButton(
                     onClick = { importLauncher.launch("*/*") },
                     shape = RoundedCornerShape(10.dp),
@@ -4214,6 +4354,8 @@ private fun InventarioSectionView(
                 ) {
                     Text("Carga Masiva", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
+                }
+                if (invMovimientos) {
                 OutlinedButton(
                     onClick = { showMovimientos = true },
                     shape = RoundedCornerShape(10.dp),
@@ -4221,12 +4363,15 @@ private fun InventarioSectionView(
                 ) {
                     Text("Movimientos", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
+                }
+                if (invCrear) {
                 Button(
                     onClick = onNewProduct,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Text("+ Producto", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                }
                 }
             }
         }
@@ -4350,14 +4495,18 @@ private fun InventarioSectionView(
 
                     Column(horizontalAlignment = Alignment.End) {
                         iOSPill(text = "${formatCurrency(prod.price)} C/U")
-                        if (!isCajero) {
+                        if (invEditar || invEliminar) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Row {
+                                if (invEditar) {
                                 IconButton(onClick = { onEditProduct(prod) }, modifier = Modifier.size(28.dp)) {
                                     Icon(imageVector = Icons.Default.Edit, contentDescription = "Editar", tint = MaterialTheme.colorScheme.primary)
                                 }
+                                }
+                                if (invEliminar) {
                                 IconButton(onClick = { onDeleteProduct(prod.id) }, modifier = Modifier.size(28.dp)) {
                                     Icon(imageVector = Icons.Default.Delete, contentDescription = "Eliminar", tint = Color(0xFFFF453A))
+                                }
                                 }
                             }
                         }
@@ -4373,7 +4522,7 @@ private fun InventarioSectionView(
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             rowItems.forEach { prod ->
                                 Box(modifier = Modifier.weight(1f)) {
-                                    InventoryProductCard(product = prod, isCajero = isCajero, onEditProduct = onEditProduct, onDeleteProduct = onDeleteProduct)
+                                    InventoryProductCard(product = prod, isCajero = !invEditar && !invEliminar, onEditProduct = onEditProduct, onDeleteProduct = onDeleteProduct, puedeEditar = invEditar, puedeEliminar = invEliminar)
                                 }
                             }
                             repeat(columns - rowItems.size) {
@@ -4385,7 +4534,7 @@ private fun InventarioSectionView(
             }
         }
 
-        if (!isCajero) {
+        if (invGuardar || invHacer) {
             Spacer(modifier = Modifier.height(24.dp))
 
             // DOS BOTONES INFERIORES: "Guardar inventario" & "Hacer Inventario"
@@ -4394,6 +4543,7 @@ private fun InventarioSectionView(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // Botón 1: "Guardar inventario"
+                if (invGuardar) {
                 Button(
                     onClick = onSaveInventoryBaseline,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
@@ -4406,8 +4556,10 @@ private fun InventarioSectionView(
                         Text("Guardar Inventario", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }
+                }
 
                 // Botón 2: "Hacer Inventario"
+                if (invHacer) {
                 Button(
                     onClick = onHacerInventario,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759)),
@@ -4419,6 +4571,7 @@ private fun InventarioSectionView(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Hacer Inventario", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
+                }
                 }
             }
         }
@@ -4646,7 +4799,9 @@ private fun InventoryProductCard(
     product: PosProductEntity,
     isCajero: Boolean,
     onEditProduct: (PosProductEntity) -> Unit,
-    onDeleteProduct: (Int) -> Unit
+    onDeleteProduct: (Int) -> Unit,
+    puedeEditar: Boolean = !isCajero,
+    puedeEliminar: Boolean = !isCajero
 ) {
     GlassCard(shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(10.dp)) {
@@ -4681,13 +4836,17 @@ private fun InventoryProductCard(
                 Text("Stock: ${product.stock}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (product.stock <= 15) Color(0xFFFF453A) else Color(0xFF34C759))
             }
             Spacer(modifier = Modifier.height(10.dp))
-            if (!isCajero) {
+            if (puedeEditar || puedeEliminar) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (puedeEditar) {
                     Button(onClick = { onEditProduct(product) }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f).height(36.dp)) {
                         Text("Editar", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
+                    }
+                    if (puedeEliminar) {
                     Button(onClick = { onDeleteProduct(product.id) }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF453A)), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f).height(36.dp)) {
                         Text("Eliminar", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
                     }
                 }
             }

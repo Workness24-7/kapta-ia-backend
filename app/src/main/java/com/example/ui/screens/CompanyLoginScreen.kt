@@ -201,12 +201,14 @@ fun CompanyLoginScreen(
         } else {
             loginErrorMsg = null
             scope.launch {
+                // Si escribió usuario/nombre en vez de correo, se resuelve al correo real.
+                val correoLogin = viewModel.resolveLoginEmail(cCode, uVal)
                 var online = hayConexion(context)
                 if (online) {
                     val resultado = viewModel.loginWithServer(
                         pais = selectedCountry.code,
                         codigo = cCode,
-                        correo = uVal,
+                        correo = correoLogin,
                         password = pVal
                     )
                     Log.d("CompanyLoginScreen", "Server login idEmpresa: ${resultado.idEmpresa}")
@@ -363,7 +365,7 @@ fun CompanyLoginScreen(
                     OutlinedTextField(
                         value = userInput,
                         onValueChange = { userInput = it },
-                        label = { Text("Correo", fontFamily = customFontFamily) },
+                        label = { Text("Correo o usuario", fontFamily = customFontFamily) },
                         leadingIcon = { Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = primaryBrandColor) },
                         singleLine = true,
                         shape = RoundedCornerShape(18.dp),

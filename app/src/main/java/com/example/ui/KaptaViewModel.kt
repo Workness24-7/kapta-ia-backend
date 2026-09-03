@@ -1317,9 +1317,10 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         // Paso 2: Validación (Hoja de Negocio - Tabla Usuarios específica)
+        // Acepta correo, usuario o nombre del empleado.
         val dbUsers = repository.getUsersByCompanyCodeAndId(companyCode, company.id).firstOrNull() ?: emptyList()
         var match = dbUsers.find { 
-            (it.username.equals(uInput, ignoreCase = true) || it.email.equals(uInput, ignoreCase = true)) &&
+            (it.username.equals(uInput, ignoreCase = true) || it.email.equals(uInput, ignoreCase = true) || it.name.equals(uInput, ignoreCase = true)) &&
             verificarContrasena(pInput, it.password)
         }
 
@@ -1350,6 +1351,22 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         return match
+    }
+
+    /**
+     * Resuelve el correo real a partir de lo escrito en el login (correo, usuario o
+     * nombre del empleado) usando los usuarios cacheados en Room. El servidor
+     * valida por correo, así que esto permite entrar con el usuario en línea.
+     */
+    suspend fun resolveLoginEmail(companyCode: String, input: String): String {
+        val u = input.trim()
+        if (u.isBlank() || u.contains("@")) return u
+        return try {
+            val users = repository.getUsersByCompanyCode(companyCode).firstOrNull() ?: emptyList()
+            users.find {
+                it.username.equals(u, ignoreCase = true) || it.name.equals(u, ignoreCase = true)
+            }?.email?.ifBlank { u } ?: u
+        } catch (_: Exception) { u }
     }
 
     // ponytail: espejo del hash PBKDF2 del backend; cachés locales con texto plano legado siguen validando
