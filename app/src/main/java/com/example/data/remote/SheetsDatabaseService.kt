@@ -720,6 +720,67 @@ class SheetsDatabaseService(
     suspend fun registrarGasto(sheetName: String, expenseData: List<Any>): Boolean =
         postRowToAppsScript(sheetName = sheetName, data = expenseData, tableName = "Gastos", action = "registrar_gasto")
 
+    /**
+     * Kardex de inventario en el backend (tabla Movimientos del negocio).
+     * Payload con campos nombrados para action "registrar_movimiento".
+     */
+    suspend fun registrarMovimiento(
+        sheetName: String,
+        fecha: String,
+        producto: String,
+        tipo: String,
+        cantidad: Double,
+        stockAnterior: Int = -1,
+        stockNuevo: Int = -1,
+        usuario: String = "",
+        observacion: String = ""
+    ): Boolean = withContext(Dispatchers.IO) {
+        val result = executeWithRetry {
+            val jsonPayload = JSONObject().apply {
+                val effectiveSheet = if (!currentIdEmpresa.isNullOrBlank()) currentIdEmpresa!! else sheetName
+                put("action", "registrar_movimiento")
+                put("sheetName", effectiveSheet)
+                if (!currentIdEmpresa.isNullOrBlank()) {
+                    put("idEmpresa", currentIdEmpresa)
+                }
+                put("fecha", fecha)
+                put("producto", producto)
+                put("tipo", tipo)
+                put("cantidad", cantidad)
+                if (stockAnterior >= 0) put("stockAnterior", stockAnterior)
+                if (stockNuevo >= 0) put("stockNuevo", stockNuevo)
+                put("usuario", usuario)
+                put("observacion", observacion)
+            }
+
+            val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
+            val targetUrl: String = if (!webAppScriptUrl.isNullOrBlank()) webAppScriptUrl!! else APPS_SCRIPT_WEB_APP_URL
+            val request = Request.Builder()
+                .url(targetUrl)
+                .post(body)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (response.code == 429) throw RateLimitException("429 Rate Limit")
+                val responseStr = response.body?.string() ?: ""
+                Log.d(TAG, "registrarMovimiento response code ${response.code}: $responseStr")
+                val isSuccessJson = try {
+                    val json = JSONObject(responseStr)
+                    val status = json.optString("status")
+                    val isSuccess = json.optBoolean("success", false)
+                    val message = json.optString("message").lowercase()
+                    status.equals("success", ignoreCase = true) || isSuccess ||
+                            message.contains("exito") || message.contains("registrad") ||
+                            message.contains("movimiento") || message.contains("ok")
+                } catch (_: Exception) {
+                    responseStr.lowercase().contains("success") || responseStr.lowercase().contains("ok")
+                }
+                response.isSuccessful && (isSuccessJson || responseStr.isBlank())
+            }
+        }
+        result ?: false
+    }
+
     suspend fun crearUsuario(sheetName: String, userData: List<Any>): Boolean =
         postRowToAppsScript(sheetName = sheetName, data = userData, tableName = "Usuarios", action = "crear_usuario")
 

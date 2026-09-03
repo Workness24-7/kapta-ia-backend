@@ -13,5 +13,8 @@ data class FinancialTransactionEntity(
     val dateString: String,
     val isExpense: Boolean,
     val category: String = "",
-    val isSynced: Boolean = false
+    val isSynced: Boolean = false,
+    val stockAnterior: Int = -1,
+    val stockNuevo: Int = -1,
+    val usuario: String = ""
 )

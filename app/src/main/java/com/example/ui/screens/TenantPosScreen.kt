@@ -2086,7 +2086,7 @@ fun TenantPosScreen(
                     val prod = entries.first().key
                     val qty = entries.sumOf { it.value }
                     if (qty > 0 && !prod.isService) {
-                        viewModel.registrarMovimientoStock(company.code, prod.name, qty, "VENTA")
+                        viewModel.registrarMovimientoStock(company.code, prod.name, qty, "VENTA", prod.stock, (prod.stock - qty).coerceAtLeast(0))
                         viewModel.saveOrUpdateProduct(prod.copy(stock = (prod.stock - qty).coerceAtLeast(0))) {}
                     }
                 }
@@ -2102,7 +2102,7 @@ fun TenantPosScreen(
                     val qty = entries.sumOf { it.value }
                     if (qty > 0) {
                         val updated = if (prod.isService) prod else prod.copy(stock = (prod.stock - qty).coerceAtLeast(0))
-                        if (!prod.isService) viewModel.registrarMovimientoStock(company.code, prod.name, qty, "VENTA")
+                        if (!prod.isService) viewModel.registrarMovimientoStock(company.code, prod.name, qty, "VENTA", prod.stock, (prod.stock - qty).coerceAtLeast(0))
                         viewModel.saveOrUpdateProduct(updated) {}
                         val itemTotal = qty * prod.price
                         val ratio = if (totalAmount > 0) itemTotal / totalAmount else 0.0
@@ -2141,7 +2141,7 @@ fun TenantPosScreen(
                     val prod = entries.first().key
                     val qty = entries.sumOf { it.value }
                     if (qty > 0 && !prod.isService) {
-                        viewModel.registrarMovimientoStock(company.code, prod.name, qty, "DEUDOR")
+                        viewModel.registrarMovimientoStock(company.code, prod.name, qty, "DEUDOR", prod.stock, (prod.stock - qty).coerceAtLeast(0))
                         viewModel.saveOrUpdateProduct(prod.copy(stock = (prod.stock - qty).coerceAtLeast(0))) {}
                     }
                 }
@@ -2632,7 +2632,7 @@ fun TenantPosScreen(
                             val newAdded = (currentBase?.second ?: 0) + addedQty
                             savedInventoryBaselines[prod.id] = Pair(currentBase?.first ?: prod.stock, newAdded)
 
-                            viewModel.registrarMovimientoStock(company.code, prod.name, addedQty, "INGRESO")
+                            viewModel.registrarMovimientoStock(company.code, prod.name, addedQty, "INGRESO", prod.stock, prod.stock + addedQty)
                             viewModel.saveOrUpdateProduct(updatedProduct) {}
                         }
                         showStockConfirmationDialog = false
@@ -2948,7 +2948,7 @@ fun TenantPosScreen(
                                 val prod = productsFlow.find { it.id == prodId }
                                 if (prod != null) {
                                     val updated = if (prod.isService) prod else prod.copy(stock = (prod.stock - qty).coerceAtLeast(0))
-                                    if (!prod.isService) viewModel.registrarMovimientoStock(company.code, prod.name, qty, "VENTA")
+                                    if (!prod.isService) viewModel.registrarMovimientoStock(company.code, prod.name, qty, "VENTA", prod.stock, (prod.stock - qty).coerceAtLeast(0))
                                     viewModel.saveOrUpdateProduct(updated) {}
                                     val itemTotal = qty * prod.price
                                     viewModel.registerPosSale(

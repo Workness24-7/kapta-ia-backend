@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
         FinancialTransactionEntity::class,
         IaFunctionEntity::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -44,7 +44,7 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 .fallbackToDestructiveMigration()
                 .addCallback(DatabaseCallback(context))
-                .addMigrations(MIGRATION_10_11, MIGRATION_11_12)
+                .addMigrations(MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
                 .build()
                 INSTANCE = instance
                 instance
@@ -60,6 +60,14 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_11_12 = object : androidx.room.migration.Migration(11, 12) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE pos_sales ADD COLUMN tipoVenta TEXT NOT NULL DEFAULT 'Normal'")
+            }
+        }
+
+        val MIGRATION_12_13 = object : androidx.room.migration.Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE financial_transactions ADD COLUMN stockAnterior INTEGER NOT NULL DEFAULT -1")
+                db.execSQL("ALTER TABLE financial_transactions ADD COLUMN stockNuevo INTEGER NOT NULL DEFAULT -1")
+                db.execSQL("ALTER TABLE financial_transactions ADD COLUMN usuario TEXT NOT NULL DEFAULT ''")
             }
         }
     }

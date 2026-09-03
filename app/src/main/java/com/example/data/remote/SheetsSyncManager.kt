@@ -124,14 +124,30 @@ class SheetsSyncManager(
                 }
             }
 
-            // 3. Unsynced Financial Transactions (Gastos)
+            // 3. Unsynced Financial Transactions (Gastos) y Movimientos de Stock (Kardex)
             val unsyncedTx = repository.getUnsyncedTransactions()
             for (tx in unsyncedTx) {
                 val company = repository.getCompanyByCode(tx.companyCode)
                 val sheetName = company?.name ?: tx.companyCode
-                // Gastos (AS:BF - 14 cols): Id_Gasto, Fecha, Hora, Categoría, Concepto, Descripción, Proveedor, Monto, Método_Pago, Referencia, Usuario, Estado, Fecha_Modificación, Modificado_Por
-                val payload = listOf("", tx.dateString, "", tx.category.ifBlank { "Operativo" }, tx.subtitle.ifBlank { tx.title }, "", "", tx.amount, "", "", "", "Activo", "", "")
-                val success = sheetsService.registrarGasto(sheetName, payload)
+                val success = if (tx.category == "Stock") {
+                    // Kardex: tabla Movimientos del negocio (10 cols).
+                    val tipo = if (tx.subtitle.contains("Ingreso", ignoreCase = true)) "Entrada" else "Salida"
+                    sheetsService.registrarMovimiento(
+                        sheetName = sheetName,
+                        fecha = tx.dateString,
+                        producto = tx.title,
+                        tipo = tipo,
+                        cantidad = tx.amount,
+                        stockAnterior = tx.stockAnterior,
+                        stockNuevo = tx.stockNuevo,
+                        usuario = tx.usuario,
+                        observacion = tx.subtitle
+                    )
+                } else {
+                    // Gastos (AS:BF - 14 cols): Id_Gasto, Fecha, Hora, Categoría, Concepto, Descripción, Proveedor, Monto, Método_Pago, Referencia, Usuario, Estado, Fecha_Modificación, Modificado_Por
+                    val payload = listOf("", tx.dateString, "", tx.category.ifBlank { "Operativo" }, tx.subtitle.ifBlank { tx.title }, "", "", tx.amount, "", "", "", "Activo", "", "")
+                    sheetsService.registrarGasto(sheetName, payload)
+                }
                 if (success) {
                     repository.markTransactionSynced(tx.id)
                     Log.d(TAG, "Transacción #${tx.id} sincronizada exitosamente")

@@ -2126,7 +2126,14 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
      * aislado del resumen financiero con categoria "Stock".
      * tipo: "INGRESO" | "VENTA" | "DEUDOR"
      */
-    fun registrarMovimientoStock(companyCode: String, productName: String, cantidad: Int, tipo: String) {
+    fun registrarMovimientoStock(
+        companyCode: String,
+        productName: String,
+        cantidad: Int,
+        tipo: String,
+        stockAnterior: Int = -1,
+        stockNuevo: Int = -1
+    ) {
         viewModelScope.launch {
             val dateStr = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
             val subtitle = when (tipo) {
@@ -2144,9 +2151,13 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
                     dateString = dateStr,
                     isExpense = false,
                     category = "Stock",
-                    isSynced = false
+                    isSynced = false,
+                    stockAnterior = stockAnterior,
+                    stockNuevo = stockNuevo,
+                    usuario = _currentUser.value?.name ?: ""
                 )
             )
+            syncManager.triggerImmediateSync(repository)
         }
     }
 

@@ -1349,6 +1349,35 @@ def action_importar_inventario(params):
     return respuesta_success({"insertados": insertados, "errores": errores, "total": len(lineas)})
 
 
+def action_registrar_movimiento(params):
+    """Kardex por negocio: Id_Movimiento, Fecha, Id_Producto, Nom_Producto,
+    Tipo, Cantidad, Stock_Anterior, Stock_Nuevo, Usuario, Observacion."""
+    clave = str(params.get("sheetName") or params.get("idEmpresa") or "").strip()
+    if not clave:
+        return respuesta_error("No se recibió sheetName.")
+    empresa = resolver_hoja(clave)
+    if not empresa:
+        return respuesta_error("No existe la hoja: " + clave)
+    producto = str(params.get("producto") or params.get("nomProducto") or "").strip()
+    if not producto:
+        return respuesta_error("No se recibió el producto del movimiento.")
+    fila = db.siguiente_fila_libre(empresa, "movimientos", TABLAS["MOVIMIENTOS"]["FILA_INICIO"])
+    datos = [
+        db.siguiente_id(empresa, "movimientos", "M-", 5),
+        str(params.get("fecha") or fecha_actual()),
+        str(params.get("idProducto") or ""),
+        producto,
+        str(params.get("tipo") or ""),
+        _normalizar_numero(params.get("cantidad")),
+        _normalizar_numero(params.get("stockAnterior")),
+        _normalizar_numero(params.get("stockNuevo")),
+        str(params.get("usuario") or ""),
+        str(params.get("observacion") or ""),
+    ]
+    db.guardar_fila(empresa, "movimientos", fila, datos)
+    return respuesta_success({"movimiento": datos[0], "producto": producto})
+
+
 POST_ACTIONS = {
     "reportes": action_reportes,
     "login": action_login,
@@ -1373,6 +1402,7 @@ POST_ACTIONS = {
     "importar_inventario": action_importar_inventario,
     "dedup_inventario": action_dedup_inventario,
     "registrar_inventario": action_escribir_fila,
+    "registrar_movimiento": action_registrar_movimiento,
     "registrar_venta": action_escribir_fila,
     "registrar_deudor": action_escribir_fila,
     "registrar_gasto": action_escribir_fila,
@@ -1447,7 +1477,8 @@ async def endpoint(request: Request):
                              "registrar_deudor", "registrar_gasto", "crear_usuario",
                              "pagar_deudor", "obtener_todo", "eliminar_empresa",
                              "eliminar_usuario", "reportes", "ping",
-                             "asignar_perdedor", "dividir_chico"],
+                             "asignar_perdedor", "dividir_chico",
+                             "registrar_movimiento"],
             })
         return respuesta_error("Acción GET no válida: " + action)
 
