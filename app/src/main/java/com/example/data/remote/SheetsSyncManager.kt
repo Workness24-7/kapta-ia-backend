@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class SheetsSyncManager(
     private val sheetsService: SheetsDatabaseService,
@@ -24,6 +26,9 @@ class SheetsSyncManager(
     private var pollingJob: Job? = null
     private val _isPollingActive = MutableStateFlow(false)
     val isPollingActive: StateFlow<Boolean> = _isPollingActive.asStateFlow()
+    // ponytail: un solo sync a la vez; dos corridas concurrentes reenviaban
+    // las mismas filas y el backend creaba registros duplicados con distinto ID.
+    private val syncMutex = Mutex()
 
     val syncState: StateFlow<SyncState> = sheetsService.syncState
 
@@ -34,6 +39,12 @@ class SheetsSyncManager(
      * Si falla, se mantiene en false para reintentar silenciosamente cuando haya conexión.
      */
     suspend fun syncPendingRecords(repository: KaptaRepository) {
+        syncMutex.withLock {
+            syncPendingRecordsLocked(repository)
+        }
+    }
+
+    private suspend fun syncPendingRecordsLocked(repository: KaptaRepository) {
         try {
             val dateFormatter = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
 

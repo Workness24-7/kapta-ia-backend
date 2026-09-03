@@ -2347,13 +2347,14 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
             val sheetName = company?.name ?: companyCode
             val limpios = personas.map { it.trim() }.filter { it.isNotBlank() }.distinct()
             if (limpios.isEmpty()) return@launch
-            val ok = sheetsService.dividirChico(
+            val res = sheetsService.dividirChico(
                 sheetName = sheetName,
                 bolirranaName = bolirranaName,
                 chico = chico,
                 personas = limpios
             )
-            if (ok) showToast("Chico $chico de $bolirranaName dividido entre ${limpios.size} personas")
+            if (res.ok) showToast("Chico $chico de $bolirranaName dividido entre ${limpios.size} personas")
+            else showToast(res.mensajeError?.ifBlank { null } ?: "No se pudo dividir el chico (reintenta)")
             onSuccess()
         }
     }

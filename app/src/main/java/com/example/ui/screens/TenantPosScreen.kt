@@ -649,13 +649,21 @@ private fun DebtorDetailFloatingModal(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(6.dp))
-                        // Solo chicos pendientes: los ya asignados a un perdedor no se listan.
-                        val ordenesPendientes = debtor.orders.filter { it.perdedor.isBlank() }
-                        val chicos = ordenesPendientes.groupBy { it.chico }.toSortedMap()
-                        chicos.forEach { (chico, _) ->
-                            val subtotal = ordenesPendientes.filter { it.chico == chico }.sumOf { it.quantity * it.unitPrice }
+                        // Todos los chicos: los pendientes y los ya asignados a un perdedor
+                        // cuya deuda aún no se traslada (flujo antiguo solo marcaba el nombre).
+                        val chicos = debtor.orders.groupBy { it.chico }.toSortedMap()
+                        chicos.forEach { (chico, itemsChico) ->
+                            val subtotal = itemsChico.sumOf { it.quantity * it.unitPrice }
+                            val perdedorChico = itemsChico.mapNotNull { it.perdedor.takeIf { p -> p.isNotBlank() } }.distinct()
+                            val tituloChico = if (chico == 0) "Pendiente sin número" else "Chico $chico"
                             Surface(
-                                onClick = { selectedChico = chico },
+                                onClick = {
+                                    selectedChico = chico
+                                    // Si el chico ya tenía perdedor marcado, se prellena para trasladarlo en un toque.
+                                    if (perdedorChico.size == 1 && perdedorChico.first() !in personasToDivide) {
+                                        personasToDivide = personasToDivide + perdedorChico.first()
+                                    }
+                                },
                                 shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surface,
                                 border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -666,7 +674,16 @@ private fun DebtorDetailFloatingModal(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("Chico $chico", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(tituloChico, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
+                                        if (perdedorChico.isNotEmpty()) {
+                                            Text(
+                                                "Perdedor: ${perdedorChico.joinToString()} (por trasladar)",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
                                     Text(formatCurrency(subtotal), fontWeight = FontWeight.Black, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
                                 }
                             }
@@ -674,8 +691,9 @@ private fun DebtorDetailFloatingModal(
                     } else {
                         // Nivel 2: resumen de productos del chico + "¿Quién Paga?".
                         val chico = selectedChico!!
-                        val chicoOrders = debtor.orders.filter { it.chico == chico && it.perdedor.isBlank() }
+                        val chicoOrders = debtor.orders.filter { it.chico == chico }
                         val chicoTotal = chicoOrders.sumOf { it.quantity * it.unitPrice }
+                        val tituloChicoSel = if (chico == 0) "Pendiente sin número" else "Chico $chico"
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -686,7 +704,7 @@ private fun DebtorDetailFloatingModal(
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Text(" Bolirranas", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
-                            Text("Chico $chico • ${formatCurrency(chicoTotal)}", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text("$tituloChicoSel • ${formatCurrency(chicoTotal)}", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         }
                         Spacer(modifier = Modifier.height(4.dp))
 
@@ -1079,7 +1097,8 @@ private fun DebtorDetailFloatingModal(
 
                     gruposBolirrana.forEach { (clave, items) ->
                         val (origen, chicoGrupo, perdedorGrupo) = clave
-                        val tituloGrupo = if (origen.equals(debtor.name, ignoreCase = true)) "Chico $chicoGrupo" else "$origen • Chico $chicoGrupo"
+                        val nombreChicoGrupo = if (chicoGrupo == 0) "Pendiente sin número" else "Chico $chicoGrupo"
+                        val tituloGrupo = if (origen.equals(debtor.name, ignoreCase = true)) nombreChicoGrupo else "$origen • $nombreChicoGrupo"
                         // Líneas (texto, hora): del detalle codificado o pedido por pedido con su hora.
                         val horaGrupo = items.firstOrNull { it.timeStr.isNotBlank() }?.timeStr ?: ""
                         val lineasGrupo: List<Pair<String, String>> =
@@ -4787,7 +4806,7 @@ private fun QuickActionCard(
 
     Box(
         modifier = modifier
-            .aspectRatio(1f)
+            .height(64.dp)
             .graphicsLayer {
                 translationY = liftPx
                 scaleX = scale
@@ -4802,7 +4821,7 @@ private fun QuickActionCard(
             .clip(RoundedCornerShape(18.dp))
             .background(Brush.linearGradient(gradient))
             .clickable(interactionSource = interaction, indication = LocalIndication.current) { onClick() }
-            .padding(12.dp)
+            .padding(10.dp)
     ) {
         // Icono blanco arriba a la izquierda
         Icon(
@@ -4811,13 +4830,13 @@ private fun QuickActionCard(
             tint = Color.White,
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .size(26.dp)
+                .size(22.dp)
         )
         // Nombre de la acción abajo a la izquierda
         Text(
             text = title,
             color = Color.White,
-            fontSize = 13.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

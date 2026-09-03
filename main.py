@@ -825,7 +825,7 @@ def action_dividir_chico(params):
         return respuesta_error("No se recibió sheetName.")
     if not bolirrana:
         return respuesta_error("No se recibió el nombre de la bolirrana.")
-    if chico <= 0:
+    if chico < 0:
         return respuesta_error("No se recibió el número de chico.")
     if not nombres:
         return respuesta_error("No se recibieron personas para dividir.")
@@ -837,7 +837,12 @@ def action_dividir_chico(params):
     for (n, d) in sorted(db.leer_tabla(empresa, "deudores"), key=lambda f: f[0]):
         if str(d[1] or "").strip().lower() != bolirrana.lower():
             continue
-        if str(d[10] if len(d) > 10 else "").strip() != str(chico):
+        chico_txt = str(d[10] if len(d) > 10 else "").strip()
+        if chico == 0:
+            # Legado sin número: solo filas sin chico asignado.
+            if chico_txt not in ("", "0"):
+                continue
+        elif chico_txt != str(chico):
             continue
         filas_chico.append((n, d))
     if not filas_chico:

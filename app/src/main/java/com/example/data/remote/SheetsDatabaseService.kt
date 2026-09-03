@@ -60,6 +60,11 @@ data class EliminarUsuarioResultado(
     val mensajeError: String? = null
 )
 
+data class DividirResultado(
+    val ok: Boolean,
+    val mensajeError: String? = null
+)
+
 data class FinanzaKapta(
     val id: Int = 0,
     val fecha: String = "",
@@ -892,7 +897,7 @@ class SheetsDatabaseService(
         bolirranaName: String,
         chico: Int,
         personas: List<String>
-    ): Boolean = withContext(Dispatchers.IO) {
+    ): DividirResultado = withContext(Dispatchers.IO) {
         val result = executeWithRetry {
             val jsonPayload = JSONObject().apply {
                 val effectiveSheet = if (!currentIdEmpresa.isNullOrBlank()) currentIdEmpresa!! else sheetName
@@ -918,20 +923,23 @@ class SheetsDatabaseService(
                 if (response.code == 429) throw RateLimitException("429 Rate Limit")
                 val responseStr = response.body?.string() ?: ""
                 Log.d(TAG, "dividirChico response code ${response.code}: $responseStr")
+                var mensaje: String? = null
                 val isSuccessJson = try {
                     val json = JSONObject(responseStr)
                     val status = json.optString("status")
                     val isSuccess = json.optBoolean("success", false)
                     val message = json.optString("message").lowercase()
+                    mensaje = json.optString("message").ifBlank { null }
                     status.equals("success", ignoreCase = true) || isSuccess ||
                             message.contains("exito") || message.contains("ok")
                 } catch (_: Exception) {
                     responseStr.lowercase().contains("success") || responseStr.lowercase().contains("ok") || responseStr.lowercase().contains("exito")
                 }
-                response.isSuccessful && (isSuccessJson || responseStr.isBlank())
+                val ok = response.isSuccessful && (isSuccessJson || responseStr.isBlank())
+                DividirResultado(ok, if (ok) null else mensaje)
             }
         }
-        result ?: false
+        result ?: DividirResultado(false, "Sin respuesta del servidor")
     }
 
     suspend fun registrarSoporte(
