@@ -13,10 +13,18 @@ import urllib.parse as _urlparse
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 import db
 
 app = FastAPI(title="KAPTA IA API", docs_url=None, redoc_url=None)
+# PWA web (iPhone/Android/PC) consume la API desde otro origen.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 VERSION_API = "KAPTA-1.0.0"
 

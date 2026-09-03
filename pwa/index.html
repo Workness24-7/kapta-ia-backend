@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4F46E5">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Kapta IA">
+<title>Kapta IA POS</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧾</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧾</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <!-- NEGOCIO -->
+  <section id="p-negocio" class="pantalla">
+    <div class="centrado">
+      <div class="logo">🧾</div>
+      <h1>KAPTA IA</h1>
+      <p class="muted">Punto de venta en tu iPhone</p>
+      <input id="in-codigo" placeholder="tunegocio" autocomplete="off" autocapitalize="none">
+      <div class="dominio">.kaptaia.com</div>
+      <button id="btn-codigo" class="btn primario">Continuar</button>
+      <p id="err-codigo" class="error"></p>
+    </div>
+  </section>
+
+  <!-- LOGIN -->
+  <section id="p-login" class="pantalla oculto">
+    <div class="centrado">
+      <div class="logo">🧾</div>
+      <h2 id="login-nombre">Negocio</h2>
+      <p class="muted" id="login-dominio"></p>
+      <input id="in-correo" type="email" placeholder="Correo" autocomplete="username" autocapitalize="none">
+      <input id="in-clave" type="password" placeholder="Contraseña" autocomplete="current-password">
+      <label class="recordar"><input type="checkbox" id="in-recordar" checked> Recuérdame en este dispositivo</label>
+      <button id="btn-login" class="btn primario">Ingresar al POS</button>
+      <button id="btn-volver-negocio" class="btn link">Cambiar empresa</button>
+      <p id="err-login" class="error"></p>
+    </div>
+  </section>
+
+  <!-- POS -->
+  <section id="p-pos" class="pantalla oculto">
+    <header id="pos-header"><span id="pos-negocio">Negocio</span><span id="pos-usuario"></span></header>
+
+    <div id="t-inicio" class="tab">
+      <h2>Resumen General</h2>
+      <div class="grid2" id="resumen"></div>
+      <h3>Acciones rápidas</h3>
+      <div class="grid2">
+        <button class="acc" data-go="venta">🛒<span>Nueva venta</span></button>
+        <button class="acc" data-go="deudores">👤<span>Deudores</span></button>
+        <button class="acc" data-go="inventario">📦<span>Inventario</span></button>
+        <button id="btn-recargar">🔄<span>Recargar</span></button>
+      </div>
+      <h3>Alertas de stock</h3>
+      <div id="alertas"></div>
+    </div>
+
+    <div id="t-venta" class="tab oculto">
+      <h2>Nueva Venta</h2>
+      <input id="venta-buscar" placeholder="Buscar producto..." autocomplete="off">
+      <div id="venta-productos"></div>
+      <div id="venta-carrito" class="oculto">
+        <h3>Carrito <span id="carrito-total"></span></h3>
+        <div id="carrito-items"></div>
+        <input id="venta-cliente" placeholder="Cliente (opcional)">
+        <div class="fila">
+          <select id="venta-metodo">
+            <option value="Efectivo">Efectivo</option>
+            <option value="Transferencia">Transferencia</option>
+          </select>
+          <label class="check"><input type="checkbox" id="venta-fiado"> Fiado</label>
+        </div>
+        <button id="btn-cobrar" class="btn exito">Cobrar</button>
+      </div>
+    </div>
+
+    <div id="t-inventario" class="tab oculto">
+      <h2>Inventario</h2>
+      <input id="inv-buscar" placeholder="Buscar producto..." autocomplete="off">
+      <div id="inv-lista"></div>
+    </div>
+
+    <div id="t-deudores" class="tab oculto">
+      <h2>Deudores</h2>
+      <div id="deu-lista"></div>
+      <div id="deu-detalle" class="oculto"></div>
+    </div>
+
+    <div id="t-cuenta" class="tab oculto">
+      <h2>Cuenta</h2>
+      <div class="card" id="cuenta-info"></div>
+      <button id="btn-salir" class="btn peligro">Cerrar sesión</button>
+    </div>
+
+    <nav id="dock">
+      <button data-tab="inicio" class="on">🏠<span>Inicio</span></button>
+      <button data-tab="venta">🛒<span>Venta</span></button>
+      <button data-tab="inventario">📦<span>Inventario</span></button>
+      <button data-tab="deudores">👤<span>Deudores</span></button>
+      <button data-tab="cuenta">👨‍💼<span>Cuenta</span></button>
+    </nav>
+  </section>
+</div>
+<div id="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>
