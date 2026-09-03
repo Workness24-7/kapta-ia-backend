@@ -1,6 +1,6 @@
-/* Service Worker mínimo: shell offline, API siempre a red. */
-const CACHE = "kapta-pwa-v2";
-const SHELL = ["./index.html", "./styles.css", "./app.js", "./manifest.webmanifest"];
+/* Service Worker: shell offline, API siempre a red, HTML siempre fresco. */
+const CACHE = "kapta-pwa-v3";
+const SHELL = ["./styles.css", "./app.js", "./manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -18,6 +18,17 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   // La API del negocio siempre va a la red (datos en vivo).
   if (url.pathname === "/exec" || url.searchParams.has("action")) {
+    return;
+  }
+  // El HTML siempre fresco de la red (evita mezclar versiones vieja/nueva).
+  if (e.request.mode === "navigate" || url.pathname.endsWith(".html")) {
+    e.respondWith(
+      fetch(e.request).then((res) => {
+        const copia = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, copia));
+        return res;
+      }).catch(() => caches.match(e.request))
+    );
     return;
   }
   e.respondWith(

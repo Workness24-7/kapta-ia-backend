@@ -135,20 +135,22 @@ function cargarSesion() {
 
 // Identidad visual del negocio (colores + logo), como en Android.
 function aplicarIdentidad(emp) {
-  const root = document.documentElement;
-  const prim = (emp && emp.colorPrimario) || "#4F46E5";
-  root.style.setProperty("--prim", prim);
-  const meta = document.getElementById("meta-theme");
-  if (meta) meta.setAttribute("content", prim);
-  const logo = (emp && emp.logoUrl) || "";
-  const ll = $("login-logo"), le = $("login-emoji"), pl = $("pos-logo");
-  if (logo) {
-    ll.src = logo; ll.classList.remove("oculto"); le.classList.add("oculto");
-    pl.src = logo; pl.classList.remove("oculto");
-  } else {
-    ll.classList.add("oculto"); le.classList.remove("oculto");
-    pl.classList.add("oculto");
-  }
+  try {
+    const root = document.documentElement;
+    const prim = (emp && emp.colorPrimario) || "#4F46E5";
+    root.style.setProperty("--prim", prim);
+    const meta = document.getElementById("meta-theme");
+    if (meta) meta.setAttribute("content", prim);
+    const logo = (emp && emp.logoUrl) || "";
+    const ll = $("login-logo"), le = $("login-emoji"), pl = $("pos-logo");
+    if (logo && ll && le && pl) {
+      ll.src = logo; ll.classList.remove("oculto"); le.classList.add("oculto");
+      pl.src = logo; pl.classList.remove("oculto");
+    } else if (ll && le && pl) {
+      ll.classList.add("oculto"); le.classList.remove("oculto");
+      pl.classList.add("oculto");
+    }
+  } catch { /* HTML en caché de versión anterior: no bloquea el ingreso */ }
 }
 
 $("btn-codigo").addEventListener("click", async () => {
@@ -256,8 +258,18 @@ async function entrar() {
   $("pos-negocio").textContent = SES.negocio;
   $("pos-usuario").textContent = SES.nombre + " • " + SES.rol;
   ver("pos");
-  await recargar();
-  armarDock(ME.sec);
+  try {
+    await recargar();
+  } catch {
+    toast("Sin conexión: revisa tu internet");
+    ME = ME || { row: null, funciones: "", sec: null };
+    if (!ME.sec) ME.sec = resolverSec();
+  }
+  try {
+    armarDock(ME.sec);
+  } catch {
+    armarDock(FULL());
+  }
   tab("inicio");
 }
 $("btn-salir").addEventListener("click", () => {
