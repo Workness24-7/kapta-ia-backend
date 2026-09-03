@@ -1026,11 +1026,17 @@ fun UserProfileModal(
             isDark = isDark,
             companies = companies,
             companyFunctions = companyFunctions,
+            emailsExistentes = businessUsers
+                .filter { it.id != editingUserItem?.id }
+                .mapNotNull { it.email.trim().takeIf { e -> e.isNotBlank() } }
+                .toSet(),
             onDismiss = { showUserFormDialog = false },
             onSave = { saved ->
                 if (onSaveUser != null) {
                     onSaveUser.invoke(
                         CompanyUserEntity(
+                            // Al editar se conserva el id para ACTUALIZAR; al crear va 0 para insertar.
+                            id = if (editingUserItem != null) saved.id else 0,
                             companyId = saved.companyId,
                             companyCode = saved.companyCode,
                             name = saved.name,
@@ -1389,6 +1395,7 @@ private fun UserRoleFormDialog(
     isDark: Boolean,
     companies: List<CompanyEntity> = emptyList(),
     companyFunctions: List<Pair<String, String>> = emptyList(),
+    emailsExistentes: Set<String> = emptySet(),
     onDismiss: () -> Unit,
     onSave: (UserRoleItem) -> Unit
 ) {
@@ -1405,7 +1412,10 @@ private fun UserRoleFormDialog(
     val dlgContext = androidx.compose.ui.platform.LocalContext.current
     val empresaSeleccionada = companies.firstOrNull { it.id == selectedCompanyId }
     val codigoEmpresaDlg = empresaSeleccionada?.code ?: userToEdit?.companyCode.orEmpty()
-    val puedeGuardar = name.isNotBlank() && emailValido(email) &&
+    // El correo no puede repetirse en otro usuario (al editar se excluye el propio).
+    val correoDuplicado = email.trim().isNotBlank() &&
+        email.trim().lowercase() in emailsExistentes.map { it.lowercase() }.toSet()
+    val puedeGuardar = name.isNotBlank() && emailValido(email) && !correoDuplicado &&
         pinCumpleRequisitos(pin) && confirmPin == pin &&
         (userToEdit != null || companies.isEmpty() || empresaSeleccionada != null)
 
@@ -1626,9 +1636,10 @@ private fun UserRoleFormDialog(
                     onValueChange = { email = it },
                     label = { Text("Correo Electrónico *") },
                     singleLine = true,
-                    isError = !correoOk,
+                    isError = !correoOk || correoDuplicado,
                     supportingText = {
-                        if (!correoOk) Text("El correo no es válido (ej. usuario@empresa.com)", fontSize = 11.sp, color = Color(0xFFEF4444))
+                        if (correoDuplicado) Text("Este correo ya está registrado en otro usuario", fontSize = 11.sp, color = Color(0xFFEF4444))
+                        else if (!correoOk) Text("El correo no es válido (ej. usuario@empresa.com)", fontSize = 11.sp, color = Color(0xFFEF4444))
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp)

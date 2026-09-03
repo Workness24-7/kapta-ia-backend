@@ -2528,6 +2528,15 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
     fun createOrUpdateUser(user: CompanyUserEntity, onSuccess: () -> Unit = {}) {
         viewModelScope.launch {
             val unsynced = user.copy(isSynced = false)
+            // Sanea duplicados locales del mismo correo en la empresa (ediciones pasadas).
+            val emailKey = unsynced.email.trim().lowercase()
+            if (emailKey.isNotBlank()) {
+                runCatching {
+                    repository.getUsersByCompanyCodeAndId(unsynced.companyCode, unsynced.companyId).firstOrNull()
+                        ?.filter { it.id != unsynced.id && it.email.trim().lowercase() == emailKey }
+                        ?.forEach { repository.deleteUser(it.id) }
+                }
+            }
             if (unsynced.id > 0) {
                 repository.updateUser(unsynced)
                 showToast("Usuario '${unsynced.name}' actualizado")
