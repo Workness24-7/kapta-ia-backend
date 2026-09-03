@@ -937,20 +937,27 @@ def action_eliminar_empresa(params):
 
 
 def action_eliminar_usuario(params):
-    clave = str(params.get("sheetName") or params.get("empresaNombre")
-                or params.get("idEmpresa") or "").strip()
     correo = str(params.get("userEmail") or params.get("correo") or "").lower().strip()
-    if not clave:
-        return respuesta_error("No existe la hoja: " + clave)
     if not correo:
         return respuesta_error("No se recibió el correo del usuario.")
-    empresa = resolver_hoja(clave)
+    clave = ""
+    # Preferir el código exacto de empresa; el nombre puede tener mayúsculas,
+    # tildes o espacios que rompen la resolución por nombre.
+    codigo_empresa = str(params.get("idEmpresa") or params.get("codigo")
+                         or params.get("codigoEmpresa") or "").strip()
+    empresa = resolver_hoja(codigo_empresa) if codigo_empresa else None
+    if empresa is None:
+        clave = str(params.get("sheetName") or params.get("empresaNombre")
+                    or params.get("idEmpresa") or "").strip()
+        if not clave:
+            return respuesta_error("No existe la hoja: " + clave)
+        empresa = resolver_hoja(clave)
     if not empresa:
-        return respuesta_error("No existe la hoja: " + clave)
+        return respuesta_error("No existe la hoja: " + (codigo_empresa or clave))
 
     fila_usr = None
     for (n, d) in db.leer_tabla(empresa, "usuarios"):
-        if str(d[3] or "").lower().strip() == correo:
+        if str(d[2] or "").lower().strip() == correo:
             fila_usr = n
             break
     if fila_usr is None:

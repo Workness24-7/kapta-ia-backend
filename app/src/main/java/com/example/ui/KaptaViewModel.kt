@@ -24,6 +24,7 @@ import com.example.data.remote.SheetsSyncManager
 import com.example.data.remote.SyncState
 import com.example.data.remote.SheetDataResult
 import com.example.data.remote.RemoteCompany
+import com.example.data.remote.EliminarUsuarioResultado
 import com.example.ui.screens.DebtorRawOrderItem
 import com.example.ui.screens.DebtorRecord
 import kotlinx.coroutines.Dispatchers
@@ -2439,22 +2440,24 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
         viewModelScope.launch(Dispatchers.IO) {
             val matchingComp = repository.getCompanyByCode(user.companyCode) ?: repository.getCompanyById(user.companyId)
             val companyName = matchingComp?.name ?: user.companyCode
-            val userEmailToDelete = user.email.ifBlank { user.username }
-            val success = try {
+            val companyCode = matchingComp?.code?.ifBlank { user.companyCode } ?: user.companyCode
+            val userEmailToDelete = user.email.ifBlank { user.username }.trim()
+            val resultado = try {
                 sheetsService.eliminarUsuario(
                     empresaNombre = companyName,
-                    userEmail = userEmailToDelete
+                    userEmail = userEmailToDelete,
+                    idEmpresa = companyCode
                 )
             } catch (e: Exception) {
                 Log.e("KaptaViewModel", "Error al eliminar usuario en Railway: ${e.message}")
-                false
+                EliminarUsuarioResultado(false, e.message)
             }
             withContext(Dispatchers.Main) {
-                if (success) {
+                if (resultado.ok) {
                     repository.deleteUser(user.id)
                     showToast("Usuario '${user.name}' eliminado exitosamente")
                 } else {
-                    showToast("Fallo al eliminar en servidor (Reintentar)")
+                    showToast(resultado.mensajeError?.ifBlank { null } ?: "Fallo al eliminar en servidor (Reintentar)")
                 }
             }
         }

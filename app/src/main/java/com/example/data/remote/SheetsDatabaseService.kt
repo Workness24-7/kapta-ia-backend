@@ -55,6 +55,11 @@ data class LoginResultado(
     val mensajeError: String?
 )
 
+data class EliminarUsuarioResultado(
+    val ok: Boolean,
+    val mensajeError: String? = null
+)
+
 data class FinanzaKapta(
     val id: Int = 0,
     val fecha: String = "",
@@ -1381,13 +1386,18 @@ class SheetsDatabaseService(
         result ?: false
     }
 
-    suspend fun eliminarUsuario(empresaNombre: String, userEmail: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun eliminarUsuario(
+        empresaNombre: String,
+        userEmail: String,
+        idEmpresa: String = ""
+    ): EliminarUsuarioResultado = withContext(Dispatchers.IO) {
         val result = executeWithRetry {
             val jsonPayload = JSONObject().apply {
                 put("action", "eliminar_usuario")
                 put("empresaNombre", empresaNombre)
                 put("userEmail", userEmail)
                 put("sheetName", empresaNombre)
+                if (idEmpresa.isNotBlank()) put("idEmpresa", idEmpresa)
             }
 
             val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
@@ -1401,12 +1411,14 @@ class SheetsDatabaseService(
                 if (response.code == 429) throw RateLimitException("429 Rate Limit")
                 val responseStr = response.body?.string() ?: ""
                 Log.d(TAG, "eliminarUsuario response: $responseStr")
+                var mensaje: String? = null
                 val isSuccessJson = try {
                     val json = JSONObject(responseStr)
                     val status = json.optString("status")
                     val isSuccess = json.optBoolean("success", false)
                     val resultStr = json.optString("result")
                     val message = json.optString("message").lowercase()
+                    mensaje = json.optString("message").ifBlank { null }
                     status.equals("success", ignoreCase = true) ||
                             isSuccess ||
                             resultStr.equals("success", ignoreCase = true) ||
@@ -1415,10 +1427,11 @@ class SheetsDatabaseService(
                 } catch (_: Exception) {
                     responseStr.lowercase().contains("success") || responseStr.lowercase().contains("eliminad")
                 }
-                response.isSuccessful && (isSuccessJson || responseStr.isBlank())
+                val ok = response.isSuccessful && (isSuccessJson || responseStr.isBlank())
+                EliminarUsuarioResultado(ok, if (ok) null else mensaje)
             }
         }
-        result ?: false
+        result ?: EliminarUsuarioResultado(false, "Sin respuesta del servidor")
     }
 
     suspend fun resetPassword(empresaNombre: String, userEmail: String, newPass: String): Boolean = withContext(Dispatchers.IO) {
