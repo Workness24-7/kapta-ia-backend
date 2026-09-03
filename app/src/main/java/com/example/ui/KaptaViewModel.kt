@@ -2363,7 +2363,7 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
         }
     }
 
-    fun cargarDeudoresExistentes(sheetName: String, onResult: (List<DebtorRecord>) -> Unit) {
+    fun cargarDeudoresExistentes(sheetName: String, onResult: (List<DebtorRecord>?) -> Unit) {
         viewModelScope.launch {
             try {
                 val res = sheetsService.fetchBusinessData(sheetName, "Deudores")
@@ -2426,7 +2426,7 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
                     )
                 })
             } catch (e: Exception) {
-                onResult(emptyList())
+                onResult(null)
             }
         }
     }

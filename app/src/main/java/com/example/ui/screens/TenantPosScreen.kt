@@ -268,7 +268,9 @@ private fun DebtorsManagementModal(
     onDividirChico: (bolirranaName: String, chico: Int, personas: List<String>) -> Unit = { _, _, _ -> },
     allCustomerNames: List<String> = emptyList()
 ) {
-    var selectedDebtor by remember { mutableStateOf<DebtorRecord?>(null) }
+    var selectedDebtorName by remember { mutableStateOf<String?>(null) }
+    // Lookup vivo: tras dividir/recargar, el detalle muestra los datos frescos o se cierra solo.
+    val selectedDebtor = selectedDebtorName?.let { n -> debtorsList.find { it.name.equals(n, ignoreCase = true) } }
     var showAddDebtorDialog by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
@@ -331,7 +333,7 @@ private fun DebtorsManagementModal(
                         val pendingBalance = (debtor.amountOwed - debtor.abonoAmount).coerceAtLeast(0.0)
 
                         Surface(
-                            onClick = { selectedDebtor = debtor },
+                            onClick = { selectedDebtorName = debtor.name },
                             shape = RoundedCornerShape(14.dp),
                             color = MaterialTheme.colorScheme.surface,
                             border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -413,11 +415,11 @@ private fun DebtorsManagementModal(
     if (selectedDebtor != null) {
         DebtorDetailFloatingModal(
             debtor = selectedDebtor!!,
-            onDismiss = { selectedDebtor = null },
+            onDismiss = { selectedDebtorName = null },
             onPaymentDone = { debtorPaid, paymentMethod ->
                 onPayDebtor(debtorPaid.name, paymentMethod, debtorPaid.amountOwed)
                 debtorsList.remove(debtorPaid)
-                selectedDebtor = null
+                selectedDebtorName = null
                 onShowToast("Deuda liquidada completamente para ${debtorPaid.name}")
             },
             onAbonoDone = { debtorUpdated, newAbonoValue ->
@@ -426,12 +428,10 @@ private fun DebtorsManagementModal(
                     val updatedTotalAbono = debtorUpdated.abonoAmount + newAbonoValue
                     if (updatedTotalAbono >= debtorUpdated.amountOwed) {
                         debtorsList.removeAt(idx)
-                        selectedDebtor = null
+                        selectedDebtorName = null
                         onShowToast("¡Abono liquidó la totalidad de la deuda de ${debtorUpdated.name}!")
                     } else {
-                        val newRecord = debtorUpdated.copy(abonoAmount = updatedTotalAbono)
-                        debtorsList[idx] = newRecord
-                        selectedDebtor = newRecord
+                        debtorsList[idx] = debtorUpdated.copy(abonoAmount = updatedTotalAbono)
                         onShowToast("Abono de ${formatCurrency(newAbonoValue)} registrado para ${debtorUpdated.name}")
                     }
                 }
@@ -649,9 +649,11 @@ private fun DebtorDetailFloatingModal(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(6.dp))
-                        val chicos = debtor.orders.groupBy { it.chico }.toSortedMap()
+                        // Solo chicos pendientes: los ya asignados a un perdedor no se listan.
+                        val ordenesPendientes = debtor.orders.filter { it.perdedor.isBlank() }
+                        val chicos = ordenesPendientes.groupBy { it.chico }.toSortedMap()
                         chicos.forEach { (chico, _) ->
-                            val subtotal = debtor.orders.filter { it.chico == chico }.sumOf { it.quantity * it.unitPrice }
+                            val subtotal = ordenesPendientes.filter { it.chico == chico }.sumOf { it.quantity * it.unitPrice }
                             Surface(
                                 onClick = { selectedChico = chico },
                                 shape = RoundedCornerShape(12.dp),
@@ -672,7 +674,7 @@ private fun DebtorDetailFloatingModal(
                     } else {
                         // Nivel 2: resumen de productos del chico + "¿Quién Paga?".
                         val chico = selectedChico!!
-                        val chicoOrders = debtor.orders.filter { it.chico == chico }
+                        val chicoOrders = debtor.orders.filter { it.chico == chico && it.perdedor.isBlank() }
                         val chicoTotal = chicoOrders.sumOf { it.quantity * it.unitPrice }
 
                         Row(
@@ -755,33 +757,23 @@ private fun DebtorDetailFloatingModal(
                                 }
                             }
                         }
-                        Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = {
-                                    val name = addPersonName.trim()
-                                    if (name.isNotEmpty() && name !in personasToDivide) {
-                                        personasToDivide = personasToDivide + name
-                                        addPersonName = ""
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.weight(1f)
-                            ) { Text("+ Agregar", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-
-                            Button(
-                                onClick = {
-                                    onDividirChico(debtor.name, chico, personasToDivide)
-                                    personasToDivide = emptyList()
-                                    addPersonName = ""
-                                    selectedChico = null
-                                },
-                                enabled = personasToDivide.isNotEmpty(),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.weight(1f)
-                            ) { Text(if (personasToDivide.size == 1) "Asignar perdedor" else "¿Quién Paga?", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White) }
-                        }
+                        // La persona escrita se incluye sola al confirmar: no se interrumpe la
+                        // escritura aunque exista un cliente con nombre parecido (ej. "ruben 5").
+                        val typedPerson = addPersonName.trim()
+                        val effectivePersonas = personasToDivide +
+                                (if (typedPerson.isNotEmpty() && typedPerson !in personasToDivide) listOf(typedPerson) else emptyList())
+                        Button(
+                            onClick = {
+                                onDividirChico(debtor.name, chico, effectivePersonas)
+                                personasToDivide = emptyList()
+                                addPersonName = ""
+                                selectedChico = null
+                            },
+                            enabled = effectivePersonas.isNotEmpty(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (effectivePersonas.size == 1) "Asignar perdedor" else "¿Quién Paga?", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White) }
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -1078,6 +1070,9 @@ private fun DebtorDetailFloatingModal(
                                 (it.origenBolirrana.isNotBlank() || it.chico > 0 || esBolirrana)
                     }
                     val gruposBolirrana = rawOrders.filter(esFilaBolirrana)
+                        // Un chico con perdedor ya asignado deja de mostrarse en la bolirrana;
+                        // su deuda vive en la cuenta de la persona (filas con origen).
+                        .filter { it.origenBolirrana.isNotBlank() || it.perdedor.isBlank() }
                         .groupBy { Triple(it.origenBolirrana.ifBlank { debtor.name }, it.chico, it.perdedor) }
                         .toSortedMap(compareBy({ it.first }, { it.second }, { it.third }))
                     val filasNormales = rawOrders.filterNot(esFilaBolirrana)
@@ -1085,8 +1080,13 @@ private fun DebtorDetailFloatingModal(
                     gruposBolirrana.forEach { (clave, items) ->
                         val (origen, chicoGrupo, perdedorGrupo) = clave
                         val tituloGrupo = if (origen.equals(debtor.name, ignoreCase = true)) "Chico $chicoGrupo" else "$origen • Chico $chicoGrupo"
-                        val detalleGrupo = items.firstOrNull { it.detalleBolirrana.isNotBlank() }?.detalleBolirrana
-                            ?: items.groupBy { it.productName }.map { (nombre, lineas) -> "${lineas.sumOf { it.quantity }}x $nombre" }.joinToString(" + ")
+                        // Líneas (texto, hora): del detalle codificado o pedido por pedido con su hora.
+                        val horaGrupo = items.firstOrNull { it.timeStr.isNotBlank() }?.timeStr ?: ""
+                        val lineasGrupo: List<Pair<String, String>> =
+                            items.firstOrNull { it.detalleBolirrana.isNotBlank() }?.detalleBolirrana
+                                ?.split(" + ")?.filter { it.isNotBlank() }?.map { it.trim() to horaGrupo }
+                                ?: items.groupBy { it.productName to it.timeStr }.toSortedMap(compareBy({ it.first }, { it.second }))
+                                    .map { (k, lineas) -> "${lineas.sumOf { it.quantity }}x ${k.first}" to k.second }
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = MaterialTheme.colorScheme.surface,
@@ -1125,12 +1125,19 @@ private fun DebtorDetailFloatingModal(
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
-                                detalleGrupo.split(" + ").filter { it.isNotBlank() }.forEach { linea ->
+                                lineasGrupo.forEach { (linea, hora) ->
                                     Text(
-                                        text = linea.trim(),
+                                        text = linea,
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onBackground
                                     )
+                                    if (hora.isNotBlank()) {
+                                        Text(
+                                            text = hora,
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1419,8 +1426,12 @@ fun TenantPosScreen(
             }
         }
     }
-    val userCapabilities = remember(userFunctions, isAdminUser) {
-        if (isAdminUser) setOf("*") else derivarCapacidades(userFunctions)
+    val userCapabilities = remember(userFunctions, isAdminUser, currentUser) {
+        if (isAdminUser) setOf("*") else {
+            // Si el admin persistió capacidades explícitas al crear el usuario, usarlas tal cual.
+            com.example.ui.components.decodeCapsFromJson(currentUser?.assignedFunctionsJson)
+                ?: derivarCapacidades(userFunctions)
+        }
     }
     val hasCap: (String) -> Boolean = { cap -> isAdminUser || userCapabilities.contains(cap) }
 
@@ -1522,7 +1533,7 @@ fun TenantPosScreen(
     // Seed deudores existentes desde la hoja Deudores (resumen por cliente con hora por pedido)
     androidx.compose.runtime.LaunchedEffect(company.code) {
         viewModel.cargarDeudoresExistentes(company.code) { cargados ->
-            if (cargados.isNotEmpty()) {
+            if (cargados != null && cargados.isNotEmpty()) {
                 debtorsList.clear()
                 debtorsList.addAll(cargados)
             }
@@ -2449,7 +2460,7 @@ fun TenantPosScreen(
 // Quantity input
                                     OutlinedTextField(
                                         value = rowItem.quantityText,
-                                        onValueChange = { rowItem.quantityText = it },
+                                        onValueChange = { stockRows[index] = rowItem.copy(quantityText = it.filter { ch -> ch.isDigit() }) },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         singleLine = true,
                                         placeholder = { Text(text = "0", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline) },
@@ -2464,8 +2475,7 @@ fun TenantPosScreen(
                                         OutlinedTextField(
                                             value = rowItem.searchQuery,
                                             onValueChange = {
-                                                rowItem.searchQuery = it
-                                                rowItem.selectedProduct = null
+                                                stockRows[index] = rowItem.copy(searchQuery = it, selectedProduct = null)
                                                 dropdownExpanded = true
                                             },
                                             placeholder = { Text("Buscar producto...", fontSize = 12.sp) },
@@ -2507,8 +2517,7 @@ fun TenantPosScreen(
                                                                 modifier = Modifier
                                                                     .fillMaxWidth()
                                                                     .clickable {
-                                                                        rowItem.selectedProduct = prod
-                                                                        rowItem.searchQuery = prod.name
+                                                                        stockRows[index] = rowItem.copy(selectedProduct = prod, searchQuery = prod.name)
                                                                         dropdownExpanded = false
                                                                     }
                                                                     .padding(horizontal = 12.dp, vertical = 8.dp)
@@ -2688,7 +2697,7 @@ fun TenantPosScreen(
                 viewModel.dividirChico(companyCode = company.code, bolirranaName = bolirranaName, chico = chico, personas = personas) {
                     // Recargar deudores para reflejar las nuevas cuentas divididas.
                     viewModel.cargarDeudoresExistentes(company.code) { cargados ->
-                        if (cargados.isNotEmpty()) {
+                        if (cargados != null) {
                             debtorsList.clear()
                             debtorsList.addAll(cargados)
                         }
@@ -5356,26 +5365,15 @@ private fun CartProductCard(
                         shape = RoundedCornerShape(50),
                         color = if (item.isMinPrice) Color(0xFFFEF3C7) else MaterialTheme.colorScheme.surfaceVariant
                     ) {
-                        Row(
-                            modifier = Modifier.padding(start = 8.dp, end = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Mínimo",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (item.isMinPrice) Color(0xFFB45309) else MaterialTheme.colorScheme.onSurfaceVariant
+                        Switch(
+                            checked = item.isMinPrice,
+                            onCheckedChange = { item.isMinPrice = it },
+                            modifier = Modifier.scale(0.6f),
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFFFF9F0A)
                             )
-                            Switch(
-                                checked = item.isMinPrice,
-                                onCheckedChange = { item.isMinPrice = it },
-                                modifier = Modifier.scale(0.6f),
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = Color(0xFFFF9F0A)
-                                )
-                            )
-                        }
+                        )
                     }
                 }
             }
@@ -6263,7 +6261,7 @@ private fun NuevaVentaView(
                     iOSButton(
                         text = "¡Jugar!",
                         onClick = {
-                            val active = cartItems.filter { it.quantity > 0 }.associate { it.product to it.quantity }
+                            val active = cartItems.filter { it.quantity > 0 }.associate { it.product.copy(price = it.unitPrice) to it.quantity }
                             if (mesa != null && active.isNotEmpty()) {
                                 val chico = chicoActivo(mesa)
                                 onDebeSuccess(listOf("Bolirrana $mesa"), active, totalAmount, 0.0, "", "Bolirrana($mesa)", chico)
@@ -6352,7 +6350,7 @@ private fun NuevaVentaView(
                             val ok = validarClaveYo(regaloClaveInput)
                             regaloValidando = false
                             if (ok) {
-                                val active = cartItems.filter { it.quantity > 0 }.associate { it.product to it.quantity }
+                                val active = cartItems.filter { it.quantity > 0 }.associate { it.product.copy(price = it.unitPrice) to it.quantity }
                                 if (active.isNotEmpty()) {
                                     onRegaloSuccess(active, totalAmount)
                                     cartItems.forEach { it.quantity = 0 }
@@ -6376,7 +6374,7 @@ private fun NuevaVentaView(
 
     // DIÁLOGO DE SELECCIÓN DE MÉTODO DE PAGO ("Pago")
     if (showPaymentModal) {
-        val activeMap = remember(cartItems) { cartItems.filter { it.quantity > 0 }.associate { it.product to it.quantity } }
+        val activeMap = remember(cartItems) { cartItems.filter { it.quantity > 0 }.associate { it.product.copy(price = it.unitPrice) to it.quantity } }
         AlertDialog(
             onDismissRequest = { showPaymentModal = false },
             containerColor = MaterialTheme.colorScheme.surface,
@@ -6461,7 +6459,7 @@ private fun NuevaVentaView(
             },
             confirmButton = {
                 if (paymentTab == "DIVIDIDO") {
-                    val activeMap = remember(cartItems) { cartItems.filter { it.quantity > 0 }.associate { it.product to it.quantity } }
+                    val activeMap = remember(cartItems) { cartItems.filter { it.quantity > 0 }.associate { it.product.copy(price = it.unitPrice) to it.quantity } }
                     val tVal = transferInput.toDoubleOrNull() ?: 0.0
                     val cVal = cashInput.toDoubleOrNull() ?: 0.0
                     Button(
@@ -6486,7 +6484,7 @@ private fun NuevaVentaView(
 
     // DIÁLOGO DE REGISTRO DE DEUDOR ("Debe")
     if (showDebeModal) {
-        val activeMap = remember(cartItems) { cartItems.filter { it.quantity > 0 }.associate { it.product to it.quantity } }
+        val activeMap = remember(cartItems) { cartItems.filter { it.quantity > 0 }.associate { it.product.copy(price = it.unitPrice) to it.quantity } }
         AlertDialog(
             onDismissRequest = { showDebeModal = false },
             containerColor = MaterialTheme.colorScheme.surface,

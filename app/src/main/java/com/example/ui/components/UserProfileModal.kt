@@ -94,8 +94,9 @@ data class UserRoleItem(
 
 /**
  * Codifica los permisos del usuario en un único JSON para assignedFunctionsJson.
- * Formato: {"dock": {tab: bool}, "functions": [nombres...]}. Si functions está vacío
- * y no hay dock, devuelve null para conservar el formato legacy (array de nombres).
+ * Formato: {"dock": {tab: bool}, "functions": [nombres...], "caps": [...]}.
+ * Si functions está vacío y no hay dock, devuelve null para conservar el formato
+ * legacy (array de nombres).
  */
 private fun encodeUserPermissions(saved: UserRoleItem): String? {
     val functions = try {
@@ -106,9 +107,21 @@ private fun encodeUserPermissions(saved: UserRoleItem): String? {
     } catch (_: Exception) { return saved.functionsJson }
     val dockEnabled = saved.dockAccess.any { it.value }
     if (functions.isEmpty() && !dockEnabled) return null
+    // Capacidades internas derivadas tal cual de los interruptores otorgados.
+    val caps = mutableSetOf<String>()
+    if (saved.dockAccess["Ventas"] == true) caps.addAll(listOf("ventas", "deudores", "clientes"))
+    if (saved.dockAccess["Finanzas"] == true) caps.addAll(listOf("gastos", "reporte"))
+    if (saved.dockAccess["Inventario"] == true) caps.add("inventario")
+    if (saved.moduleAccess["Control de Turnos y Caja"] == true) caps.add("gastos")
+    if (saved.moduleAccess["Reportes y Analytics"] == true) caps.add("reporte")
+    if (saved.moduleAccess["Facturación Electrónica DIAN"] == true) caps.add("facturacion")
+    if (saved.moduleAccess["Venta por Mesa & Comandero"] == true) caps.add("ventas")
+    if (saved.moduleAccess["División de Cuentas (Split)"] == true) caps.add("ventas")
+    if (saved.moduleAccess["Happy Hour & Promociones"] == true) caps.add("ventas")
     return org.json.JSONObject().apply {
         put("dock", org.json.JSONObject(saved.dockAccess))
         put("functions", org.json.JSONArray().apply { functions.forEach { put(it) } })
+        put("caps", org.json.JSONArray().apply { caps.forEach { put(it) } })
     }.toString()
 }
 
@@ -126,6 +139,24 @@ fun decodeDockAccessFromJson(json: String?): Map<String, Boolean>? {
                 buildMap { d.keys().forEach { key -> put(key, d.optBoolean(key, false)) } }
             } else null
         } else null
+    } catch (_: Exception) { null }
+}
+
+/**
+ * Extrae las capacidades otorgadas ("caps") desde el assignedFunctionsJson
+ * codificado. Devuelve null si no están presentes (formato legacy).
+ */
+fun decodeCapsFromJson(json: String?): Set<String>? {
+    if (json.isNullOrBlank() || !json.trimStart().startsWith("{")) return null
+    return try {
+        val o = org.json.JSONObject(json)
+        if (!o.has("caps")) null
+        else {
+            val arr = o.getJSONArray("caps")
+            val out = mutableSetOf<String>()
+            for (i in 0 until arr.length()) { val c = arr.optString(i); if (c.isNotBlank()) out.add(c) }
+            out
+        }
     } catch (_: Exception) { null }
 }
 
@@ -1176,7 +1207,7 @@ private fun UserRoleFormDialog(
                                 dockAccess = when (r) {
                                     "Administrador", "Supervisor" -> mapOf("Inicio" to true, "Ventas" to true, "Finanzas" to true, "Inventario" to true)
                                     "Cajero" -> mapOf("Inicio" to true, "Ventas" to true, "Finanzas" to true, "Inventario" to false)
-                                    "Mesero", "Barman" -> mapOf("Inicio" to false, "Ventas" to true, "Finanzas" to false, "Inventario" to false)
+                                    "Mesero", "Barman" -> mapOf("Inicio" to true, "Ventas" to true, "Finanzas" to false, "Inventario" to false)
                                     else -> mapOf("Inicio" to false, "Ventas" to true, "Finanzas" to false, "Inventario" to false)
                                 }
                                 moduleAccess = when (r) {
