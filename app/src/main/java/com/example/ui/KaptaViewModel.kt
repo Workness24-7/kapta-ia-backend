@@ -2385,6 +2385,19 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
                     val tipo = row.getOrNull(8)?.trim()?.takeIf { it.isNotBlank() } ?: "Normal"
                     val perdedor = row.getOrNull(9)?.trim() ?: ""
                     val chico = row.getOrNull(10)?.trim()?.toIntOrNull() ?: 0
+                    // Origen transparente de bolirrana: "Bolirrana X • Chico N • ...detalle".
+                    var origenBolirrana = ""
+                    var detalleBolirrana = ""
+                    if (tipo.equals("Bolirrana", ignoreCase = true)) {
+                        val marcador = " • Chico "
+                        val idx = producto.indexOf(marcador)
+                        if (idx > 0) {
+                            origenBolirrana = producto.substring(0, idx).trim()
+                            val resto = producto.substring(idx + marcador.length).trim()
+                            val idxDetalle = resto.indexOf(" • ")
+                            detalleBolirrana = if (idxDetalle >= 0) resto.substring(idxDetalle + 3).trim() else resto
+                        }
+                    }
                     porCliente.getOrPut(cliente) { mutableListOf() }.add(
                         DebtorRawOrderItem(
                             quantity = cantidad,
@@ -2393,7 +2406,9 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
                             timeStr = extraerHora(fechaCruda),
                             tipo = tipo,
                             perdedor = perdedor,
-                            chico = chico
+                            chico = chico,
+                            origenBolirrana = origenBolirrana,
+                            detalleBolirrana = detalleBolirrana
                         )
                     )
                     totales[cliente] = (totales[cliente] ?: 0.0) + (total - abonos).coerceAtLeast(0.0)

@@ -760,7 +760,8 @@ def action_pagar_deudor(params):
 def action_asignar_perdedor(params):
     """Escribe el nombre del perdedor (col 9) de un chico/orden deudor.
     En bolirrana una cuenta (cliente) acumula varios chicos; el perdedor se
-    asigna después, a un chico concreto. Si hay varios chicos del mismo
+    asigna después, a un chico concreto. Si se envía chico, solo se toca ese
+    chico para no afectar rondas de otras bolirranas. Si hay varios chicos del mismo
     producto, se edita el primero que aún no tenga perdedor.
     ponytail: coincidencia por cliente+producto (el app no reenvía la fila);
     si un mismo chico necesitara edición fina, pasar tambien fecha para cotejar."""
@@ -768,6 +769,10 @@ def action_asignar_perdedor(params):
     cliente = str(params.get("clienteNombre") or params.get("clientName") or "").strip()
     producto = str(params.get("productoNombre") or params.get("productName") or "").strip()
     perdedor = str(params.get("perdedor") or "").strip()
+    try:
+        chico = int(params.get("chico") or 0)
+    except (TypeError, ValueError):
+        chico = 0
     if not clave:
         return respuesta_error("No se recibió sheetName.")
     if not cliente:
@@ -783,6 +788,8 @@ def action_asignar_perdedor(params):
         if nom_cliente.lower() != cliente.lower():
             continue
         if producto and str(d[2] or "").strip().lower() != producto.lower():
+            continue
+        if chico > 0 and str(d[10] if len(d) > 10 else "").strip() != str(chico):
             continue
         if str(d[9] or "").strip():
             continue
@@ -839,11 +846,25 @@ def action_dividir_chico(params):
     total = sum(_to_float(d[7]) for (_, d) in filas_chico)
     share = (total / len(nombres)) if len(nombres) else 0
     fecha = str(filas_chico[0][1][0] or "").strip()
-    producto = str(filas_chico[0][1][2] or "").strip() or bolirrana
+    # Detalle transparente: conserva cada producto del chico para que el deudor
+    # sepa exactamente qué perdió. Solo se tocan las filas de esta bolirrana+chico.
+    lineas = []
+    for (_, d) in filas_chico:
+        cant = int(_to_float(d[3]) or 1)
+        nom = str(d[2] or "").strip() or "Producto"
+        lineas.append(str(cant) + "x " + nom)
+    detalle = " + ".join(lineas) or bolirrana
+    es_unico = len(nombres) == 1
     for persona in nombres:
+        if es_unico:
+            producto = bolirrana + " • Chico " + str(chico) + " • Perdedor " + persona + " • " + detalle
+            perdedor_val = persona
+        else:
+            producto = bolirrana + " • Chico " + str(chico) + " • Dividido " + str(len(nombres)) + " • " + detalle
+            perdedor_val = "Dividido: " + ", ".join(nombres)
         fila_nueva = db.siguiente_fila_libre(empresa, "deudores", TABLAS["DEUDORES"]["FILA_INICIO"])
-        datos = [fecha, persona, producto + " (Chico " + str(chico) + ")", "1",
-                 "1", 0, 0, _normalizar_numero(share), "Bolirrana", "", chico]
+        datos = [fecha, persona, producto, "1",
+                 "1", 0, 0, _normalizar_numero(share), "Bolirrana", perdedor_val, chico]
         db.guardar_fila(empresa, "deudores", fila_nueva,
                         [str(x) if x is not None else "" for x in datos])
     for (n, _) in filas_chico:

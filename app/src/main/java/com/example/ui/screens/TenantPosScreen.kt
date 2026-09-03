@@ -212,7 +212,9 @@ data class DebtorRawOrderItem(
     val timeStr: String,
     val tipo: String = "Normal",
     val perdedor: String = "",
-    val chico: Int = 0
+    val chico: Int = 0,
+    val origenBolirrana: String = "",
+    val detalleBolirrana: String = ""
 )
 
 private fun getGroupedProductsForDebtor(
@@ -778,7 +780,7 @@ private fun DebtorDetailFloatingModal(
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier.weight(1f)
-                            ) { Text("¿Quién Paga?", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White) }
+                            ) { Text(if (personasToDivide.size == 1) "Asignar perdedor" else "¿Quién Paga?", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White) }
                         }
                     }
                     Spacer(modifier = Modifier.height(10.dp))
@@ -851,7 +853,8 @@ private fun DebtorDetailFloatingModal(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 4. ACCIONES DINÁMICAS
+                // 4. ACCIONES DINÁMICAS (ocultas en bolirrana: ahí solo se divide/asigna el chico)
+                if (!esBolirrana) {
                 when (activeFlowMode) {
                     "NONE" -> {
                         Row(
@@ -1047,6 +1050,7 @@ private fun DebtorDetailFloatingModal(
                         }
                     }
                 }
+                }
 
                 // 5. HISTORIAL EXPANDIBLE
                 if (isHistoryExpanded) {
@@ -1067,7 +1071,72 @@ private fun DebtorDetailFloatingModal(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    rawOrders.forEach { rawItem ->
+                    // Historial transparente: primero bolirrana + chico (+ perdedor/división),
+                    // y debajo los productos perdidos. Las filas normales se muestran como antes.
+                    val esFilaBolirrana: (DebtorRawOrderItem) -> Boolean = {
+                        it.tipo.equals("Bolirrana", ignoreCase = true) &&
+                                (it.origenBolirrana.isNotBlank() || it.chico > 0 || esBolirrana)
+                    }
+                    val gruposBolirrana = rawOrders.filter(esFilaBolirrana)
+                        .groupBy { Triple(it.origenBolirrana.ifBlank { debtor.name }, it.chico, it.perdedor) }
+                        .toSortedMap(compareBy({ it.first }, { it.second }, { it.third }))
+                    val filasNormales = rawOrders.filterNot(esFilaBolirrana)
+
+                    gruposBolirrana.forEach { (clave, items) ->
+                        val (origen, chicoGrupo, perdedorGrupo) = clave
+                        val tituloGrupo = if (origen.equals(debtor.name, ignoreCase = true)) "Chico $chicoGrupo" else "$origen • Chico $chicoGrupo"
+                        val detalleGrupo = items.firstOrNull { it.detalleBolirrana.isNotBlank() }?.detalleBolirrana
+                            ?: items.groupBy { it.productName }.map { (nombre, lineas) -> "${lineas.sumOf { it.quantity }}x $nombre" }.joinToString(" + ")
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp).fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Text(
+                                        text = tituloGrupo,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        modifier = Modifier.weight(1f).padding(end = 8.dp)
+                                    )
+                                    Text(
+                                        text = formatCurrency(items.sumOf { it.quantity * it.unitPrice }),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onBackground
+                                    )
+                                }
+                                if (perdedorGrupo.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = perdedorGrupo,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                detalleGrupo.split(" + ").filter { it.isNotBlank() }.forEach { linea ->
+                                    Text(
+                                        text = linea.trim(),
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onBackground
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    filasNormales.forEach { rawItem ->
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = MaterialTheme.colorScheme.surface,
