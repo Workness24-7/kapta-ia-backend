@@ -10,7 +10,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -35,6 +37,8 @@ import com.example.ui.theme.BusinessTheme
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.example.util.ReporteErrores.instalar(this)
+        com.example.util.Notificaciones.crearCanal(this)
         enableEdgeToEdge()
         setContent {
             KaptaApp()
@@ -54,7 +58,7 @@ fun KaptaApp() {
     val forceLightScreen = currentRoute == "redirection" ||
             currentRoute == "admin_login" ||
             currentRoute == "tenant_pos" ||
-            (currentRoute != null && currentRoute.startsWith("company_login"))
+            (currentRoute != null && (currentRoute.startsWith("company_login") || currentRoute.startsWith("consentimiento")))
 
     val effectiveDarkMode = isDarkMode && !forceLightScreen
 
@@ -67,7 +71,35 @@ fun KaptaApp() {
     }
     val startDestination = if (!ultimoCodigo.isNullOrBlank()) "company_login/$ultimoCodigo" else "redirection"
 
+    // Reporte de error pendiente de un cierre anterior: ofrecer enviarlo a soporte.
+    var reportePendiente by remember { mutableStateOf(com.example.util.ReporteErrores.pendiente(context)) }
+
     MyApplicationTheme(darkTheme = effectiveDarkMode) {
+        if (reportePendiente != null) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { reportePendiente = null },
+                title = { androidx.compose.material3.Text("Se detectó un error") },
+                text = { androidx.compose.material3.Text("La app se cerró inesperadamente la última vez. ¿Deseas enviar el reporte a soporte?") },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        val traza = reportePendiente ?: ""
+                        reportePendiente = null
+                        com.example.util.ReporteErrores.limpiar(context)
+                        val u = viewModel.currentUser.value
+                        val codigo = u?.companyCode?.ifBlank { ultimoCodigo } ?: ultimoCodigo ?: ""
+                        if (codigo.isNotBlank()) {
+                            viewModel.enviarSoporte(codigo, "Error de aplicación", traza.take(2000))
+                        }
+                    }) { androidx.compose.material3.Text("Enviar reporte") }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        reportePendiente = null
+                        com.example.util.ReporteErrores.limpiar(context)
+                    }) { androidx.compose.material3.Text("Descartar") }
+                }
+            )
+        }
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
@@ -130,10 +162,44 @@ fun KaptaApp() {
                 onLoginToPosSuccess = { company ->
                     viewModel.selectCompany(company)
                     viewModel.setSuperAdminSession(false)
-                    navController.navigate("tenant_pos")
+                    // Consentimiento legal: usuarios nuevos (o sin registro) lo aceptan antes de entrar.
+                    val u = viewModel.currentUser.value
+                    val userKey = com.example.ui.screens.claveUsuarioConsentimiento(
+                        u?.name ?: "", u?.email ?: "", u?.username ?: ""
+                    )
+                    val ctx = navController.context
+                    if (com.example.ui.screens.tieneConsentimiento(ctx, company.code, userKey)) {
+                        navController.navigate("tenant_pos")
+                    } else {
+                        navController.navigate("consentimiento/${company.code}")
+                    }
                 },
                 onBackToRedirection = {
                     navController.navigate("redirection")
+                }
+            )
+        }
+
+        // Screen 3b: Consentimiento legal (solo primera vez por usuario+negocio)
+        composable(
+            route = "consentimiento/{companyCode}",
+            arguments = listOf(navArgument("companyCode") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val code = backStackEntry.arguments?.getString("companyCode") ?: ""
+            val comp = viewModel.companies.value.find { it.code.equals(code, ignoreCase = true) }
+            val u = viewModel.currentUser.value
+            com.example.ui.screens.ConsentimientoScreen(
+                nombreNegocio = comp?.name ?: code,
+                nombreUsuario = u?.name ?: "usuario",
+                onAceptar = {
+                    val ctx = navController.context
+                    com.example.ui.screens.guardarConsentimiento(
+                        ctx, code,
+                        com.example.ui.screens.claveUsuarioConsentimiento(u?.name ?: "", u?.email ?: "", u?.username ?: "")
+                    )
+                    navController.navigate("tenant_pos") {
+                        popUpTo("consentimiento/$code") { inclusive = true }
+                    }
                 }
             )
         }

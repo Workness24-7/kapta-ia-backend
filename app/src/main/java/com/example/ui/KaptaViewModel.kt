@@ -2234,6 +2234,7 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
             )
             repository.insertSale(sale)
             syncManager.triggerImmediateSync(repository)
+            sumarLogro("venta")
             onSuccess()
         }
     }
@@ -2261,6 +2262,7 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
             )
             if (success) {
                 showToast("¡Deudor $clientName pagado y movido a Ventas!")
+                sumarLogro("pago")
                 onSuccess()
             } else {
                 showToast("Deuda liquidada localmente para $clientName")
@@ -2372,6 +2374,7 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
             )
             if (res.ok) showToast("Chico $chico de $bolirranaName dividido entre ${limpios.size} personas")
             else showToast(res.mensajeError?.ifBlank { null } ?: "No se pudo dividir el chico (reintenta)")
+            if (res.ok) sumarLogro("division")
             onSuccess()
         }
     }
@@ -2533,5 +2536,22 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
 
     fun showToast(message: String) {
         Toast.makeText(getApplication(), message, Toast.LENGTH_SHORT).show()
+    }
+
+    // Logros para review/upsell/analítica (Analitica local, sin SDK externo).
+    private val _logros = MutableStateFlow(0)
+    val logros: StateFlow<Int> = _logros.asStateFlow()
+
+    fun sumarLogro(nombre: String) {
+        try {
+            com.example.util.Analitica.evento(getApplication(), nombre)
+            _logros.value = com.example.util.Analitica.logros(getApplication())
+        } catch (_: Exception) { }
+    }
+
+    fun refrescarLogros() {
+        try {
+            _logros.value = com.example.util.Analitica.logros(getApplication())
+        } catch (_: Exception) { }
     }
 }

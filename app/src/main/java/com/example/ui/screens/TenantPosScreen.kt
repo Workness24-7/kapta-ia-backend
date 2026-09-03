@@ -1516,6 +1516,26 @@ fun TenantPosScreen(
         viewModel.startPollingForTenant(company.code)
     }
 
+    // Crecimiento: review tras logros, upsell post-valor y notificaciones.
+    val posContext = androidx.compose.ui.platform.LocalContext.current
+    val logros by viewModel.logros.collectAsState()
+    var showUpsell by remember { mutableStateOf(false) }
+    LaunchedEffect(logros) {
+        viewModel.refrescarLogros()
+        (posContext as? android.app.Activity)?.let { act ->
+            com.example.util.Analitica.pedirReviewSiCorresponde(act)
+        }
+        val esBasico = company.plan.contains("Básico", ignoreCase = true) || company.plan.contains("Basico", ignoreCase = true)
+        if (!showUpsell && com.example.util.Analitica.debeMostrarUpsell(posContext, esBasico)) {
+            showUpsell = true
+        }
+    }
+
+    // Permiso de notificaciones + alertas contextuales + recordatorio diario.
+    val notifLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { }
+
     // Cart items for POS
     val cart = remember { mutableStateMapOf<Int, Int>() }
 
@@ -1616,6 +1636,20 @@ fun TenantPosScreen(
     val lowStockList = productsFlow.filter { it.stock <= it.minStockAlert }
         var showNotificacionesDialog by remember { mutableStateOf(false) }
         var showSoporteDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(company.code) {
+        com.example.util.Notificaciones.crearCanal(posContext)
+        com.example.util.Notificaciones.programarRecordatorioDiario(posContext)
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(posContext, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                notifLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+        if (lowStockList.isNotEmpty()) {
+            com.example.util.Notificaciones.alertarStockBajo(posContext, lowStockList.size)
+        }
+        com.example.util.Notificaciones.alertarMembresia(posContext, company.expirationDays)
+    }
 
     val filteredProducts = productsFlow.filter { prod ->
         val matchesSearch = searchPosQuery.isEmpty() ||
@@ -2793,6 +2827,30 @@ fun TenantPosScreen(
         )
     }
 
+    // Upsell post-valor: tras usar el sistema (plan Básico), ofrece Premium/MAX IA.
+    if (showUpsell) {
+        AlertDialog(
+            onDismissRequest = { showUpsell = false },
+            title = { Text("Desbloquea el máximo de tu negocio", fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+            text = {
+                Text(
+                    "Ya sumas $logros logros operando tu negocio. Con Premium y MAX IA obtienes: reportes y analítica avanzada, facturación electrónica, promociones Happy Hour, comandero por mesa, división de cuentas y el asistente con IA.",
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showUpsell = false; showSoporteDialog = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Solicitar upgrade", color = Color.White, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUpsell = false }) { Text("Ahora no") }
+            }
+        )
+    }
+
     // -------------------------------------------------------------------------------------
     // BOTON 5: (•••) MENÚ ADICIONAL (Módulos Avanzados del Plan)
     // -------------------------------------------------------------------------------------
@@ -3726,6 +3784,9 @@ private fun VentasSectionView(
 
         var mostrarTodoRanking by remember { mutableStateOf(false) }
         val rankingVisibles = if (mostrarTodoRanking) rankingList else rankingList.take(5)
+        if (rankingVisibles.isEmpty()) {
+            Text("Sin ventas registradas todavía. Tus productos más vendidos aparecerán aquí.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             rankingVisibles.forEachIndexed { index, (prod, units, revenue) ->
                 Card(
@@ -4420,7 +4481,11 @@ private fun InventarioSectionView(
         Spacer(modifier = Modifier.height(12.dp))
 
         // Product Items
-        if (vistaInventarioLista) {
+        if (filtered.isEmpty()) {
+            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                Text("Sin productos en inventario. Usa + Producto o Carga Masiva para empezar.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+            }
+        } else if (vistaInventarioLista) {
         filtered.forEach { prod ->
             val baseline = savedInventoryBaselines[prod.id]
             val formatText = if (baseline != null) {
