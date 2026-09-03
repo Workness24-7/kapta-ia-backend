@@ -39,10 +39,30 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         com.example.util.ReporteErrores.instalar(this)
         com.example.util.Notificaciones.crearCanal(this)
+        manejarDeepLink(intent)
         enableEdgeToEdge()
         setContent {
             KaptaApp()
         }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        manejarDeepLink(intent)
+    }
+
+    /** Deep link kaptaia://auth del retorno de Apple. */
+    private fun manejarDeepLink(intent: android.content.Intent?) {
+        try {
+            val uri = intent?.data ?: return
+            if (uri.scheme != "kaptaia") return
+            val canje = uri.getQueryParameter("canje").orEmpty()
+            val empresa = uri.getQueryParameter("empresa").orEmpty()
+            if (canje.isBlank() || empresa.isBlank()) return
+            androidx.lifecycle.ViewModelProvider(this)[com.example.ui.KaptaViewModel::class.java]
+                .setAppleDeepLink(uri)
+        } catch (_: Exception) { }
     }
 }
 
@@ -70,6 +90,45 @@ fun KaptaApp() {
             .getString("ultimo_codigo_negocio", null)
     }
     val startDestination = if (!ultimoCodigo.isNullOrBlank()) "company_login/$ultimoCodigo" else "redirection"
+
+    // Entrada común al POS con puerta de consentimiento legal.
+    fun irAlPos(company: com.example.data.local.entity.CompanyEntity) {
+        val u = viewModel.currentUser.value
+        val userKey = com.example.ui.screens.claveUsuarioConsentimiento(
+            u?.name ?: "", u?.email ?: "", u?.username ?: ""
+        )
+        if (com.example.ui.screens.tieneConsentimiento(context, company.code, userKey)) {
+            navController.navigate("tenant_pos")
+        } else {
+            navController.navigate("consentimiento/${company.code}")
+        }
+    }
+
+    // Retorno del navegador tras login con Apple (deep link kaptaia://auth).
+    val appleUri by viewModel.appleDeepLink.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(appleUri) {
+        val uri = appleUri ?: return@LaunchedEffect
+        viewModel.limpiarAppleDeepLink()
+        val canje = uri.getQueryParameter("canje").orEmpty()
+        val empresa = uri.getQueryParameter("empresa").orEmpty()
+        if (canje.isBlank() || empresa.isBlank()) return@LaunchedEffect
+        val res = viewModel.completarLoginApple(empresa, canje)
+        if (res.mensajeError != null) {
+            viewModel.showToast(res.mensajeError)
+            return@LaunchedEffect
+        }
+        val comp = viewModel.companies.value.find { it.code.equals(empresa, ignoreCase = true) }
+            ?: viewModel.empresaPorCodigo(empresa)
+        val user = comp?.let { viewModel.usuarioDesdeLoginSocial(it.code, it.id, res) }
+        if (comp == null || user == null) {
+            viewModel.showToast("No se pudo completar el ingreso con Apple.")
+            return@LaunchedEffect
+        }
+        viewModel.selectCompany(comp)
+        viewModel.setSuperAdminSession(false)
+        viewModel.setCurrentUser(user)
+        irAlPos(comp)
+    }
 
     // Reporte de error pendiente de un cierre anterior: ofrecer enviarlo a soporte.
     var reportePendiente by remember { mutableStateOf(com.example.util.ReporteErrores.pendiente(context)) }
@@ -162,17 +221,7 @@ fun KaptaApp() {
                 onLoginToPosSuccess = { company ->
                     viewModel.selectCompany(company)
                     viewModel.setSuperAdminSession(false)
-                    // Consentimiento legal: usuarios nuevos (o sin registro) lo aceptan antes de entrar.
-                    val u = viewModel.currentUser.value
-                    val userKey = com.example.ui.screens.claveUsuarioConsentimiento(
-                        u?.name ?: "", u?.email ?: "", u?.username ?: ""
-                    )
-                    val ctx = navController.context
-                    if (com.example.ui.screens.tieneConsentimiento(ctx, company.code, userKey)) {
-                        navController.navigate("tenant_pos")
-                    } else {
-                        navController.navigate("consentimiento/${company.code}")
-                    }
+                    irAlPos(company)
                 },
                 onBackToRedirection = {
                     navController.navigate("redirection")

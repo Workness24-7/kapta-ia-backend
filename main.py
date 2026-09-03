@@ -7,9 +7,12 @@ import json
 import re
 import os
 import uuid
+import time as _time
+import urllib.request as _urlreq
+import urllib.parse as _urlparse
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 
 import db
 
@@ -371,6 +374,252 @@ def action_login(params):
         "data": dict(admin_datos, idEmpresa=empresa, codigo=codigo,
                      empresaNombre=params.get("nombre") or empresa),
     })
+
+
+# ===================================================
+# LOGIN SOCIAL (Google / Apple)
+# ===================================================
+_CANJES_APPLE = {}  # canje -> {"empresa": codigo, "correo": email, "expira": epoch}
+
+
+def _google_ids_permitidos():
+    return [x.strip() for x in str(os.getenv("GOOGLE_WEB_CLIENT_ID") or "").split(",") if x.strip()]
+
+
+def _verificar_id_token_google(id_token):
+    """Valida el ID token contra Google. Retorna el payload o None."""
+    try:
+        url = "https://oauth2.googleapis.com/tokeninfo?id_token=" + _urlparse.quote(id_token, safe="")
+        with _urlreq.urlopen(url, timeout=10) as resp:
+            datos = json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
+    if str(datos.get("email_verified") or "").lower() not in ("true", "1"):
+        return None
+    if str(datos.get("aud") or "") not in _google_ids_permitidos():
+        return None
+    try:
+        if int(datos.get("exp") or 0) < int(_time.time()):
+            return None
+    except (TypeError, ValueError):
+        return None
+    if str(datos.get("iss") or "") not in ("accounts.google.com", "https://accounts.google.com"):
+        return None
+    return datos
+
+
+def _respuesta_sesion_social(empresa_codigo, codigo_cli, correo, rol, estado, nombre):
+    rol = rol or "Empleado"
+    estado = estado or "Activo"
+    return JSONResponse({
+        "status": "success",
+        "idEmpresa": empresa_codigo, "id_empresa": empresa_codigo, "Id_Negocio": empresa_codigo,
+        "id_negocio": empresa_codigo, "idEmpresaSesion": empresa_codigo,
+        "codigo": codigo_cli,
+        "empresaNombre": empresa_codigo,
+        "correo": correo, "rol": rol,
+        "nombre": nombre or "",
+        "estado": estado, "login": True,
+        "version": VERSION_API,
+        "data": {"idEmpresa": empresa_codigo, "codigo": codigo_cli,
+                 "empresaNombre": empresa_codigo, "idUsuario": "",
+                 "nombre": nombre or "", "correo": correo,
+                 "rol": rol, "estado": estado, "login": True},
+    })
+
+
+def _login_social_por_correo(codigo_cli, correo, nombre_sugerido=""):
+    """Sesión social por correo ya verificado (Google/Apple)."""
+    empresa = resolver_hoja(codigo_cli)
+    if not empresa:
+        return respuesta_error("No existe empresa con ese código.")
+    emp = db.buscar_empresa(codigo_cli) or {}
+    if str(emp.get("estado") or "").strip().lower() == "suspendido":
+        return respuesta_error("Empresa suspendida. Para reactivar contactanos.")
+    fv = str(emp.get("fecha_vencimiento") or "").strip()
+    if fv:
+        try:
+            if datetime.date.fromisoformat(fv[:10]) < datetime.date.today():
+                return respuesta_error("Membresía vencida. Para renovar contactanos.")
+        except ValueError:
+            pass
+
+    usuario = None
+    for (n, d) in db.leer_tabla(empresa, "usuarios"):
+        if str(d[2] or "").lower().strip() == correo:
+            usuario = d
+            break
+    if usuario is not None:
+        if str(usuario[5] or "") in ("Suspendido", "Bloqueado"):
+            return respuesta_error("Usuario " + str(usuario[5]).lower() + ".")
+        db.actualizar_ultimo_acceso(empresa, correo, fecha_actual())
+        return _respuesta_sesion_social(empresa, codigo_cli, correo,
+                                        usuario[4], usuario[5], usuario[1])
+    correo_admin = str(emp.get("correo") or "").lower().strip()
+    if correo and correo == correo_admin:
+        return _respuesta_sesion_social(empresa, codigo_cli, correo, "Administrador",
+                                        "Activo", str(emp.get("nombre") or "") or nombre_sugerido)
+    return respuesta_error("Tu correo no tiene usuario en este negocio. Pide al administrador que te cree uno.")
+
+
+def action_login_google(params):
+    codigo_cli = _limpiar(params.get("codigo") or params.get("idEmpresa"), 20).upper()
+    id_token = str(params.get("idToken") or "").strip()
+    if not codigo_cli or not id_token:
+        return respuesta_error("Faltan datos para el ingreso con Google.")
+    if not _google_ids_permitidos():
+        return respuesta_error("Ingreso con Google no configurado en el servidor.")
+    datos = _verificar_id_token_google(id_token)
+    if not datos:
+        return respuesta_error("No se pudo verificar tu cuenta de Google. Intenta de nuevo.")
+    correo = str(datos.get("email") or "").lower().strip()
+    if not correo:
+        return respuesta_error("Google no devolvió un correo válido.")
+    return _login_social_por_correo(codigo_cli, correo, str(datos.get("name") or ""))
+
+
+def _apple_env():
+    return {
+        "service_id": str(os.getenv("APPLE_SERVICE_ID") or "").strip(),
+        "team_id": str(os.getenv("APPLE_TEAM_ID") or "").strip(),
+        "key_id": str(os.getenv("APPLE_KEY_ID") or "").strip(),
+        "private_key": str(os.getenv("APPLE_PRIVATE_KEY") or "").replace("\\n", "\n"),
+        "redirect": str(os.getenv("APP_PUBLIC_URL") or "https://kapta-ia-backend-production.up.railway.app").rstrip("/") + "/apple/callback",
+    }
+
+
+def action_apple_auth_url(params):
+    """Devuelve la URL de autorización de Apple para el negocio indicado."""
+    cfg = _apple_env()
+    if not cfg["service_id"]:
+        return respuesta_error("Ingreso con Apple no configurado en el servidor.")
+    codigo_cli = _limpiar(params.get("codigo") or params.get("idEmpresa"), 20).upper()
+    if not codigo_cli:
+        return respuesta_error("Falta el código del negocio.")
+    if not resolver_hoja(codigo_cli):
+        return respuesta_error("No existe empresa con ese código.")
+    url = ("https://appleid.apple.com/auth/authorize?response_type=code"
+           "&response_mode=form_post"
+           "&client_id=" + _urlparse.quote(cfg["service_id"], safe="") +
+           "&redirect_uri=" + _urlparse.quote(cfg["redirect"], safe="") +
+           "&scope=" + _urlparse.quote("name email", safe="") +
+           "&state=" + _urlparse.quote(codigo_cli, safe=""))
+    return respuesta_success({"url": url})
+
+
+def _apple_client_secret(cfg):
+    """Firma el client_secret ES256 que exige Apple (requiere PyJWT)."""
+    try:
+        import jwt as _pyjwt
+    except Exception:
+        return None
+    ahora = int(_time.time())
+    payload = {"iss": cfg["team_id"], "iat": ahora, "exp": ahora + 300,
+               "aud": "https://appleid.apple.com", "sub": cfg["service_id"]}
+    try:
+        return _pyjwt.encode(payload, cfg["private_key"], algorithm="ES256",
+                             headers={"kid": cfg["key_id"]})
+    except Exception:
+        return None
+
+
+def _apple_verificar_identity_token(cfg, identity_token):
+    """Verifica firma y reclamos del identity_token con las llaves públicas de Apple."""
+    try:
+        import jwt as _pyjwt
+    except Exception:
+        return None
+    try:
+        with _urlreq.urlopen("https://appleid.apple.com/auth/keys", timeout=10) as resp:
+            jwks = json.loads(resp.read().decode("utf-8"))
+        sin_verificar = _pyjwt.decode(identity_token, options={"verify_signature": False})
+        kid = _pyjwt.get_unverified_header(identity_token).get("kid")
+        llave = next((k for k in jwks.get("keys", []) if k.get("kid") == kid), None)
+        if not llave:
+            return None
+        clave = _pyjwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(llave))
+        datos = _pyjwt.decode(identity_token, clave, algorithms=["RS256"],
+                              audience=cfg["service_id"], issuer="https://appleid.apple.com",
+                              leeway=60)
+        if str(datos.get("email_verified") or "").lower() not in ("true", "1", ""):
+            return None
+        return datos
+    except Exception:
+        return None
+
+
+def _apple_intercambiar_codigo(cfg, code):
+    """Intercambia el authorization code por tokens en Apple."""
+    secreto = _apple_client_secret(cfg)
+    if not secreto:
+        return None
+    try:
+        cuerpo = _urlparse.urlencode({
+            "grant_type": "authorization_code", "code": code,
+            "redirect_uri": cfg["redirect"], "client_id": cfg["service_id"],
+            "client_secret": secreto,
+        }).encode("utf-8")
+        req = _urlreq.Request("https://appleid.apple.com/auth/token", data=cuerpo, method="POST")
+        with _urlreq.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
+
+
+@app.get("/apple/callback")
+@app.post("/apple/callback")
+async def apple_callback(request: Request):
+    """Retorno de Apple: verifica, crea un canje de un solo uso y vuelve a la app."""
+    cfg = _apple_env()
+    if request.method == "GET":
+        params = dict(request.query_params)
+    else:
+        try:
+            ctype = request.headers.get("content-type", "")
+            if "application/json" in ctype:
+                params = await request.json()
+            else:
+                forma = await request.form()
+                params = dict(forma)
+        except Exception:
+            params = {}
+    codigo_cli = str(params.get("state") or "").strip().upper()
+    code = str(params.get("code") or "").strip()
+    if not cfg["service_id"] or not codigo_cli or not code:
+        return respuesta_error("Autorización de Apple incompleta.")
+    tokens = _apple_intercambiar_codigo(cfg, code)
+    if not tokens or not tokens.get("id_token"):
+        return respuesta_error("Apple no devolvió credenciales válidas.")
+    datos = _apple_verificar_identity_token(cfg, tokens["id_token"])
+    if not datos or not datos.get("email"):
+        return respuesta_error("No se pudo verificar tu cuenta de Apple.")
+    correo = str(datos["email"]).lower().strip()
+    canje = "APL-" + uuid.uuid4().hex[:12].upper()
+    _CANJES_APPLE[canje] = {"empresa": codigo_cli, "correo": correo,
+                            "expira": int(_time.time()) + 300}
+    destino = "kaptaia://auth?canje=" + _urlparse.quote(canje, safe="") + "&empresa=" + _urlparse.quote(codigo_cli, safe="")
+    # HTML que devuelve a la app vía deep link (el navegador no sabe mostrar JSON).
+    html = ("<!doctype html><html><head><meta charset='utf-8'>"
+            "<meta http-equiv='refresh' content='0;url=" + destino + "'>"
+            "<title>Volviendo a Kapta IA…</title></head>"
+            "<body style='font-family:sans-serif;text-align:center;padding-top:60px'>"
+            "<p>Verificación exitosa. Volviendo a la aplicación…</p>"
+            "<p><a href='" + destino + "'>Toca aquí si no regresa sola</a></p>"
+            "<script>window.location.href='" + destino + "';</script>"
+            "</body></html>")
+    return HTMLResponse(html)
+
+
+def action_login_apple_canjear(params):
+    """Canjea el código de un solo uso del callback de Apple por una sesión."""
+    canje = str(params.get("canje") or "").strip().upper()
+    codigo_cli = _limpiar(params.get("empresa") or params.get("codigo") or params.get("idEmpresa"), 20).upper()
+    datos = _CANJES_APPLE.pop(canje, None)
+    if not datos or int(datos.get("expira") or 0) < int(_time.time()):
+        return respuesta_error("Código de Apple vencido o inválido. Intenta de nuevo.")
+    if codigo_cli and datos.get("empresa") != codigo_cli:
+        return respuesta_error("El código no corresponde a este negocio.")
+    return _login_social_por_correo(datos.get("empresa"), datos.get("correo"))
 
 
 def action_registrar_empresa(params):
@@ -1422,6 +1671,9 @@ POST_ACTIONS = {
     "dedup_inventario": action_dedup_inventario,
     "registrar_inventario": action_escribir_fila,
     "registrar_movimiento": action_registrar_movimiento,
+    "login_google": action_login_google,
+    "apple_auth_url": action_apple_auth_url,
+    "login_apple_canjear": action_login_apple_canjear,
     "registrar_venta": action_escribir_fila,
     "registrar_deudor": action_escribir_fila,
     "registrar_gasto": action_escribir_fila,

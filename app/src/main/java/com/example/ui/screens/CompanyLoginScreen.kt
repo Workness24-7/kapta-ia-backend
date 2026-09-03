@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -191,6 +192,21 @@ fun CompanyLoginScreen(
         else -> androidx.compose.ui.text.font.FontFamily.Default
     }
 
+    // Cierre común de sesión exitosa (clave admin, usuario actual y navegación).
+    // Se usa en login con contraseña, biométrico y social (Google/Apple).
+    fun finalizarAcceso(user: CompanyUserEntity, cCode: String) {
+        val sesionPrefs = prefsSesion.edit()
+        if (user.role.contains("Admin", ignoreCase = true) || user.role.equals("Administrador", ignoreCase = true)) {
+            sesionPrefs.putBoolean("admin_iniciado_${cCode.uppercase()}", true)
+        } else {
+            sesionPrefs.putBoolean("admin_iniciado_${cCode.uppercase()}", false)
+        }
+        sesionPrefs.apply()
+        viewModel.setCurrentUser(user)
+        viewModel.setSuperAdminSession(false)
+        onLoginToPosSuccess(comp)
+    }
+
     // Flujo de autenticación compartido (usado por el botón "Ingresar al POS" y el botón biométrico).
     val loginFlow: (String, String) -> Unit = { uValInput, pValInput ->
         val cCode = comp.code.trim()
@@ -256,9 +272,90 @@ fun CompanyLoginScreen(
                     sesionPrefs.putBoolean("admin_iniciado_${cCode.uppercase()}", false)
                 }
                 sesionPrefs.apply()
-                viewModel.setCurrentUser(user)
-                viewModel.setSuperAdminSession(false)
-                onLoginToPosSuccess(comp)
+                finalizarAcceso(user, cCode)
+            }
+        }
+    }
+
+    // ID de cliente web de Google (BuildConfig vía .env). Sin él, el botón se oculta.
+    val googleWebClientId = remember {
+        try {
+            (Class.forName("com.example.BuildConfig").getField("GOOGLE_WEB_CLIENT_ID").get(null) as? String)?.trim().orEmpty()
+        } catch (_: Exception) { "" }
+    }
+
+    // Ingreso con Google vía Credential Manager (requiere cuenta creada por el admin).
+    fun ingresarConGoogle() {
+        if (googleWebClientId.isBlank()) {
+            loginErrorMsg = "Ingreso con Google no configurado en esta compilación."
+            return
+        }
+        if (!hayConexion(context)) {
+            loginErrorMsg = "Sin conexión a internet para continuar con Google."
+            return
+        }
+        scope.launch {
+            try {
+                val credManager = androidx.credentials.CredentialManager.create(context)
+                val googleOption = com.google.android.libraries.identity.googleid.GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(false)
+                    .setServerClientId(googleWebClientId)
+                    .build()
+                val request = androidx.credentials.GetCredentialRequest.Builder()
+                    .addCredentialOption(googleOption)
+                    .build()
+                val resultado = credManager.getCredential(context, request)
+                val credencial = resultado.credential
+                if (credencial is androidx.credentials.CustomCredential &&
+                    credencial.type == com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                ) {
+                    val idToken = com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+                        .createFrom(credencial.data).idToken
+                    val cCode = comp.code.trim()
+                    val res = viewModel.sheetsServiceLoginGoogle(cCode, idToken)
+                    if (res.mensajeError != null) {
+                        loginErrorMsg = res.mensajeError
+                        return@launch
+                    }
+                    val user = viewModel.usuarioDesdeLoginSocial(cCode, comp.id, res)
+                    if (user == null) {
+                        loginErrorMsg = "Google no devolvió datos válidos. Intenta de nuevo."
+                        return@launch
+                    }
+                    loginErrorMsg = null
+                    finalizarAcceso(user, cCode)
+                } else {
+                    loginErrorMsg = "No se obtuvo credencial de Google. Intenta de nuevo."
+                }
+            } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
+                // El usuario canceló: silencio.
+            } catch (e: Exception) {
+                loginErrorMsg = "No se pudo continuar con Google: ${e.message}"
+            }
+        }
+    }
+
+    // Ingreso con Apple: el servidor entrega la URL, el navegador vuelve vía deep link.
+    fun ingresarConApple() {
+        if (!hayConexion(context)) {
+            loginErrorMsg = "Sin conexión a internet para continuar con Apple."
+            return
+        }
+        scope.launch {
+            val cCode = comp.code.trim()
+            val (url, error) = viewModel.sheetsServiceAppleUrl(cCode)
+            if (url.isNullOrBlank()) {
+                loginErrorMsg = error ?: "Ingreso con Apple no configurado en el servidor."
+                return@launch
+            }
+            try {
+                val intent = android.content.Intent(
+                    android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse(url)
+                )
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                loginErrorMsg = "No se pudo abrir el navegador: ${e.message}"
             }
         }
     }
@@ -541,6 +638,58 @@ fun CompanyLoginScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Ingreso social (requiere que el admin haya creado tu usuario con ese correo).
+                    if (googleWebClientId.isNotBlank()) {
+                        OutlinedButton(
+                            onClick = { ingresarConGoogle() },
+                            shape = RoundedCornerShape(50),
+                            border = BorderStroke(0.6.dp, Color(0xFFCBD5E1)),
+                            modifier = Modifier.fillMaxWidth().height(46.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "G",
+                                    color = primaryBrandColor,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 16.sp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Continuar con Google",
+                                    color = neutralBrandColor,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = customFontFamily,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+                    Button(
+                        onClick = { ingresarConApple() },
+                        shape = RoundedCornerShape(50),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A)),
+                        modifier = Modifier.fillMaxWidth().height(46.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "",
+                                color = Color.White,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 16.sp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Continuar con Apple",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = customFontFamily,
+                                fontSize = 14.sp
+                            )
                         }
                     }
                 }

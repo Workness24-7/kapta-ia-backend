@@ -1369,6 +1369,63 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
         } catch (_: Exception) { u }
     }
 
+    /**
+     * Construye el usuario local desde un login social verificado (Google/Apple).
+     * La contraseña queda vacía: la sesión se sostiene con el proveedor.
+     */
+    fun usuarioDesdeLoginSocial(
+        companyCode: String,
+        companyId: Int,
+        res: com.example.data.remote.SheetsDatabaseService.LoginSocialResultado
+    ): CompanyUserEntity? {
+        val correo = res.correo?.trim().orEmpty()
+        if (res.idEmpresa == null || correo.isBlank()) return null
+        val nombre = res.nombre?.trim()?.ifBlank { correo } ?: correo
+        return CompanyUserEntity(
+            companyCode = companyCode,
+            companyId = companyId,
+            name = nombre,
+            role = res.rol?.trim()?.ifBlank { "Empleado" } ?: "Empleado",
+            email = correo,
+            username = nombre,
+            password = ""
+        )
+    }
+
+    suspend fun completarLoginApple(empresa: String, canje: String) =
+        sheetsService.loginAppleCanjear(empresa, canje)
+
+    suspend fun sheetsServiceLoginGoogle(codigo: String, idToken: String) =
+        sheetsService.loginGoogle(codigo, idToken)
+
+    suspend fun sheetsServiceAppleUrl(codigo: String) =
+        sheetsService.appleAuthUrl(codigo)
+
+    private val _appleCanje = MutableStateFlow<String?>(null)
+
+    private val _appleDeepLink = MutableStateFlow<android.net.Uri?>(null)
+    val appleDeepLink: StateFlow<android.net.Uri?> = _appleDeepLink.asStateFlow()
+
+    fun setAppleDeepLink(uri: android.net.Uri?) {
+        if (uri != null) _appleDeepLink.value = uri
+    }
+
+    fun limpiarAppleDeepLink() {
+        _appleDeepLink.value = null
+    }
+
+    fun setAppleCanje(empresa: String, canje: String) {
+        _appleCanje.value = "$empresa|$canje"
+    }
+
+    /** Consume el canje pendiente del deep link (una sola vez). */
+    fun consumirAppleCanje(): Pair<String, String>? {
+        val v = _appleCanje.value ?: return null
+        _appleCanje.value = null
+        val p = v.split("|")
+        return if (p.size == 2 && p[0].isNotBlank() && p[1].isNotBlank()) p[0] to p[1] else null
+    }
+
     // ponytail: espejo del hash PBKDF2 del backend; cachés locales con texto plano legado siguen validando
     private fun verificarContrasena(input: String, stored: String): Boolean {
         if (!stored.startsWith("pbkdf2$")) return stored == input

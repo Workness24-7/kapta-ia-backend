@@ -527,6 +527,104 @@ class SheetsDatabaseService(
     }
 
     /**
+     * Resultado de login social (Google/Apple): trae los datos del usuario
+     * ya verificado por el proveedor para crear la sesión local.
+     */
+    data class LoginSocialResultado(
+        val idEmpresa: String?,
+        val codigo: String?,
+        val nombre: String?,
+        val correo: String?,
+        val rol: String?,
+        val mensajeError: String?
+    )
+
+    private fun parseSocial(json: JSONObject, codigoFallback: String): LoginSocialResultado {
+        if (json.optString("status") != "success") {
+            return LoginSocialResultado(null, null, null, null, null, json.optString("message").ifBlank { null })
+        }
+        val idEmpresa = json.optString("idEmpresa")
+            .ifBlank { json.optString("id_empresa") }
+            .ifBlank { codigoFallback }
+        if (idEmpresa.isNotBlank()) currentIdEmpresa = idEmpresa
+        return LoginSocialResultado(
+            idEmpresa = idEmpresa.ifBlank { null },
+            codigo = json.optString("codigo").ifBlank { codigoFallback },
+            nombre = json.optString("nombre"),
+            correo = json.optString("correo"),
+            rol = json.optString("rol"),
+            mensajeError = null
+        )
+    }
+
+    /** Login con Google: envía el ID token para verificación en el servidor. */
+    suspend fun loginGoogle(codigo: String, idToken: String): LoginSocialResultado = withContext(Dispatchers.IO) {
+        try {
+            val jsonPayload = JSONObject().apply {
+                put("action", "login_google")
+                put("codigo", codigo)
+                put("idToken", idToken)
+            }
+            val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
+            val targetUrl: String = if (!webAppScriptUrl.isNullOrBlank()) webAppScriptUrl!! else APPS_SCRIPT_WEB_APP_URL
+            val request = Request.Builder().url(targetUrl).post(body).build()
+            client.newCall(request).execute().use { response ->
+                if (response.code == 429) throw RateLimitException("429 Rate Limit")
+                parseSocial(JSONObject(response.body?.string() ?: ""), codigo)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error en login_google: ${e.message}", e)
+            LoginSocialResultado(null, null, null, null, null, null)
+        }
+    }
+
+    /** Pide al servidor la URL de autorización de Apple para este negocio. */
+    suspend fun appleAuthUrl(codigo: String): Pair<String?, String?> = withContext(Dispatchers.IO) {
+        try {
+            val jsonPayload = JSONObject().apply {
+                put("action", "apple_auth_url")
+                put("codigo", codigo)
+            }
+            val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
+            val targetUrl: String = if (!webAppScriptUrl.isNullOrBlank()) webAppScriptUrl!! else APPS_SCRIPT_WEB_APP_URL
+            val request = Request.Builder().url(targetUrl).post(body).build()
+            client.newCall(request).execute().use { response ->
+                if (response.code == 429) throw RateLimitException("429 Rate Limit")
+                val json = JSONObject(response.body?.string() ?: "")
+                if (json.optString("status") == "success") {
+                    Pair(json.optJSONObject("data")?.optString("url"), null)
+                } else {
+                    Pair(null, json.optString("message").ifBlank { null })
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error en apple_auth_url: ${e.message}", e)
+            Pair(null, null)
+        }
+    }
+
+    /** Canjea el código del callback de Apple por una sesión. */
+    suspend fun loginAppleCanjear(empresa: String, canje: String): LoginSocialResultado = withContext(Dispatchers.IO) {
+        try {
+            val jsonPayload = JSONObject().apply {
+                put("action", "login_apple_canjear")
+                put("empresa", empresa)
+                put("canje", canje)
+            }
+            val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
+            val targetUrl: String = if (!webAppScriptUrl.isNullOrBlank()) webAppScriptUrl!! else APPS_SCRIPT_WEB_APP_URL
+            val request = Request.Builder().url(targetUrl).post(body).build()
+            client.newCall(request).execute().use { response ->
+                if (response.code == 429) throw RateLimitException("429 Rate Limit")
+                parseSocial(JSONObject(response.body?.string() ?: ""), empresa)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error en login_apple_canjear: ${e.message}", e)
+            LoginSocialResultado(null, null, null, null, null, null)
+        }
+    }
+
+    /**
      * Acción para Listar Empresas:
      * Al cargar la pantalla principal de selección de negocios, realiza una petición POST con {"action": "listar_empresas"}.
      * Retorna un arreglo con todas las empresas registradas (código, país, nombre, idEmpresa, correoAdmin, passwordAdmin).
