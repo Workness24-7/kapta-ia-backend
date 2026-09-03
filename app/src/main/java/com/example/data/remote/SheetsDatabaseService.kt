@@ -67,6 +67,12 @@ data class FinanzaKapta(
     val usuario: String = ""
 )
 
+data class ClaveDinamica(
+    val codigo: String,
+    val expira: Long = 0L,
+    val segundosRestantes: Int = 60
+)
+
 data class FinanzasKaptaResumen(
     val registros: List<FinanzaKapta> = emptyList(),
     val totalIngresos: Double = 0.0,
@@ -968,6 +974,10 @@ class SheetsDatabaseService(
     }
 
     suspend fun obtenerClaveDinamica(empresa: String): String? = withContext(Dispatchers.IO) {
+        obtenerClaveDinamicaDetalle(empresa)?.codigo
+    }
+
+    suspend fun obtenerClaveDinamicaDetalle(empresa: String): ClaveDinamica? = withContext(Dispatchers.IO) {
         try {
             val jsonPayload = JSONObject().apply {
                 put("action", "obtener_clave_dinamica")
@@ -982,7 +992,10 @@ class SheetsDatabaseService(
                 val json = JSONObject(str)
                 if (json.optString("status") == "success") {
                     val data = json.optJSONObject("data")
-                    data?.optString("codigo")?.takeIf { it.isNotBlank() }
+                    val cod = data?.optString("codigo")?.takeIf { it.isNotBlank() } ?: return@use null
+                    val exp = data.optLong("expira", 0L)
+                    val seg = data.optInt("segundosRestantes", 60)
+                    ClaveDinamica(codigo = cod, expira = exp, segundosRestantes = seg)
                 } else null
             }
         } catch (e: Exception) {

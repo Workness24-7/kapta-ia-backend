@@ -56,6 +56,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import com.example.R
 import com.example.ui.KaptaViewModel
+import com.example.ui.components.DynamicCodeDock
 import com.example.ui.components.EtherealBackground
 import com.example.ui.components.GlassCard
 import com.example.ui.components.KaptaLogoHeader
@@ -70,6 +71,9 @@ fun RedirectionLoginScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val prefsSesion = remember { context.getSharedPreferences("kapta_sesion", android.content.Context.MODE_PRIVATE) }
+    val dynamicClave by viewModel.dynamicClave.collectAsState()
+    val companies by viewModel.companies.collectAsState()
     var selectedCountry by remember { mutableStateOf(CountryItem("Colombia", R.drawable.flag_colombia)) }
     var countryDropdownExpanded by remember { mutableStateOf(false) }
     var companyCodeInput by remember { mutableStateOf("") }
@@ -84,6 +88,14 @@ fun RedirectionLoginScreen(
         CountryItem("Ecuador", R.drawable.flag_ecuador)
     )
 
+    val empresaUpper = companyCodeInput.trim().uppercase()
+    val adminIniciado = if (empresaUpper.isNotBlank()) prefsSesion.getBoolean("admin_iniciado_$empresaUpper", false) else false
+    LaunchedEffect(empresaUpper, adminIniciado) {
+        if (adminIniciado && empresaUpper.isNotBlank()) {
+            viewModel.iniciarClaveParaEmpresa(empresaUpper)
+        }
+    }
+
     EtherealBackground {
         Column(
             modifier = Modifier
@@ -94,7 +106,17 @@ fun RedirectionLoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
+            if (adminIniciado && empresaUpper.isNotBlank() && dynamicClave != null) {
+                val compForDock = companies.find { it.code.equals(empresaUpper, ignoreCase = true) }
+                val dockPrimary = try { Color(android.graphics.Color.parseColor(compForDock?.primaryColorHex ?: "#4F46E5")) } catch (_: Exception) { Color(0xFF4F46E5) }
+                val dockSecondary = try { Color(android.graphics.Color.parseColor(compForDock?.secondaryColorHex ?: "#3B82F6")) } catch (_: Exception) { Color(0xFF3B82F6) }
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopStart) {
+                    DynamicCodeDock(clave = dynamicClave, primaryColor = dockPrimary, secondaryColor = dockSecondary)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            } else {
+                Spacer(modifier = Modifier.height(24.dp))
+            }
 
             // Header Logo
             Column(horizontalAlignment = Alignment.CenterHorizontally) {

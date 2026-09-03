@@ -1157,6 +1157,9 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
     private val _dynamicCode = MutableStateFlow<String?>(null)
     val dynamicCode: StateFlow<String?> = _dynamicCode.asStateFlow()
 
+    private val _dynamicClave = MutableStateFlow<com.example.data.remote.ClaveDinamica?>(null)
+    val dynamicClave: StateFlow<com.example.data.remote.ClaveDinamica?> = _dynamicClave.asStateFlow()
+
     private var dynamicJob: Job? = null
 
     private fun esAdministrador(user: CompanyUserEntity?): Boolean {
@@ -1177,8 +1180,11 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
         dynamicJob = viewModelScope.launch {
             while (true) {
                 try {
-                    val codigo = sheetsService.obtenerClaveDinamica(empresa)
-                    if (!codigo.isNullOrBlank()) _dynamicCode.value = codigo
+                    val detalle = sheetsService.obtenerClaveDinamicaDetalle(empresa)
+                    if (detalle != null) {
+                        _dynamicClave.value = detalle
+                        _dynamicCode.value = detalle.codigo
+                    }
                 } catch (_: Exception) { }
                 kotlinx.coroutines.delay(30_000L)
             }
@@ -1186,8 +1192,38 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
         // fetch inmediato
         viewModelScope.launch {
             try {
-                val codigo = sheetsService.obtenerClaveDinamica(empresa)
-                if (!codigo.isNullOrBlank()) _dynamicCode.value = codigo
+                val detalle = sheetsService.obtenerClaveDinamicaDetalle(empresa)
+                if (detalle != null) {
+                    _dynamicClave.value = detalle
+                    _dynamicCode.value = detalle.codigo
+                }
+            } catch (_: Exception) { }
+        }
+    }
+
+    // Para pantallas de login (sin usuario logueado) que conocen el codigo de empresa
+    fun iniciarClaveParaEmpresa(empresa: String) {
+        if (empresa.isBlank()) return
+        detenerClaveDinamica()
+        dynamicJob = viewModelScope.launch {
+            while (true) {
+                try {
+                    val detalle = sheetsService.obtenerClaveDinamicaDetalle(empresa.uppercase())
+                    if (detalle != null) {
+                        _dynamicClave.value = detalle
+                        _dynamicCode.value = detalle.codigo
+                    }
+                } catch (_: Exception) { }
+                kotlinx.coroutines.delay(30_000L)
+            }
+        }
+        viewModelScope.launch {
+            try {
+                val detalle = sheetsService.obtenerClaveDinamicaDetalle(empresa.uppercase())
+                if (detalle != null) {
+                    _dynamicClave.value = detalle
+                    _dynamicCode.value = detalle.codigo
+                }
             } catch (_: Exception) { }
         }
     }
@@ -1196,6 +1232,7 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
         dynamicJob?.cancel()
         dynamicJob = null
         _dynamicCode.value = null
+        _dynamicClave.value = null
     }
 
     suspend fun validarClaveDinamica(codigo: String): Boolean {
@@ -1207,10 +1244,12 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
             sheetsService.validarClaveDinamica(empresa, codigo.trim())
         } catch (_: Exception) { false }
         if (ok) {
-            // Regenera en backend al usarse; refrescar local inmediatamente
             try {
-                val nuevo = sheetsService.obtenerClaveDinamica(empresa)
-                if (!nuevo.isNullOrBlank()) _dynamicCode.value = nuevo
+                val detalle = sheetsService.obtenerClaveDinamicaDetalle(empresa)
+                if (detalle != null) {
+                    _dynamicClave.value = detalle
+                    _dynamicCode.value = detalle.codigo
+                }
             } catch (_: Exception) { }
         }
         return ok

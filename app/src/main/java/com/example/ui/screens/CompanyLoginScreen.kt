@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,6 +66,7 @@ import com.example.data.local.entity.CompanyEntity
 import com.example.data.local.entity.CompanyUserEntity
 import android.util.Log
 import com.example.ui.KaptaViewModel
+import com.example.ui.components.DynamicCodeDock
 import com.example.ui.components.EtherealBackground
 import com.example.ui.components.KaptaLogoHeader
 
@@ -106,6 +108,15 @@ fun CompanyLoginScreen(
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember { context.getSharedPreferences("kapta_login", android.content.Context.MODE_PRIVATE) }
+    val prefsSesion = remember { context.getSharedPreferences("kapta_sesion", android.content.Context.MODE_PRIVATE) }
+    val dynamicClave by viewModel.dynamicClave.collectAsState()
+    val empresaUpperLogin = companyCode.trim().uppercase()
+    val adminIniciadoLogin = if (empresaUpperLogin.isNotBlank()) prefsSesion.getBoolean("admin_iniciado_$empresaUpperLogin", false) else false
+    androidx.compose.runtime.LaunchedEffect(empresaUpperLogin, adminIniciadoLogin) {
+        if (adminIniciadoLogin && empresaUpperLogin.isNotBlank()) {
+            viewModel.iniciarClaveParaEmpresa(empresaUpperLogin)
+        }
+    }
 
     // Volver al login de redirección solo con 5 pulsaciones de atrás consecutivas.
     var backPressCount by remember { mutableStateOf(0) }
@@ -184,6 +195,12 @@ fun CompanyLoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
+            if (adminIniciadoLogin && dynamicClave != null && dynamicClave?.codigo?.isNotBlank() == true) {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopStart) {
+                    DynamicCodeDock(clave = dynamicClave, primaryColor = primaryBrandColor, secondaryColor = secondaryBrandColor)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -427,6 +444,10 @@ fun CompanyLoginScreen(
                                         prefs.edit().clear().apply()
                                     }
 
+                                    // marcar que admin ya inició sesión para mostrar clave dinámica en logins futuros
+                                    if (user.role.contains("Admin", ignoreCase = true) || user.role.equals("Administrador", ignoreCase = true)) {
+                                        prefsSesion.edit().putBoolean("admin_iniciado_${cCode.uppercase()}", true).apply()
+                                    }
                                     viewModel.setCurrentUser(user)
                                     viewModel.setSuperAdminSession(false)
                                     onLoginToPosSuccess(comp)
