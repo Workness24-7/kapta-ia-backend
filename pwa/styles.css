@@ -49,3 +49,23 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .btn-mini { border: 0; border-radius: 10px; padding: 8px 12px; background: var(--prim); color: #fff; font-weight: 700; font-size: 13px; margin-top: 6px; }
 .btn-mini.verde { background: var(--ok); }
 .volver { background: none; border: 0; color: var(--prim); font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+.fila-btns { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.fila-btns label.btn-mini { cursor: pointer; }
+.seg { display: flex; gap: 6px; margin: 8px 0; }
+.seg button { flex: 1; border: 0; border-radius: 12px; padding: 9px 0; background: #E8EAF6; color: var(--mut); font-weight: 700; font-size: 13px; }
+.seg button.on { background: var(--prim); color: #fff; }
+.tabla { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tabla th, .tabla td { text-align: left; padding: 7px 6px; border-bottom: 1px solid #E2E8F0; }
+.tabla th { color: var(--mut); font-size: 11px; }
+.card.utilidad { background: #14131f; color: #fff; }
+.card.utilidad small { color: #ffffffd9; }
+.card.utilidad b { font-size: 22px; display: block; }
+#modal { position: fixed; inset: 0; z-index: 40; background: #0007; display: flex; align-items: flex-end; justify-content: center; }
+#modal-card { background: #fff; width: 100%; max-width: 520px; max-height: 88dvh; overflow-y: auto; border-radius: 20px 20px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
+#modal-card h2 { margin-top: 0; }
+#print-area { display: none; }
+@media print {
+  #app, #toast, #modal { display: none !important; }
+  #print-area { display: block; font-size: 12px; }
+  #print-area .tabla { font-size: 11px; }
+}

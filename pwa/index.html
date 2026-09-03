@@ -16,7 +16,6 @@
 </head>
 <body>
 <div id="app">
-  <!-- NEGOCIO -->
   <section id="p-negocio" class="pantalla">
     <div class="centrado">
       <div class="logo">🧾</div>
@@ -29,7 +28,6 @@
     </div>
   </section>
 
-  <!-- LOGIN -->
   <section id="p-login" class="pantalla oculto">
     <div class="centrado">
       <div class="logo">🧾</div>
@@ -44,26 +42,23 @@
     </div>
   </section>
 
-  <!-- POS -->
   <section id="p-pos" class="pantalla oculto">
     <header id="pos-header"><span id="pos-negocio">Negocio</span><span id="pos-usuario"></span></header>
 
     <div id="t-inicio" class="tab">
-      <h2>Resumen General</h2>
+      <h2>Resumen General del Negocio</h2>
       <div class="grid2" id="resumen"></div>
-      <h3>Acciones rápidas</h3>
-      <div class="grid2">
-        <button class="acc" data-go="venta">🛒<span>Nueva venta</span></button>
-        <button class="acc" data-go="deudores">👤<span>Deudores</span></button>
-        <button class="acc" data-go="inventario">📦<span>Inventario</span></button>
-        <button id="btn-recargar">🔄<span>Recargar</span></button>
-      </div>
-      <h3>Alertas de stock</h3>
-      <div id="alertas"></div>
+      <div id="bloque-acciones"><h3>Acciones rápidas</h3><div class="grid2" id="acciones"></div></div>
+      <div id="bloque-alertas"><h3>Alertas de stock</h3><div id="alertas"></div></div>
     </div>
 
     <div id="t-venta" class="tab oculto">
       <h2>Nueva Venta</h2>
+      <div class="fila">
+        <select id="venta-modo"><option value="Normal">Normal</option><option value="Bolirrana">Bolirrana</option></select>
+        <input id="venta-mesa" type="number" min="1" max="20" value="1" class="oculto" title="Mesa">
+      </div>
+      <p id="venta-chico-info" class="muted oculto"></p>
       <input id="venta-buscar" placeholder="Buscar producto..." autocomplete="off">
       <div id="venta-productos"></div>
       <div id="venta-carrito" class="oculto">
@@ -78,13 +73,16 @@
           <label class="check"><input type="checkbox" id="venta-fiado"> Fiado</label>
         </div>
         <button id="btn-cobrar" class="btn exito">Cobrar</button>
+        <button id="btn-regalo" class="btn link">🎁 Regalo de la casa</button>
       </div>
     </div>
 
     <div id="t-inventario" class="tab oculto">
-      <h2>Inventario</h2>
+      <h2>Inventario de Productos</h2>
+      <div id="inv-botones" class="fila-btns"></div>
       <input id="inv-buscar" placeholder="Buscar producto..." autocomplete="off">
       <div id="inv-lista"></div>
+      <div id="inv-movimientos" class="oculto"></div>
     </div>
 
     <div id="t-deudores" class="tab oculto">
@@ -93,22 +91,45 @@
       <div id="deu-detalle" class="oculto"></div>
     </div>
 
+    <div id="t-finanzas" class="tab oculto">
+      <h2>Estado Financiero</h2>
+      <div id="fin-pdf-btn"></div>
+      <div id="fin-filtros" class="seg"></div>
+      <div id="fin-rango" class="oculto fila">
+        <input id="fin-desde" placeholder="dd/mm/aaaa" inputmode="numeric">
+        <input id="fin-hasta" placeholder="dd/mm/aaaa" inputmode="numeric">
+      </div>
+      <div class="grid2" id="fin-kpis"></div>
+      <div id="fin-utilidad"></div>
+      <div id="fin-ventas"></div>
+      <div id="fin-gastos"></div>
+    </div>
+
+    <div id="t-usuarios" class="tab oculto">
+      <h2>Usuarios y Roles</h2>
+      <button id="btn-nuevo-usuario" class="btn primario">+ Crear Usuario</button>
+      <div id="usu-lista"></div>
+      <div id="usu-form" class="oculto"></div>
+    </div>
+
     <div id="t-cuenta" class="tab oculto">
       <h2>Cuenta</h2>
       <div class="card" id="cuenta-info"></div>
+      <div id="cuenta-clave"></div>
+      <div class="card">
+        <b>Teléfono del negocio</b>
+        <div class="fila"><input id="cuenta-tel" inputmode="tel" placeholder="+57 ..."><button class="btn-mini" id="btn-tel">Guardar</button></div>
+      </div>
       <button id="btn-salir" class="btn peligro">Cerrar sesión</button>
     </div>
 
-    <nav id="dock">
-      <button data-tab="inicio" class="on">🏠<span>Inicio</span></button>
-      <button data-tab="venta">🛒<span>Venta</span></button>
-      <button data-tab="inventario">📦<span>Inventario</span></button>
-      <button data-tab="deudores">👤<span>Deudores</span></button>
-      <button data-tab="cuenta">👨‍💼<span>Cuenta</span></button>
-    </nav>
+    <nav id="dock"></nav>
   </section>
 </div>
+
+<div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
+<div id="print-area"></div>
 <script src="app.js"></script>
 </body>
 </html>

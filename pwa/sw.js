@@ -1,5 +1,5 @@
 /* Service Worker mínimo: shell offline, API siempre a red. */
-const CACHE = "kapta-pwa-v1";
+const CACHE = "kapta-pwa-v2";
 const SHELL = ["./index.html", "./styles.css", "./app.js", "./manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
