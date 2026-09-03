@@ -489,7 +489,8 @@ def action_login_superadmin(params):
     return respuesta_error("Credenciales de superadmin inválidas.")
 
 
-def action_login_google(params):    codigo_cli = _limpiar(params.get("codigo") or params.get("idEmpresa"), 20).upper()
+def action_login_google(params):
+    codigo_cli = _limpiar(params.get("codigo") or params.get("idEmpresa"), 20).upper()
     id_token = str(params.get("idToken") or "").strip()
     if not codigo_cli or not id_token:
         return respuesta_error("Faltan datos para el ingreso con Google.")
