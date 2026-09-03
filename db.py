@@ -21,9 +21,9 @@ CABECERAS = {
                "Cantidad", "Precio_Unitario", "Subtotal", "Descuento",
                "Transferencia", "Efectivo", "Total", "Usuario", "Estado",
                "Fecha_Modificacion", "Hora_Modificacion", "Modificado_Por",
-               "Fecha_Anulacion", "Hora_Anulacion", "Anulado_Por"],
+               "Fecha_Anulacion", "Hora_Anulacion", "Anulado_Por", "Tipo"],
     "deudores": ["Fecha_Registro", "Nom_Cliente", "Producto", "Cantidad",
-                 "Minimo", "Transferencia", "Efectivo", "Total_Pendiente"],
+                 "Minimo", "Transferencia", "Efectivo", "Total_Pendiente", "Tipo", "Perdedor", "Chico"],
     "movimientos": ["Id_Movimiento", "Fecha", "Id_Producto", "Nom_Producto",
                     "Tipo", "Cantidad", "Stock_Anterior", "Stock_Nuevo",
                     "Usuario", "Observacion"],
@@ -706,18 +706,42 @@ def reactivar_empresa(codigo):
         conn.commit()
 
 
-def guardar_foto(datos_b64):
-    """Logos de empresa: se guardan en Postgres para acceso multi-dispositivo."""
+def guardar_foto(datos_b64, empresa=""):
+    """Logos/fotos de producto: se guardan en Postgres para acceso multi-dispositivo.
+    empresa = codigo (ej KAMELOT): cada imagen queda asociada a su negocio."""
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 "CREATE TABLE IF NOT EXISTS fotos ("
-                "id TEXT PRIMARY KEY, contenido TEXT, creado TIMESTAMP DEFAULT NOW())"
+                "id TEXT PRIMARY KEY, contenido TEXT, empresa TEXT DEFAULT '', "
+                "creado TIMESTAMP DEFAULT NOW())"
             )
+            cur.execute("ALTER TABLE fotos ADD COLUMN IF NOT EXISTS empresa TEXT DEFAULT ''")
             foto_id = uuid.uuid4().hex[:12]
-            cur.execute("INSERT INTO fotos (id, contenido) VALUES (%s, %s)", (foto_id, datos_b64))
+            cur.execute(
+                "INSERT INTO fotos (id, contenido, empresa) VALUES (%s, %s, %s)",
+                (foto_id, datos_b64, empresa),
+            )
         conn.commit()
     return foto_id
+
+
+def listar_fotos(empresa=""):
+    """Superadmin: id, empresa y fecha de cada imagen (para saber de quién es cada foto)."""
+    sql = "SELECT id, empresa, creado, octet_length(contenido) FROM fotos"
+    valores = ()
+    if empresa:
+        sql += " WHERE empresa=%s"
+        valores = (empresa,)
+    sql += " ORDER BY creado"
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, valores)
+            filas = cur.fetchall()
+    return [
+        {"id": r[0], "empresa": r[1] or "", "creado": str(r[2]), "bytes": r[3]}
+        for r in filas
+    ]
 
 
 def obtener_foto(foto_id):

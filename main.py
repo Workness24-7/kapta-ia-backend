@@ -25,9 +25,9 @@ VERSION_API = "KAPTA-1.0.0"
 # Eliminadas: estadisticas, ia.
 # ===================================================
 TABLAS = {
-    "INVENTARIO": {"INICIO": 1, "FILA_INICIO": 3, "COLUMNAS": 12},
-    "VENTAS": {"INICIO": 14, "FILA_INICIO": 3, "COLUMNAS": 21},
-    "DEUDORES": {"INICIO": 36, "FILA_INICIO": 3, "COLUMNAS": 8},
+    "INVENTARIO": {"INICIO": 1, "FILA_INICIO": 3, "COLUMNAS": 13},
+    "VENTAS": {"INICIO": 14, "FILA_INICIO": 3, "COLUMNAS": 22},
+    "DEUDORES": {"INICIO": 36, "FILA_INICIO": 3, "COLUMNAS": 11},
     "GASTOS": {"INICIO": 45, "FILA_INICIO": 3, "COLUMNAS": 14},
     "AUDITORIA_GASTOS": {"INICIO": 60, "FILA_INICIO": 3, "COLUMNAS": 8},
     "USUARIOS": {"INICIO": 69, "FILA_INICIO": 3, "COLUMNAS": 11},
@@ -43,9 +43,9 @@ CABECERAS = {
                "Cantidad", "Precio_Unitario", "Subtotal", "Descuento",
                "Transferencia", "Efectivo", "Total", "Usuario", "Estado",
                "Fecha_Modificacion", "Hora_Modificacion", "Modificado_Por",
-               "Fecha_Anulacion", "Hora_Anulacion", "Anulado_Por"],
+               "Fecha_Anulacion", "Hora_Anulacion", "Anulado_Por", "Tipo"],
     "DEUDORES": ["Fecha_Registro", "Nom_Cliente", "Producto", "Cantidad",
-                 "Minimo", "Transferencia", "Efectivo", "Total_Pendiente"],
+                 "Minimo", "Transferencia", "Efectivo", "Total_Pendiente", "Tipo", "Perdedor", "Chico"],
     "MOVIMIENTOS": ["Id_Movimiento", "Fecha", "Id_Producto", "Nom_Producto",
                     "Tipo", "Cantidad", "Stock_Anterior", "Stock_Nuevo",
                     "Usuario", "Observacion"],
@@ -457,6 +457,12 @@ def action_registrar_empresa(params):
         "correo": str(datos.get("adminCorreo") or "").lower(),
         "password": _hash_password(str(datos.get("adminPassword") or "")[:128]),
     }
+
+    # Limpiar usuarios existentes (solo dejar 1: el admin del form)
+    for (n, _d) in db.leer_tabla(codigo, "usuarios"):
+        if n > 2:
+            db.borrar_fila(codigo, "usuarios", n)
+
     fila_admin = ["USR-" + uuid.uuid4().hex[:8].upper(), admin["nombre"],
                   admin["correo"], admin["password"], "Administrador", "Activo",
                   fecha_hoy, "", "", "", ""]
@@ -647,6 +653,17 @@ def action_escribir_fila(params):
         datos = list(datos)
         datos[0] = db.siguiente_id(empresa, tabla_key.lower(), prefijo, ancho)
 
+    # Venta directa: el cliente suele enviar Id_Producto vacio; se resuelve desde el
+    # inventario por nombre (igual que en el pago de deudores) y se normalizan numeros
+    # (sin decimales fantasma) y fecha (unico formato dd/mm/yyyy).
+    if tabla_key == "VENTAS":
+        datos = list(datos)
+        if not str(datos[4] or "").strip():
+            datos[4] = _resolver_id_producto(empresa, datos[5])
+        datos[1] = _fecha_iso_a_latina(datos[1])
+        for i in (6, 7, 8, 9, 10, 11, 12):
+            datos[i] = _normalizar_numero(datos[i])
+
     # Tablas globales (USUARIOS, GASTOS...) usan CABECERAS_GLOBALES (sin Codigo_Empresa);
     # las por-negocio usan TABLAS. El corte debe respetar esa longitud o se pierden
     # columnas como Funciones en usuarios.
@@ -728,13 +745,112 @@ def action_pagar_deudor(params):
 
     movido_a_ventas = False
     if nuevo_pendiente == 0:
+        usuario = str(params.get("usuario") or params.get("userName")
+                      or params.get("usuarioNombre") or "").strip()
         movido_a_ventas = mover_deudor_a_ventas(empresa, fila_deudor, fila_datos,
-                                                nueva_transferencia, nuevo_efectivo)
+                                                nueva_transferencia, nuevo_efectivo, usuario)
 
     return respuesta_success({
         "cliente": cliente, "pagado": monto_pagado,
         "totalPendiente": nuevo_pendiente, "pagadoOk": True,
         "movidoAVentas": movido_a_ventas,
+    })
+
+
+def action_asignar_perdedor(params):
+    """Escribe el nombre del perdedor (col 9) de un chico/orden deudor.
+    En bolirrana una cuenta (cliente) acumula varios chicos; el perdedor se
+    asigna después, a un chico concreto. Si hay varios chicos del mismo
+    producto, se edita el primero que aún no tenga perdedor.
+    ponytail: coincidencia por cliente+producto (el app no reenvía la fila);
+    si un mismo chico necesitara edición fina, pasar tambien fecha para cotejar."""
+    clave = str(params.get("sheetName") or params.get("idEmpresa") or "").strip()
+    cliente = str(params.get("clienteNombre") or params.get("clientName") or "").strip()
+    producto = str(params.get("productoNombre") or params.get("productName") or "").strip()
+    perdedor = str(params.get("perdedor") or "").strip()
+    if not clave:
+        return respuesta_error("No se recibió sheetName.")
+    if not cliente:
+        return respuesta_error("No se recibió el nombre del cliente.")
+    if not perdedor:
+        return respuesta_error("No se recibió el nombre del perdedor.")
+    empresa = resolver_hoja(clave)
+    if not empresa:
+        return respuesta_error("No existe la hoja: " + clave)
+
+    for (n, d) in sorted(db.leer_tabla(empresa, "deudores"), key=lambda f: f[0]):
+        nom_cliente = str(d[1] or "").strip()
+        if nom_cliente.lower() != cliente.lower():
+            continue
+        if producto and str(d[2] or "").strip().lower() != producto.lower():
+            continue
+        if str(d[9] or "").strip():
+            continue
+        d[9] = perdedor
+        db.guardar_fila(empresa, "deudores", n, d)
+        return respuesta_success({"cliente": cliente, "producto": producto, "perdedor": perdedor})
+    return respuesta_error("No se encontró el chico sin perdedor para: " + cliente)
+
+
+def action_dividir_chico(params):
+    """Divide el total pendiente de un chico (col 10) de una bolirrana entre
+    varias personas: crea (o recarga) una cuenta deudora por persona con su
+    parte y borra las filas del chico de la cuenta bolirrana.
+    partes = [nombre1, nombre2, ...] -> reparto equitativo del total del chico.
+    ponytail: reparto equitativo; si se necesitara importe por persona, pasar
+    partes como [{"nombre": x, "monto": y}]."""
+    clave = str(params.get("sheetName") or params.get("idEmpresa") or "").strip()
+    bolirrana = str(params.get("clienteNombre") or params.get("clientName") or "").strip()
+    partes = params.get("partes") or []
+    if isinstance(partes, str):
+        try:
+            partes = json.loads(partes)
+        except (json.JSONDecodeError, TypeError):
+            partes = []
+    try:
+        chico = int(params.get("chico") or 0)
+    except (TypeError, ValueError):
+        chico = 0
+    nombres = [str(p.get("nombre") if isinstance(p, dict) else p or "").strip()
+               for p in partes if p]
+    nombres = [n for n in nombres if n]
+    if not clave:
+        return respuesta_error("No se recibió sheetName.")
+    if not bolirrana:
+        return respuesta_error("No se recibió el nombre de la bolirrana.")
+    if chico <= 0:
+        return respuesta_error("No se recibió el número de chico.")
+    if not nombres:
+        return respuesta_error("No se recibieron personas para dividir.")
+    empresa = resolver_hoja(clave)
+    if not empresa:
+        return respuesta_error("No existe la hoja: " + clave)
+
+    filas_chico = []
+    for (n, d) in sorted(db.leer_tabla(empresa, "deudores"), key=lambda f: f[0]):
+        if str(d[1] or "").strip().lower() != bolirrana.lower():
+            continue
+        if str(d[10] if len(d) > 10 else "").strip() != str(chico):
+            continue
+        filas_chico.append((n, d))
+    if not filas_chico:
+        return respuesta_error("No se encontró el chico " + str(chico) + " de " + bolirrana)
+
+    total = sum(_to_float(d[7]) for (_, d) in filas_chico)
+    share = (total / len(nombres)) if len(nombres) else 0
+    fecha = str(filas_chico[0][1][0] or "").strip()
+    producto = str(filas_chico[0][1][2] or "").strip() or bolirrana
+    for persona in nombres:
+        fila_nueva = db.siguiente_fila_libre(empresa, "deudores", TABLAS["DEUDORES"]["FILA_INICIO"])
+        datos = [fecha, persona, producto + " (Chico " + str(chico) + ")", "1",
+                 "1", 0, 0, _normalizar_numero(share), "Bolirrana", "", chico]
+        db.guardar_fila(empresa, "deudores", fila_nueva,
+                        [str(x) if x is not None else "" for x in datos])
+    for (n, _) in filas_chico:
+        db.borrar_fila(empresa, "deudores", n)
+    return respuesta_success({
+        "bolirrana": bolirrana, "chico": chico, "total": _normalizar_numero(total),
+        "personas": nombres, "parte": _normalizar_numero(share),
     })
 
 
@@ -744,6 +860,30 @@ def _to_float(v):
         return num if num == num else 0.0
     except (TypeError, ValueError):
         return 0.0
+
+
+def _normalizar_numero(v):
+    """5.0 -> 5, 2500.5 -> 2500.5, 'abc'/vacio -> se deja como llego (texto o '')."""
+    if v is None or str(v).strip() == "":
+        return ""
+    try:
+        num = float(v)
+    except (TypeError, ValueError):
+        return str(v).strip()
+    if num == int(num):
+        return int(num)
+    return round(num, 2)
+
+
+def _fecha_iso_a_latina(texto):
+    """'2026-08-30' -> '30/08/2026'; si ya viene dd/mm/yyyy (o no parsea) se deja igual."""
+    if not texto:
+        return texto
+    t = str(texto).strip()
+    try:
+        return datetime.datetime.strptime(t[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+    except ValueError:
+        return t
 
 
 def _resolver_id_producto(empresa, nombre_producto):
@@ -759,22 +899,25 @@ def _resolver_id_producto(empresa, nombre_producto):
     return ""
 
 
-def mover_deudor_a_ventas(empresa, fila_deudor, datos, nueva_transferencia, nuevo_efectivo):
+def mover_deudor_a_ventas(empresa, fila_deudor, datos, nueva_transferencia, nuevo_efectivo, usuario=""):
     fila_venta = db.siguiente_fila_libre(empresa, "ventas", TABLAS["VENTAS"]["FILA_INICIO"])
     total = nueva_transferencia + nuevo_efectivo
     cantidad = _to_float(datos[3]) or 1
     precio_unitario = total / cantidad if cantidad else total
 
     fecha_hora = str(datos[0] or "").strip().split()
-    fecha = fecha_hora[0] if fecha_hora else ""
+    fecha = _fecha_iso_a_latina(fecha_hora[0] if fecha_hora else "")
     hora = fecha_hora[1] if len(fecha_hora) > 1 else ""
 
     id_venta = db.siguiente_id(empresa, "ventas", "V-")
     id_producto = _resolver_id_producto(empresa, datos[2])
     fila_valores = [
         id_venta, fecha, hora, datos[1] or "", id_producto, datos[2] or "",
-        cantidad, precio_unitario, total, "", nueva_transferencia,
-        nuevo_efectivo, total, "", "Activo", "", "", "", "", "", "",
+        _normalizar_numero(cantidad), _normalizar_numero(precio_unitario),
+        _normalizar_numero(total), "", _normalizar_numero(nueva_transferencia),
+        _normalizar_numero(nuevo_efectivo), _normalizar_numero(total), usuario,
+        "Activo", "", "", "", "", "", "",
+        str(datos[8] or "").strip() or "Normal",
     ]
     db.guardar_fila(empresa, "ventas", fila_venta, fila_valores)
     db.borrar_fila(empresa, "deudores", fila_deudor)
@@ -814,6 +957,22 @@ def action_eliminar_usuario(params):
         return respuesta_error("Usuario no encontrado: " + correo)
     db.borrar_fila(empresa, "usuarios", fila_usr)
     return respuesta_success({"correo": correo, "eliminado": True})
+
+
+def action_actualizar_contrasena(params):
+    clave = str(params.get("sheetName") or params.get("empresaNombre")
+                or params.get("idEmpresa") or "").strip()
+    correo = str(params.get("userEmail") or params.get("correo") or "").lower().strip()
+    clave_nueva = str(params.get("clave") or "").strip()
+    if not clave:
+        return respuesta_error("No existe la hoja: " + clave)
+    if not correo or not clave_nueva:
+        return respuesta_error("No se recibió correo o contraseña.")
+    empresa = resolver_hoja(clave)
+    if not empresa:
+        return respuesta_error("No existe la hoja: " + clave)
+    db.actualizar_contrasena(empresa, correo, _hash_password(clave_nueva))
+    return respuesta_success({"correo": correo, "actualizado": True})
 
 
 def action_eliminar_producto(params):
@@ -1061,8 +1220,19 @@ def action_subir_foto(params):
     datos = str(params.get("datos") or "")
     if len(datos) < 100:
         return respuesta_error("Imagen no válida.")
-    foto_id = db.guardar_foto(datos)
+    clave = str(params.get("idEmpresa") or params.get("sheetName") or params.get("empresa") or "").strip()
+    empresa = resolver_hoja(clave) if clave else ""
+    if not empresa:
+        empresa = clave.upper()
+    foto_id = db.guardar_foto(datos, empresa)
     return respuesta_success({"id": foto_id, "url": "/foto/" + foto_id})
+
+
+def action_listar_fotos(params=None):
+    """Superadmin: qué imágenes pertenecen a cada empresa (foto id cifrado -> empresa + fecha)."""
+    empresa = str((params or {}).get("empresa") or "").strip().upper()
+    fotos = db.listar_fotos(empresa)
+    return respuesta_success({"fotos": fotos, "total": len(fotos)})
 
 
 def action_registrar_soporte(params):
@@ -1162,7 +1332,10 @@ POST_ACTIONS = {
     "read": action_read,
     "obtener_todo": action_obtener_todo,
     "pagar_deudor": action_pagar_deudor,
+    "asignar_perdedor": action_asignar_perdedor,
+    "dividir_chico": action_dividir_chico,
     "eliminar_empresa": action_eliminar_empresa,
+    "actualizar_contrasena": action_actualizar_contrasena,
     "eliminar_usuario": action_eliminar_usuario,
     "eliminar_producto": action_eliminar_producto,
     "comprar_plan": action_comprar_plan,
@@ -1195,6 +1368,7 @@ GET_ACTIONS = {
     "listar_finanzas_kapta": action_listar_finanzas_kapta,
     "listar_soportes": action_listar_soportes,
     "listar_todos_usuarios": action_listar_todos_usuarios,
+    "listar_fotos": action_listar_fotos,
     "obtener_clave_dinamica": action_obtener_clave_dinamica,
     "obtener_clave": action_obtener_clave_dinamica,
     "get_clave": action_obtener_clave_dinamica,
@@ -1244,7 +1418,8 @@ async def endpoint(request: Request):
                              "registrar_inventario", "registrar_venta",
                              "registrar_deudor", "registrar_gasto", "crear_usuario",
                              "pagar_deudor", "obtener_todo", "eliminar_empresa",
-                             "eliminar_usuario", "reportes", "ping"],
+                             "eliminar_usuario", "reportes", "ping",
+                             "asignar_perdedor", "dividir_chico"],
             })
         return respuesta_error("Acción GET no válida: " + action)
 
