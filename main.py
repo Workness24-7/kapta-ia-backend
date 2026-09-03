@@ -647,6 +647,20 @@ def action_escribir_fila(params):
                     fila = n
                     id_era_vacio = False
                     break
+    # Usuarios: upsert por correo. Editar un usuario (p. ej. cambiar su contraseña)
+    # actualiza su fila en vez de crear un duplicado, así el cambio es global
+    # y multidispositivo.
+    if tabla_key == "USUARIOS":
+        correo_n = str(datos[2] if len(datos) > 2 else "").strip().lower()
+        if correo_n:
+            for (n, d) in db.leer_tabla(empresa, "usuarios"):
+                if str(d[2] or "").strip().lower() == correo_n:
+                    datos = list(datos)
+                    if not str(datos[0] or "").strip():
+                        datos[0] = str(d[0] or "").strip()
+                    fila = n
+                    id_era_vacio = False
+                    break
     if fila is None:
         fila = db.siguiente_fila_libre(empresa, tabla_key.lower(), TABLAS[tabla_key]["FILA_INICIO"])
     if prefijo and id_era_vacio:
