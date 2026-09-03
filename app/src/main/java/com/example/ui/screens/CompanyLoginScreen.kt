@@ -36,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
@@ -73,6 +74,11 @@ import com.example.ui.components.KaptaLogoHeader
 import com.example.util.hayConexion
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+
+import androidx.compose.material.icons.filled.Fingerprint
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
 
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.DropdownMenu
@@ -185,6 +191,76 @@ fun CompanyLoginScreen(
         else -> androidx.compose.ui.text.font.FontFamily.Default
     }
 
+    // Flujo de autenticación compartido (usado por el botón "Ingresar al POS" y el botón biométrico).
+    val loginFlow: (String, String) -> Unit = { uValInput, pValInput ->
+        val cCode = comp.code.trim()
+        val uVal = uValInput.trim()
+        val pVal = pValInput.trim()
+        if (uVal.isBlank() || pVal.isBlank()) {
+            loginErrorMsg = "Por favor completa Correo y Contraseña"
+        } else {
+            loginErrorMsg = null
+            scope.launch {
+                var online = hayConexion(context)
+                if (online) {
+                    val resultado = viewModel.loginWithServer(
+                        pais = selectedCountry.code,
+                        codigo = cCode,
+                        correo = uVal,
+                        password = pVal
+                    )
+                    Log.d("CompanyLoginScreen", "Server login idEmpresa: ${resultado.idEmpresa}")
+                    when {
+                        resultado.idEmpresa != null -> {}
+                        resultado.mensajeError != null -> {
+                            loginErrorMsg = resultado.mensajeError
+                            return@launch
+                        }
+                        else -> online = false
+                    }
+                }
+
+                var user = viewModel.authenticateCompanyUser(cCode, uVal, pVal)
+                if (user == null) {
+                    if (!online) {
+                        loginErrorMsg = "Sin conexión a internet. Ingresa con un usuario ya registrado en este dispositivo."
+                        return@launch
+                    }
+                    user = CompanyUserEntity(
+                        companyCode = cCode,
+                        companyId = comp.id,
+                        username = uVal,
+                        name = "Administrador",
+                        email = uVal,
+                        password = pVal,
+                        role = "Administrador"
+                    )
+                }
+
+                if (recordarme) {
+                    prefs.edit()
+                        .putString("usuario", uVal)
+                        .putString("clave", pVal)
+                        .putBoolean("recordarme", true)
+                        .apply()
+                } else {
+                    prefs.edit().clear().apply()
+                }
+
+                val sesionPrefs = prefsSesion.edit()
+                if (user.role.contains("Admin", ignoreCase = true) || user.role.equals("Administrador", ignoreCase = true)) {
+                    sesionPrefs.putBoolean("admin_iniciado_${cCode.uppercase()}", true)
+                } else {
+                    sesionPrefs.putBoolean("admin_iniciado_${cCode.uppercase()}", false)
+                }
+                sesionPrefs.apply()
+                viewModel.setCurrentUser(user)
+                viewModel.setSuperAdminSession(false)
+                onLoginToPosSuccess(comp)
+            }
+        }
+    }
+
     EtherealBackground {
         Column(
             modifier = Modifier
@@ -201,23 +277,7 @@ fun CompanyLoginScreen(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBackToRedirection) {
-                    Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color(0xFF1E293B))
-                }
-                Text(
-                    text = "Cambiar empresa",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    fontFamily = customFontFamily,
-                    color = Color(0xFF475569)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Top Official Business Logo (el subido en el form; fallback a KAPTA IA)
             val logoValido = remember(comp.logoUrl) {
@@ -303,7 +363,7 @@ fun CompanyLoginScreen(
                     OutlinedTextField(
                         value = userInput,
                         onValueChange = { userInput = it },
-                        label = { Text("Correo o usuario (ej. admin@empresa.com)", fontFamily = customFontFamily) },
+                        label = { Text("Correo", fontFamily = customFontFamily) },
                         leadingIcon = { Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = primaryBrandColor) },
                         singleLine = true,
                         shape = RoundedCornerShape(18.dp),
@@ -362,7 +422,12 @@ fun CompanyLoginScreen(
                     ) {
                         Checkbox(
                             checked = recordarme,
-                            onCheckedChange = { recordarme = it }
+                            onCheckedChange = { recordarme = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = primaryBrandColor,
+                                checkmarkColor = Color.White,
+                                uncheckedColor = primaryBrandColor
+                            )
                         )
                         Text(
                             text = "Recuérdame en este dispositivo",
@@ -387,72 +452,7 @@ fun CompanyLoginScreen(
 
                     Button(
                         onClick = {
-                            val cCode = comp.code.trim()
-                            val uVal = userInput.trim()
-                            val pVal = passwordInput.trim()
-                            if (uVal.isBlank() || pVal.isBlank()) {
-                                loginErrorMsg = "Por favor completa Correo y Contraseña"
-                            } else {
-                                loginErrorMsg = null
-                                scope.launch {
-                                    // Online: el servidor es autoridad (credenciales, bloqueo, hash).
-                                    // Offline: login local estricto contra usuarios cacheados en Room;
-                                    // ventas/gastos/inventario pendientes se sincronizan solos al reconectar.
-                                    var online = hayConexion(context)
-                                    if (online) {
-                                        val resultado = viewModel.loginWithServer(
-                                            pais = selectedCountry.code,
-                                            codigo = cCode,
-                                            correo = uVal,
-                                            password = pVal
-                                        )
-                                        Log.d("CompanyLoginScreen", "Server login idEmpresa: ${resultado.idEmpresa}")
-                                        when {
-                                            resultado.idEmpresa != null -> {}
-                                            resultado.mensajeError != null -> {
-                                                loginErrorMsg = resultado.mensajeError
-                                                return@launch
-                                            }
-                                            else -> online = false // servidor inalcanzable pese a haber red
-                                        }
-                                    }
-
-                                    var user = viewModel.authenticateCompanyUser(cCode, uVal, pVal)
-                                    if (user == null) {
-                                        if (!online) {
-                                            loginErrorMsg = "Sin conexión a internet. Ingresa con un usuario ya registrado en este dispositivo."
-                                            return@launch
-                                        }
-                                        user = CompanyUserEntity(
-                                            companyCode = cCode,
-                                            companyId = comp.id,
-                                            username = uVal,
-                                            name = "Administrador",
-                                            email = uVal,
-                                            password = pVal,
-                                            role = "Administrador"
-                                        )
-                                    }
-
-                                    if (recordarme) {
-                                        prefs.edit()
-                                            .putString("usuario", uVal)
-                                            .putString("clave", pVal)
-                                            .putBoolean("recordarme", true)
-                                            .apply()
-                                    } else {
-                                        prefs.edit().clear().apply()
-                                    }
-
-                                    // marcar que admin ya inició sesión para mostrar clave dinámica en logins futuros
-                                    if (user.role.contains("Admin", ignoreCase = true) || user.role.equals("Administrador", ignoreCase = true)) {
-                                        prefsSesion.edit().putBoolean("admin_iniciado_${cCode.uppercase()}", true).apply()
-                                    }
-                                    viewModel.setCurrentUser(user)
-                                    viewModel.setSuperAdminSession(false)
-                                    onLoginToPosSuccess(comp)
-                                }
-                            }
+                            loginFlow(userInput, passwordInput)
                         },
                         shape = RoundedCornerShape(50),
                         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
@@ -485,6 +485,59 @@ fun CompanyLoginScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = Color.White)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Acceso biométrico (huella / FaceID / PIN del dispositivo) si hay credenciales guardadas.
+                    val savedUserPref = prefs.getString("usuario", "")
+                    val savedPassPref = prefs.getString("clave", "")
+                    if (!savedUserPref.isNullOrBlank() && !savedPassPref.isNullOrBlank()) {
+                        val activity = context as? androidx.fragment.app.FragmentActivity
+                        val biometricAvailable = activity?.let {
+                            BiometricManager.from(it).canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG or androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS
+                        } ?: false
+                        if (biometricAvailable) {
+                            Button(
+                                onClick = {
+                                    val prompt = activity?.let { act ->
+                                        BiometricPrompt(
+                                            act,
+                                            ContextCompat.getMainExecutor(act),
+                                            object : BiometricPrompt.AuthenticationCallback() {
+                                                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                                                    loginFlow(savedUserPref, savedPassPref)
+                                                }
+                                                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                                    loginErrorMsg = "Autenticación biométrica cancelada o fallida"
+                                                }
+                                            }
+                                        )
+                                    }
+                                    prompt?.authenticate(
+                                        BiometricPrompt.PromptInfo.Builder()
+                                            .setTitle("Iniciar sesión con biometría")
+                                            .setSubtitle("Usa huella dactilar, Face ID o PIN del dispositivo")
+                                            .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG or androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL)
+                                            .build()
+                                    )
+                                },
+                                shape = RoundedCornerShape(50),
+                                colors = ButtonDefaults.buttonColors(containerColor = primaryBrandColor.copy(alpha = 0.12f)),
+                                modifier = Modifier.fillMaxWidth().height(46.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(imageVector = Icons.Default.Fingerprint, contentDescription = null, tint = primaryBrandColor)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Ingresar con biometría",
+                                        color = primaryBrandColor,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = customFontFamily,
+                                        fontSize = 14.sp
+                                    )
+                                }
                             }
                         }
                     }

@@ -173,7 +173,7 @@ private data class StockRowItem(
     val id: String = java.util.UUID.randomUUID().toString(),
     var selectedProduct: PosProductEntity? = null,
     var searchQuery: String = "",
-    var quantityText: String = "10"
+    var quantityText: String = ""
 )
 
 // Expense Item model
@@ -1332,12 +1332,22 @@ fun TenantPosScreen(
         t.contains("bar") || t.contains("disco") || t.contains("licor") || t.contains("fiesta")
     }
 
-    val allowedDockTabs = remember(userFunctions, isAdminUser) {
+    val allowedDockTabs = remember(userFunctions, isAdminUser, currentUser) {
         if (isAdminUser) setOf(0, 1, 2, 3, 4)
         else {
-            val tabs = mutableSetOf(0)
-            userFunctions.forEach { fn -> tabs.add(funcionModuloToDockTab(fn.modulo)) }
-            tabs
+            // Si el admin persistió el acceso explícito al dock, usarlo tal cual.
+            val dock = currentUser?.assignedFunctionsJson?.let { com.example.ui.components.decodeDockAccessFromJson(it) }
+            if (dock != null) {
+                val tabs = mutableSetOf(0)
+                if (dock["Ventas"] == true) tabs.add(1)
+                if (dock["Finanzas"] == true) tabs.add(2)
+                if (dock["Inventario"] == true) tabs.add(3)
+                tabs
+            } else {
+                val tabs = mutableSetOf(0)
+                userFunctions.forEach { fn -> tabs.add(funcionModuloToDockTab(fn.modulo)) }
+                tabs
+            }
         }
     }
     val userCapabilities = remember(userFunctions, isAdminUser) {
@@ -2367,29 +2377,15 @@ fun TenantPosScreen(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-// Quantity input: al enfocar por primera vez selecciona el valor por defecto
-                                    // para reemplazarlo; luego edita como un campo normal (borrar, escribir).
-                                    var qtyFocused by remember(rowItem.id) { mutableStateOf(false) }
-                                    var qtySelectAll by remember(rowItem.id) { mutableStateOf(true) }
-                                    val qtyValue = remember(rowItem.quantityText, qtyFocused, qtySelectAll) {
-                                        if (qtyFocused && qtySelectAll) TextFieldValue(rowItem.quantityText, TextRange(0, rowItem.quantityText.length))
-                                        else TextFieldValue(rowItem.quantityText)
-                                    }
+// Quantity input
                                     OutlinedTextField(
-                                        value = qtyValue,
-                                        onValueChange = { nv ->
-                                            qtyFocused = true
-                                            qtySelectAll = false
-                                            rowItem.quantityText = nv.text
-                                        },
+                                        value = rowItem.quantityText,
+                                        onValueChange = { rowItem.quantityText = it },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         singleLine = true,
+                                        placeholder = { Text(text = "0", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline) },
                                         modifier = Modifier
-                                            .width(88.dp)
-                                            .onFocusChanged {
-                                                qtyFocused = it.isFocused
-                                                if (!it.isFocused) qtySelectAll = false
-                                            },
+                                            .width(88.dp),
                                         shape = RoundedCornerShape(10.dp)
                                     )
 
@@ -2924,6 +2920,7 @@ fun TenantPosScreen(
             onDarkModeToggle = { viewModel.toggleDarkMode(it) },
             onDeleteUser = { userToDelete -> viewModel.deleteUser(userToDelete) },
             onSaveUser = { nuevo -> viewModel.createOrUpdateUser(nuevo) },
+            onSavePhone = { nuevoTelefono -> viewModel.updateCompanyPhone(company, nuevoTelefono) },
             onDismiss = { showUserProfileModal = false },
             onLogout = {
                 viewModel.setCurrentUser(null)
@@ -3900,15 +3897,17 @@ private fun FinanzasSectionView(
         Spacer(modifier = Modifier.height(10.dp))
 
         // Card Net Profit
+        val brandPrimary = try { Color(android.graphics.Color.parseColor(company.primaryColorHex.ifBlank { "#4F46E5" })) } catch (_: Exception) { Color(0xFF4F46E5) }
+        // ponytail: 10% primario mezclado en negro (90%) con leve transparencia; ajustar el 0.10f/0.92f si el tono no conforma
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0.10f * brandPrimary.red, 0.10f * brandPrimary.green, 0.10f * brandPrimary.blue, 0.92f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Utilidad Neta (Neto)", fontSize = 12.sp, color = Color(0xFF34C759), fontWeight = FontWeight.SemiBold)
-                Text(formatCurrency(netProfit), fontSize = 24.sp, fontWeight = FontWeight.Black, color = Color(0xFF34C759))
-                Text("Cálculo: Ventas (${formatCurrency(totalSales)}) - Gastos (${formatCurrency(totalExpenses)})", fontSize = 11.sp, color = MaterialTheme.colorScheme.outlineVariant)
+                Text("Utilidad Neta (Neto)", fontSize = 12.sp, color = Color.White.copy(alpha = 0.85f), fontWeight = FontWeight.SemiBold)
+                Text(formatCurrency(netProfit), fontSize = 24.sp, fontWeight = FontWeight.Black, color = Color.White)
+                Text("Cálculo: Ventas (${formatCurrency(totalSales)}) - Gastos (${formatCurrency(totalExpenses)})", fontSize = 11.sp, color = Color.White.copy(alpha = 0.7f))
             }
         }
 
@@ -4085,7 +4084,8 @@ private fun InventarioSectionView(
 
     val filtered = if (selectedCatFilter == "Todos") products else products.filter { it.category.equals(selectedCatFilter, ignoreCase = true) }
 
-    Column(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
@@ -4326,18 +4326,25 @@ private fun InventarioSectionView(
             }
         }
 
+        }
+
         if (showMovimientos) {
-            MovimientosInventarioView(
-                movimientos = stockMovimientos.filter { it.category == "Stock" },
-                company = company,
-                onClose = { showMovimientos = false }
-            )
+            Dialog(
+                onDismissRequest = { showMovimientos = false },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                MovimientosInventarioPopover(
+                    movimientos = stockMovimientos.filter { it.category == "Stock" },
+                    company = company,
+                    onClose = { showMovimientos = false }
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun MovimientosInventarioView(
+private fun MovimientosInventarioPopover(
     movimientos: List<FinancialTransactionEntity>,
     company: CompanyEntity,
     onClose: () -> Unit
@@ -4397,7 +4404,7 @@ private fun MovimientosInventarioView(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Column(modifier = Modifier.fillMaxHeight().fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,

@@ -92,6 +92,43 @@ data class UserRoleItem(
     val functionsJson: String = ""
 )
 
+/**
+ * Codifica los permisos del usuario en un único JSON para assignedFunctionsJson.
+ * Formato: {"dock": {tab: bool}, "functions": [nombres...]}. Si functions está vacío
+ * y no hay dock, devuelve null para conservar el formato legacy (array de nombres).
+ */
+private fun encodeUserPermissions(saved: UserRoleItem): String? {
+    val functions = try {
+        val arr = org.json.JSONArray(saved.functionsJson)
+        val out = mutableListOf<String>()
+        for (i in 0 until arr.length()) { val n = arr.optString(i); if (n.isNotBlank()) out.add(n) }
+        out
+    } catch (_: Exception) { return saved.functionsJson }
+    val dockEnabled = saved.dockAccess.any { it.value }
+    if (functions.isEmpty() && !dockEnabled) return null
+    return org.json.JSONObject().apply {
+        put("dock", org.json.JSONObject(saved.dockAccess))
+        put("functions", org.json.JSONArray().apply { functions.forEach { put(it) } })
+    }.toString()
+}
+
+/**
+ * Extrae el mapa de acceso al dock (Inicio/Ventas/Finanzas/Inventario) desde el
+ * assignedFunctionsJson codificado. Devuelve null si no está presente (formato legacy).
+ */
+fun decodeDockAccessFromJson(json: String?): Map<String, Boolean>? {
+    if (json.isNullOrBlank()) return null
+    return try {
+        if (json.trimStart().startsWith("{")) {
+            val o = org.json.JSONObject(json)
+            if (o.has("dock")) {
+                val d = o.getJSONObject("dock")
+                buildMap { d.keys().forEach { key -> put(key, d.optBoolean(key, false)) } }
+            } else null
+        } else null
+    } catch (_: Exception) { null }
+}
+
 private fun parseCompanyFunctions(json: String?): List<Pair<String, String>> {
     if (json.isNullOrBlank()) return emptyList()
     return try {
@@ -139,6 +176,7 @@ fun UserProfileModal(
     onDarkModeToggle: (Boolean) -> Unit = {},
     onDeleteUser: ((CompanyUserEntity) -> Unit)? = null,
     onSaveUser: ((CompanyUserEntity) -> Unit)? = null,
+    onSavePhone: ((String) -> Unit)? = null,
     onDismiss: () -> Unit,
     onLogout: () -> Unit = {}
 ) {
@@ -154,6 +192,8 @@ fun UserProfileModal(
     val prefs = remember { context.getSharedPreferences("kapta_perfil", android.content.Context.MODE_PRIVATE) }
     var userPhotoUrl by remember { mutableStateOf(prefs.getString("foto_$userEmail", "") ?: "") }
     var showPhotoUploadDialog by remember { mutableStateOf(false) }
+    var showPhoneEditDialog by remember { mutableStateOf(false) }
+    var phoneEditValue by remember { mutableStateOf(userPhone) }
     val photoPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.GetContent()
     ) { picked ->
@@ -205,6 +245,15 @@ fun UserProfileModal(
     }
 
     // Dynamic color definitions for light / dark blue theme
+    val profileCompany = remember(currentCompanyCode, companies) {
+        companies.firstOrNull { !currentCompanyCode.isNullOrBlank() && it.code.equals(currentCompanyCode, ignoreCase = true) } ?: companies.firstOrNull()
+    }
+    val businessBorderColors = remember(profileCompany) {
+        val primary = runCatching { Color(android.graphics.Color.parseColor(profileCompany?.primaryColorHex ?: "#38BDF8")) }.getOrDefault(Color(0xFF38BDF8))
+        val secondary = runCatching { Color(android.graphics.Color.parseColor(profileCompany?.secondaryColorHex ?: "#60A5FA")) }.getOrDefault(Color(0xFF60A5FA))
+        val tertiary = runCatching { Color(android.graphics.Color.parseColor(profileCompany?.tertiaryColorHex ?: "#818CF8")) }.getOrDefault(Color(0xFF818CF8))
+        listOf(primary, secondary, tertiary)
+    }
     val modalBgColor = if (isDark) Color(0xFF1E293B) else Color(0xFFF2F2F7)
     val cardBgColor = if (isDark) Color(0xFF0F172A) else Color.White
     val primaryTextColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
@@ -296,11 +345,7 @@ fun UserProfileModal(
                                     .clip(CircleShape)
                                     .background(
                                         brush = Brush.linearGradient(
-                                            colors = listOf(
-                                                Color(0xFF38BDF8), // Light Cyan
-                                                Color(0xFF60A5FA), // Soft Blue
-                                                Color(0xFF818CF8)  // Light Indigo
-                                            )
+                                            colors = businessBorderColors
                                         )
                                     )
                                     .padding(2.5.dp)
@@ -410,7 +455,13 @@ fun UserProfileModal(
                                 value = userPhone,
                                 showChevron = true,
                                 labelColor = primaryTextColor,
-                                valueColor = valueTextColor
+                                valueColor = valueTextColor,
+                                onClick = {
+                                    if (onSavePhone != null) {
+                                        phoneEditValue = userPhone
+                                        showPhoneEditDialog = true
+                                    }
+                                }
                             )
                             GroupedDivider(color = dividerColor)
                             GroupedListRow(
@@ -649,6 +700,40 @@ fun UserProfileModal(
         }
     }
 
+    if (showPhoneEditDialog && onSavePhone != null) {
+        AlertDialog(
+            onDismissRequest = { showPhoneEditDialog = false },
+            title = { Text("Editar teléfono", fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = phoneEditValue,
+                    onValueChange = { phoneEditValue = it.filter { ch -> ch.isDigit() || ch == '+' || ch == ' ' } },
+                    label = { Text("Número de celular") },
+                    placeholder = { Text("Ej. +57 300 123 4567") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (phoneEditValue.isNotBlank()) {
+                            onSavePhone.invoke(phoneEditValue.trim())
+                            showPhoneEditDialog = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                    shape = RoundedCornerShape(10.dp)
+                ) { Text("Guardar", color = Color.White, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPhoneEditDialog = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
     val companyFunctions = parseCompanyFunctions(companies.firstOrNull { it.code == currentCompanyCode }?.customFunctionsJson)
 
     if (showUserFormDialog) {
@@ -670,7 +755,7 @@ fun UserProfileModal(
                             username = saved.email.substringBefore("@").ifBlank { saved.name },
                             password = saved.pin,
                             isSynced = false,
-                            assignedFunctionsJson = saved.functionsJson
+                            assignedFunctionsJson = encodeUserPermissions(saved) ?: saved.functionsJson
                         )
                     )
                 } else {

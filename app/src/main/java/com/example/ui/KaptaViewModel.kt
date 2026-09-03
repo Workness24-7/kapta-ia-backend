@@ -1780,7 +1780,14 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
     fun parseCustomFunctions(json: String?): List<Pair<String, String>> {
         if (json.isNullOrBlank()) return emptyList()
         return try {
-            val arr = JSONArray(json)
+            // Formato codificado {"dock":{...},"functions":[...]} o legacy (array simple).
+            val raw = json.trimStart()
+            val arr = if (raw.startsWith("{")) {
+                val o = JSONObject(json)
+                if (o.has("functions")) o.getJSONArray("functions") else JSONArray()
+            } else {
+                JSONArray(json)
+            }
             val out = mutableListOf<Pair<String, String>>()
             for (i in 0 until arr.length()) {
                 val o = arr.optJSONObject(i)
@@ -2456,6 +2463,25 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
     private suspend fun ensureCompanyDataCompleted(dao: com.example.data.local.dao.KaptaDao) {
         // ponytail: ya no se crean usuarios genéricos automáticamente; el admin se crea
         // al registrar la empresa (Railway) o desde la vista de administrador del negocio.
+    }
+
+    fun updateCompanyPhone(company: CompanyEntity, nuevoTelefono: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val clean = nuevoTelefono.trim()
+            if (clean.isEmpty()) {
+                showToast("El teléfono no puede estar vacío")
+                onResult(false)
+                return@launch
+            }
+            val ok = runCatching {
+                val updated = company.copy(phone = clean)
+                repository.updateCompany(updated)
+                syncManager.triggerImmediateSync(repository)
+                true
+            }.getOrDefault(false)
+            showToast(if (ok) "Teléfono actualizado" else "No se pudo actualizar el teléfono")
+            onResult(ok)
+        }
     }
 
     fun showToast(message: String) {
