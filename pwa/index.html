@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#4F46E5">
+<meta name="theme-color" content="#4F46E5" id="meta-theme">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -28,9 +28,31 @@
     </div>
   </section>
 
+  <section id="p-superlogin" class="pantalla oculto">
+    <div class="centrado">
+      <div class="logo">🛡️</div>
+      <h2>SuperAdmin</h2>
+      <p class="muted">Consola maestra de negocios</p>
+      <input id="in-super-correo" type="email" placeholder="Correo superadmin" autocapitalize="none">
+      <input id="in-super-clave" type="password" placeholder="Contraseña">
+      <button id="btn-superlogin" class="btn primario">Entrar</button>
+      <button id="btn-super-volver" class="btn link">Volver</button>
+      <p id="err-super" class="error"></p>
+    </div>
+  </section>
+
+  <section id="p-negocios" class="pantalla oculto">
+    <div class="tab">
+      <h2>Negocios</h2>
+      <div id="neg-lista"></div>
+      <button id="btn-neg-salir" class="btn peligro">Cerrar sesión maestra</button>
+    </div>
+  </section>
+
   <section id="p-login" class="pantalla oculto">
     <div class="centrado">
-      <div class="logo">🧾</div>
+      <img id="login-logo" class="logo-img oculto" alt="logo">
+      <div class="logo" id="login-emoji">🧾</div>
       <h2 id="login-nombre">Negocio</h2>
       <p class="muted" id="login-dominio"></p>
       <input id="in-correo" type="email" placeholder="Correo" autocomplete="username" autocapitalize="none">
@@ -43,7 +65,7 @@
   </section>
 
   <section id="p-pos" class="pantalla oculto">
-    <header id="pos-header"><span id="pos-negocio">Negocio</span><span id="pos-usuario"></span></header>
+    <header id="pos-header"><img id="pos-logo" class="logo-mini oculto" alt=""><span id="pos-negocio">Negocio</span><span id="pos-usuario"></span></header>
 
     <div id="t-inicio" class="tab">
       <h2>Resumen General del Negocio</h2>

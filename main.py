@@ -477,8 +477,19 @@ def _login_social_por_correo(codigo_cli, correo, nombre_sugerido=""):
     return respuesta_error("Tu correo no tiene usuario en este negocio. Pide al administrador que te cree uno.")
 
 
-def action_login_google(params):
-    codigo_cli = _limpiar(params.get("codigo") or params.get("idEmpresa"), 20).upper()
+def action_login_superadmin(params):
+    """Acceso maestro a la consola de negocios. Credenciales en variables
+    de entorno (por defecto las históricas de la app Android)."""
+    correo = str(params.get("correo") or "").lower().strip()
+    password = str(params.get("password") or "")
+    email_ok = str(os.getenv("SUPERADMIN_EMAIL") or "AdminMauricio@kaptaia.com").lower().strip()
+    pass_ok = str(os.getenv("SUPERADMIN_PASS") or "M4ur1C10*")
+    if correo == email_ok and password == pass_ok and correo:
+        return respuesta_success({"superadmin": True, "correo": correo})
+    return respuesta_error("Credenciales de superadmin inválidas.")
+
+
+def action_login_google(params):    codigo_cli = _limpiar(params.get("codigo") or params.get("idEmpresa"), 20).upper()
     id_token = str(params.get("idToken") or "").strip()
     if not codigo_cli or not id_token:
         return respuesta_error("Faltan datos para el ingreso con Google.")
@@ -1687,6 +1698,7 @@ POST_ACTIONS = {
     "registrar_inventario": action_escribir_fila,
     "registrar_movimiento": action_registrar_movimiento,
     "login_google": action_login_google,
+    "login_superadmin": action_login_superadmin,
     "apple_auth_url": action_apple_auth_url,
     "login_apple_canjear": action_login_apple_canjear,
     "registrar_venta": action_escribir_fila,

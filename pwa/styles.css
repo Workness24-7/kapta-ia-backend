@@ -49,6 +49,8 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .btn-mini { border: 0; border-radius: 10px; padding: 8px 12px; background: var(--prim); color: #fff; font-weight: 700; font-size: 13px; margin-top: 6px; }
 .btn-mini.verde { background: var(--ok); }
 .volver { background: none; border: 0; color: var(--prim); font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+.logo-img { width: 96px; max-height: 96px; object-fit: contain; margin: 0 auto; display: block; }
+.logo-mini { width: 28px; height: 28px; object-fit: contain; border-radius: 8px; }
 .fila-btns { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
 .fila-btns label.btn-mini { cursor: pointer; }
 .seg { display: flex; gap: 6px; margin: 8px 0; }

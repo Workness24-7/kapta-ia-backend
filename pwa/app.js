@@ -7,6 +7,8 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":
 
 let SES = null, TODO = null, EMPRESA = null;
 let ME = null;               // {row, sec, admin}
+let SUPER = null;            // {correo} sesión maestra
+let NEGOCIOS = [];
 let CARRITO = {};            // idx -> {qty, min}
 let DEU_SEL = null, CHICO_SEL = null;
 let FIN_FILTRO = "Mes", FIN_DESDE = "", FIN_HASTA = "";
@@ -131,10 +133,29 @@ function cargarSesion() {
   catch { return null; }
 }
 
+// Identidad visual del negocio (colores + logo), como en Android.
+function aplicarIdentidad(emp) {
+  const root = document.documentElement;
+  const prim = (emp && emp.colorPrimario) || "#4F46E5";
+  root.style.setProperty("--prim", prim);
+  const meta = document.getElementById("meta-theme");
+  if (meta) meta.setAttribute("content", prim);
+  const logo = (emp && emp.logoUrl) || "";
+  const ll = $("login-logo"), le = $("login-emoji"), pl = $("pos-logo");
+  if (logo) {
+    ll.src = logo; ll.classList.remove("oculto"); le.classList.add("oculto");
+    pl.src = logo; pl.classList.remove("oculto");
+  } else {
+    ll.classList.add("oculto"); le.classList.remove("oculto");
+    pl.classList.add("oculto");
+  }
+}
+
 $("btn-codigo").addEventListener("click", async () => {
   const code = $("in-codigo").value.trim().toUpperCase();
   $("err-codigo").textContent = "";
   if (!code) { $("err-codigo").textContent = "Escribe el código de tu negocio"; return; }
+  if (code === "APTADMIN") { ver("superlogin"); return; }
   $("btn-codigo").disabled = true;
   try {
     const r = await fetch(BASE + "?action=listar_empresas").then((x) => x.json());
@@ -142,6 +163,7 @@ $("btn-codigo").addEventListener("click", async () => {
     if (!emp) { $("err-codigo").textContent = "Negocio no encontrado"; return; }
     SES = { code, negocio: emp.nombre || code };
     EMPRESA = emp;
+    aplicarIdentidad(emp);
     $("login-nombre").textContent = SES.negocio;
     $("login-dominio").textContent = code.toLowerCase() + ".kaptaia.com";
     localStorage.setItem("kapta_code", code);
@@ -150,6 +172,60 @@ $("btn-codigo").addEventListener("click", async () => {
   $("btn-codigo").disabled = false;
 });
 $("btn-volver-negocio").addEventListener("click", () => ver("negocio"));
+
+// ---------- superadmin ----------
+$("btn-super-volver").addEventListener("click", () => ver("negocio"));
+$("btn-superlogin").addEventListener("click", async () => {
+  const correo = $("in-super-correo").value.trim();
+  const clave = $("in-super-clave").value;
+  $("err-super").textContent = "";
+  if (!correo || !clave) { $("err-super").textContent = "Completa correo y contraseña"; return; }
+  $("btn-superlogin").disabled = true;
+  try {
+    const r = await api({ action: "login_superadmin", correo, password: clave });
+    if (r.status !== "success") { $("err-super").textContent = r.message || "Credenciales inválidas"; return; }
+    SUPER = { correo };
+    sessionStorage.setItem("kapta_super", correo);
+    await cargarNegocios();
+  } catch { $("err-super").textContent = "Sin conexión. Intenta de nuevo."; }
+  $("btn-superlogin").disabled = false;
+});
+
+async function cargarNegocios() {
+  try {
+    const r = await fetch(BASE + "?action=listar_empresas").then((x) => x.json());
+    NEGOCIOS = ((r.data || {}).empresas || []);
+  } catch { NEGOCIOS = []; }
+  const box = $("neg-lista");
+  box.innerHTML = NEGOCIOS.length ? "" : '<div class="card">Sin negocios.</div>';
+  NEGOCIOS.forEach((e) => {
+    const div = document.createElement("div");
+    div.className = "card fila-deu";
+    div.innerHTML = `<div><b>${esc(e.nombre || e.codigo)}</b><small>${esc(e.codigo || "")} • ${esc(e.plan || "")} • ${esc(e.estado || "")}</small></div><button class="btn-mini">Entrar</button>`;
+    div.querySelector("button").addEventListener("click", () => entrarComoAdmin(e));
+    box.appendChild(div);
+  });
+  ver("negocios");
+}
+
+async function entrarComoAdmin(emp) {
+  SES = { code: (emp.codigo || "").toUpperCase(), negocio: emp.nombre || emp.codigo, correo: emp.correo || SUPER.correo, nombre: "SuperAdmin", rol: "Administrador", super: true };
+  EMPRESA = emp;
+  aplicarIdentidad(emp);
+  const ck = "kapta_consent_" + SES.code + "_superadmin";
+  if (!localStorage.getItem(ck)) {
+    const ok = confirm("Entras como SuperAdmin a " + SES.negocio + ".\n\nAl entrar aceptas la Política de Privacidad y los Términos de Uso.\n\n¿Aceptas y deseas continuar?");
+    if (!ok) return;
+    localStorage.setItem(ck, new Date().toISOString());
+  }
+  await entrar();
+}
+$("btn-neg-salir").addEventListener("click", () => {
+  SUPER = null; SES = null; ME = null;
+  sessionStorage.removeItem("kapta_super");
+  aplicarIdentidad(null);
+  ver("negocio");
+});
 
 $("btn-login").addEventListener("click", async () => {
   const correo = $("in-correo").value.trim();
@@ -185,8 +261,14 @@ async function entrar() {
   tab("inicio");
 }
 $("btn-salir").addEventListener("click", () => {
+  if (SES && SES.super && SUPER) {
+    SES = null; ME = null;
+    cargarNegocios();
+    return;
+  }
   SES = null; ME = null;
   localStorage.removeItem("kapta_pwa"); sessionStorage.removeItem("kapta_pwa");
+  aplicarIdentidad(null);
   ver("negocio");
 });
 
@@ -975,9 +1057,16 @@ function imprimir(titulo, html) {
   }
   const tel = $("cuenta-tel");
   SES = cargarSesion();
-  if (SES && SES.code) {
+  const sup = sessionStorage.getItem("kapta_super");
+  if (sup) {
+    SUPER = { correo: sup };
+    cargarNegocios();
+  } else if (SES && SES.code) {
     $("login-nombre").textContent = SES.negocio || SES.code;
-    entrar();
+    fetch(BASE + "?action=listar_empresas").then((x) => x.json()).then((r) => {
+      const emp = ((r.data || {}).empresas || []).find((e) => (e.codigo || "").toUpperCase() === SES.code);
+      if (emp) { EMPRESA = emp; aplicarIdentidad(emp); }
+    }).catch(() => {}).finally(() => entrar());
   } else {
     const c = localStorage.getItem("kapta_code");
     if (c) $("in-codigo").value = c;
