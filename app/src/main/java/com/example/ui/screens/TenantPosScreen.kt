@@ -137,7 +137,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1322,6 +1324,7 @@ fun TenantPosScreen(
 
     val userRole = currentUser?.role ?: if (isSuperAdminSession) "Administrador" else "Cajero"
     val isCajero = userRole.equals("Cajero", ignoreCase = true) || userRole.equals("Empleado", ignoreCase = true) || userRole.equals("Mesero", ignoreCase = true)
+    val isMesero = userRole.equals("Mesero", ignoreCase = true)
 
     // Modo juego Bolirrana: exclusivo de bares (y afines).
     val esBarDeBolirrana = run {
@@ -1348,7 +1351,7 @@ fun TenantPosScreen(
     }
 
     // Fixed Top Dock Navigation Index (0: Inicio, 1: Ventas, 2: Finanzas, 3: Inventario, 4: Menú Adicional)
-    var selectedDockTab by remember { mutableIntStateOf(if (isCajero) 1 else 0) }
+    var selectedDockTab by remember { mutableIntStateOf(if (isMesero) 0 else if (isCajero) 1 else 0) }
 
     var searchPosQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Todos") }
@@ -1662,7 +1665,11 @@ fun TenantPosScreen(
 
             // MAIN CONTENT BODY (Switches dynamically based on selectedDockTab)
             val activeDockTab = run {
-        val base = if (isCajero && selectedDockTab != 1 && selectedDockTab != 3) 1 else selectedDockTab
+        val base = when {
+            isMesero -> if (selectedDockTab != 0 && selectedDockTab != 3) 0 else selectedDockTab
+            isCajero && selectedDockTab != 1 && selectedDockTab != 3 -> 1
+            else -> selectedDockTab
+        }
         if (base !in allowedDockTabs) 0 else base
     }
             Box(
@@ -1688,10 +1695,13 @@ fun TenantPosScreen(
                         },
                         onQuickActionDeudores = { showDebtorsModal = true },
                         onGoToFinanzasDia = {
-                            financesFilter = "Día"
-                            selectedDockTab = 2
+                            if (!isMesero) {
+                                financesFilter = "Día"
+                                selectedDockTab = 2
+                            }
                         },
-                        hasCap = hasCap
+                        hasCap = hasCap,
+                        isMesero = isMesero
                     )
 
                     // BOTON 2: Ventas (Resumen comparativo & Ranking por categoría)
@@ -1742,6 +1752,7 @@ fun TenantPosScreen(
                     // BOTON 4: Inventario (Lista por categoría, Guardar Inventario & Hacer Inventario)
                     3 -> InventarioSectionView(
                         products = productsFlow,
+                        company = company,
                         companyCode = company.code,
                         viewModel = viewModel,
                         savedInventoryBaselines = savedInventoryBaselines,
@@ -1803,7 +1814,12 @@ fun TenantPosScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val baseDockItems = if (isCajero) {
+                    val baseDockItems = if (isMesero) {
+                        listOf(
+                            TopDockItem(0, "Inicio", Icons.Default.Home),
+                            TopDockItem(3, "Inventario", Icons.Default.Inventory2)
+                        )
+                    } else if (isCajero) {
                         listOf(
                             TopDockItem(1, "Ventas", Icons.Default.TrendingUp),
                             TopDockItem(3, "Inventario", Icons.Default.Inventory2)
@@ -1971,6 +1987,22 @@ fun TenantPosScreen(
             debtorsList = debtorsList,
             onClose = { showNuevaVentaView = false },
             esBar = esBarDeBolirrana,
+            validarClaveYo = { codigo -> viewModel.validarClaveDinamica(codigo) },
+            onRegaloSuccess = { ticketItems, totalAmount ->
+                // Modo regalo: descuenta stock, NO registra venta, registra GASTO (a cargo de la casa).
+                val concepto = "Regalo de la casa: " + ticketItems.entries.joinToString(", ") { (p, q) -> "${p.name} x$q" }
+                val grouped = ticketItems.entries.groupBy { it.key.id }
+                grouped.forEach { (_, entries) ->
+                    val prod = entries.first().key
+                    val qty = entries.sumOf { it.value }
+                    if (qty > 0 && !prod.isService) {
+                        viewModel.registrarMovimientoStock(company.code, prod.name, qty, "VENTA")
+                        viewModel.saveOrUpdateProduct(prod.copy(stock = (prod.stock - qty).coerceAtLeast(0))) {}
+                    }
+                }
+                viewModel.recordExpenseOptimistic(company.code, concepto, totalAmount, "Regalo")
+                viewModel.showToast("Regalo de la casa registrado: ${formatCurrency(totalAmount)} (gasto)")
+            },
             onPaymentSuccess = { customerName, ticketItems, totalAmount, paymentMethod, transferAmount, cashAmount, tipoVenta ->
                 val finalClient = if (customerName.isBlank()) "Cliente Mostrador" else customerName.trim()
                 val sharedTimestamp = System.currentTimeMillis()
@@ -1980,6 +2012,7 @@ fun TenantPosScreen(
                     val qty = entries.sumOf { it.value }
                     if (qty > 0) {
                         val updated = if (prod.isService) prod else prod.copy(stock = (prod.stock - qty).coerceAtLeast(0))
+                        if (!prod.isService) viewModel.registrarMovimientoStock(company.code, prod.name, qty, "VENTA")
                         viewModel.saveOrUpdateProduct(updated) {}
                         val itemTotal = qty * prod.price
                         val ratio = if (totalAmount > 0) itemTotal / totalAmount else 0.0
@@ -2018,6 +2051,7 @@ fun TenantPosScreen(
                     val prod = entries.first().key
                     val qty = entries.sumOf { it.value }
                     if (qty > 0 && !prod.isService) {
+                        viewModel.registrarMovimientoStock(company.code, prod.name, qty, "DEUDOR")
                         viewModel.saveOrUpdateProduct(prod.copy(stock = (prod.stock - qty).coerceAtLeast(0))) {}
                     }
                 }
@@ -2333,28 +2367,37 @@ fun TenantPosScreen(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // Numeric Quantity input (Compact) — selecciona todo al enfocar para reemplazar el 10
+// Quantity input: al enfocar por primera vez selecciona el valor por defecto
+                                    // para reemplazarlo; luego edita como un campo normal (borrar, escribir).
                                     var qtyFocused by remember(rowItem.id) { mutableStateOf(false) }
-                                    val qtyValue = remember(rowItem.quantityText, qtyFocused) {
-                                        if (qtyFocused) TextFieldValue(rowItem.quantityText, TextRange(0, rowItem.quantityText.length))
+                                    var qtySelectAll by remember(rowItem.id) { mutableStateOf(true) }
+                                    val qtyValue = remember(rowItem.quantityText, qtyFocused, qtySelectAll) {
+                                        if (qtyFocused && qtySelectAll) TextFieldValue(rowItem.quantityText, TextRange(0, rowItem.quantityText.length))
                                         else TextFieldValue(rowItem.quantityText)
                                     }
                                     OutlinedTextField(
                                         value = qtyValue,
-                                        onValueChange = { qtyFocused = true; rowItem.quantityText = it.text },
-                                        placeholder = { Text("Cant.", fontSize = 12.sp) },
+                                        onValueChange = { nv ->
+                                            qtyFocused = true
+                                            qtySelectAll = false
+                                            rowItem.quantityText = nv.text
+                                        },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         singleLine = true,
                                         modifier = Modifier
-                                            .width(75.dp)
-                                            .onFocusChanged { qtyFocused = it.isFocused },
+                                            .width(88.dp)
+                                            .onFocusChanged {
+                                                qtyFocused = it.isFocused
+                                                if (!it.isFocused) qtySelectAll = false
+                                            },
                                         shape = RoundedCornerShape(10.dp)
                                     )
 
                                     // Product Predictive Search Field
                                     Box(modifier = Modifier.weight(1f)) {
+                                        var searchFocused by remember(rowItem.id) { mutableStateOf(false) }
                                         OutlinedTextField(
-                                            value = rowItem.selectedProduct?.name ?: rowItem.searchQuery,
+                                            value = rowItem.searchQuery,
                                             onValueChange = {
                                                 rowItem.searchQuery = it
                                                 rowItem.selectedProduct = null
@@ -2365,7 +2408,9 @@ fun TenantPosScreen(
                                                 Icon(imageVector = Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                                             },
                                             singleLine = true,
-                                            modifier = Modifier.fillMaxWidth(),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .onFocusChanged { searchFocused = it.isFocused },
                                             shape = RoundedCornerShape(10.dp)
                                         )
 
@@ -2375,15 +2420,19 @@ fun TenantPosScreen(
                                                     prod.aliases.contains(rowItem.searchQuery, ignoreCase = true)
                                         }
 
-Box(modifier = Modifier.fillMaxWidth().offset(y = 48.dp)) {
-                                            if (dropdownExpanded && matchingProducts.isNotEmpty()) {
+                                        // Dock de sugerencias flotante (Popup) que NO agranda el layout
+                                        if (dropdownExpanded && searchFocused && matchingProducts.isNotEmpty()) {
+                                            androidx.compose.ui.window.Popup(
+                                                alignment = androidx.compose.ui.Alignment.TopStart,
+                                                offset = androidx.compose.ui.unit.IntOffset(0, 56)
+                                            ) {
                                                 Surface(
                                                     shape = RoundedCornerShape(10.dp),
                                                     color = MaterialTheme.colorScheme.surface,
                                                     border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
-                                                    modifier = Modifier.fillMaxWidth()
+                                                    shadowElevation = 8.dp
                                                 ) {
-                                                    Column(modifier = Modifier.padding(4.dp)) {
+                                                    Column(modifier = Modifier.width(300.dp).padding(4.dp)) {
                                                         matchingProducts.take(6).forEach { prod ->
                                                             Text(
                                                                 "${prod.name} (Stock: ${prod.stock})",
@@ -2509,6 +2558,7 @@ Box(modifier = Modifier.fillMaxWidth().offset(y = 48.dp)) {
                             val newAdded = (currentBase?.second ?: 0) + addedQty
                             savedInventoryBaselines[prod.id] = Pair(currentBase?.first ?: prod.stock, newAdded)
 
+                            viewModel.registrarMovimientoStock(company.code, prod.name, addedQty, "INGRESO")
                             viewModel.saveOrUpdateProduct(updatedProduct) {}
                         }
                         showStockConfirmationDialog = false
@@ -2824,6 +2874,7 @@ Box(modifier = Modifier.fillMaxWidth().offset(y = 48.dp)) {
                                 val prod = productsFlow.find { it.id == prodId }
                                 if (prod != null) {
                                     val updated = if (prod.isService) prod else prod.copy(stock = (prod.stock - qty).coerceAtLeast(0))
+                                    if (!prod.isService) viewModel.registrarMovimientoStock(company.code, prod.name, qty, "VENTA")
                                     viewModel.saveOrUpdateProduct(updated) {}
                                     val itemTotal = qty * prod.price
                                     viewModel.registerPosSale(
@@ -2869,6 +2920,7 @@ Box(modifier = Modifier.fillMaxWidth().offset(y = 48.dp)) {
             companyUsers = companyUsers,
             companies = listOf(company),
             currentCompanyCode = company.code,
+            dynamicCode = viewModel.dynamicCode.collectAsState().value,
             onDarkModeToggle = { viewModel.toggleDarkMode(it) },
             onDeleteUser = { userToDelete -> viewModel.deleteUser(userToDelete) },
             onSaveUser = { nuevo -> viewModel.createOrUpdateUser(nuevo) },
@@ -3006,7 +3058,8 @@ private fun InicioDashboardView(
     onQuickActionAddStock: () -> Unit,
     onQuickActionDeudores: () -> Unit,
     onGoToFinanzasDia: () -> Unit,
-    hasCap: (String) -> Boolean = { true }
+    hasCap: (String) -> Boolean = { true },
+    isMesero: Boolean = false
 ) {
     Column(
         modifier = Modifier
@@ -3073,7 +3126,8 @@ private fun InicioDashboardView(
             AccionRapida("Agregar", Icons.Default.Add, Color(0xFF18A94F), Color(0xFF32C96A), onQuickActionAddStock),
             AccionRapida("Deudores", Icons.Default.Person, Color(0xFFE58A05), Color(0xFFF2A01A), onQuickActionDeudores)
         ).filterNotNull().filter { accion ->
-            when (accion.titulo) {
+            if (isMesero && accion.titulo == "Agregar") false
+            else when (accion.titulo) {
                 "Venta" -> hasCap("ventas")
                 "Gasto" -> hasCap("gastos")
                 "Agregar" -> hasCap("inventario")
@@ -3989,6 +4043,7 @@ private fun FinanzasSectionView(
 @Composable
 private fun InventarioSectionView(
     products: List<PosProductEntity>,
+    company: CompanyEntity,
     companyCode: String,
     viewModel: KaptaViewModel,
     savedInventoryBaselines: Map<Int, Pair<Int, Int>>,
@@ -4025,6 +4080,8 @@ private fun InventarioSectionView(
     val categories = remember(products) {
         listOf("Todos") + products.map { it.category.trim() }.filter { it.isNotBlank() }.distinct().sorted()
     }
+    var showMovimientos by remember { mutableStateOf(false) }
+    val stockMovimientos by viewModel.getTransactionsForCompany(companyCode).collectAsState(initial = emptyList())
 
     val filtered = if (selectedCatFilter == "Todos") products else products.filter { it.category.equals(selectedCatFilter, ignoreCase = true) }
 
@@ -4059,6 +4116,13 @@ private fun InventarioSectionView(
                     border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.primary)
                 ) {
                     Text("Carga Masiva", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                }
+                OutlinedButton(
+                    onClick = { showMovimientos = true },
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.primary)
+                ) {
+                    Text("Movimientos", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
                 Button(
                     onClick = onNewProduct,
@@ -4257,6 +4321,215 @@ private fun InventarioSectionView(
                         Icon(imageVector = Icons.Default.BarChart, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Hacer Inventario", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+
+        if (showMovimientos) {
+            MovimientosInventarioView(
+                movimientos = stockMovimientos.filter { it.category == "Stock" },
+                company = company,
+                onClose = { showMovimientos = false }
+            )
+        }
+    }
+}
+
+@Composable
+private fun MovimientosInventarioView(
+    movimientos: List<FinancialTransactionEntity>,
+    company: CompanyEntity,
+    onClose: () -> Unit
+) {
+    val context = LocalContext.current
+    var activeFilter by remember { mutableStateOf("Mes") }
+    var startDate by remember { mutableStateOf("") }
+    var endDate by remember { mutableStateOf("") }
+
+    val mSdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
+
+    fun parseMovementDate(dateStr: String): java.util.Date? = try { mSdf.parse(dateStr) } catch (_: Exception) { null }
+
+    val todayCal = java.util.Calendar.getInstance()
+    val curYear = todayCal.get(java.util.Calendar.YEAR)
+    val curDay = todayCal.get(java.util.Calendar.DAY_OF_YEAR)
+    val curMonth = todayCal.get(java.util.Calendar.MONTH)
+
+    val periodLabel = when (activeFilter) {
+        "Día" -> java.text.SimpleDateFormat("d 'de' MMMM yyyy", java.util.Locale("es", "CO")).format(todayCal.time).replaceFirstChar { it.uppercase() }
+        "Mes" -> java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale("es", "CO")).format(todayCal.time).replaceFirstChar { it.uppercase() }
+        else -> if (startDate.isNotBlank() && endDate.isNotBlank()) "$startDate hasta $endDate" else "Rango Personalizado"
+    }
+
+    val filtered = remember(activeFilter, startDate, endDate, movimientos) {
+        when (activeFilter) {
+            "Día" -> movimientos.filter { m ->
+                val d = parseMovementDate(m.dateString)
+                d != null && d.let {
+                    val c = java.util.Calendar.getInstance().apply { time = it }
+                    c.get(java.util.Calendar.YEAR) == curYear && c.get(java.util.Calendar.DAY_OF_YEAR) == curDay
+                }
+            }
+            "Mes" -> movimientos.filter { m ->
+                val d = parseMovementDate(m.dateString)
+                d != null && d.let {
+                    val c = java.util.Calendar.getInstance().apply { time = it }
+                    c.get(java.util.Calendar.YEAR) == curYear && c.get(java.util.Calendar.MONTH) == curMonth
+                }
+            }
+            else -> {
+                if (startDate.isBlank() || endDate.isBlank()) {
+                    movimientos
+                } else {
+                    val s = parseMovementDate(startDate)?.time ?: Long.MIN_VALUE
+                    val e = parseMovementDate(endDate)?.let {
+                        java.util.Calendar.getInstance().apply {
+                            time = it
+                            set(java.util.Calendar.HOUR_OF_DAY, 23); set(java.util.Calendar.MINUTE, 59)
+                            set(java.util.Calendar.SECOND, 59); set(java.util.Calendar.MILLISECOND, 999)
+                        }.timeInMillis
+                    } ?: Long.MAX_VALUE
+                    movimientos.filter { m -> val t = parseMovementDate(m.dateString)?.time ?: 0L; t in s..e }
+                }
+            }
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onClose) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                    }
+                    Text("Movimientos de Inventario", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                }
+                Button(
+                    onClick = {
+                        val pdfMovements = filtered.map { m ->
+                            val esIngreso = m.subtitle.contains("Ingreso")
+                            com.example.util.PdfInventoryMovement(
+                                dateStr = m.dateString,
+                                tipo = if (esIngreso) "Entrada" else "Salida",
+                                cantidad = (if (esIngreso) "+" else "-") + m.amount.toInt(),
+                                producto = if (m.title.isNotBlank()) m.title else "Producto"
+                            )
+                        }
+                        val pdfFile = com.example.util.PdfReportGenerator.generateInventoryMovementsPdf(
+                            context = context, company = company, periodLabel = periodLabel, movements = pdfMovements
+                        )
+                        com.example.util.PdfReportGenerator.openOrSharePdf(context, pdfFile)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.PictureAsPdf, contentDescription = "PDF", tint = Color.White, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Exportar a PDF", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Periodo: $periodLabel", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            Spacer(modifier = Modifier.height(12.dp))
+            iOSSegmented(
+                options = listOf("Día", "Mes", "Rango de fechas"),
+                selectedIndex = listOf("Día", "Mes", "Rango de fechas").indexOf(activeFilter),
+                onSelect = { idx -> activeFilter = listOf("Día", "Mes", "Rango de fechas")[idx] }
+            )
+
+            if (activeFilter == "Rango de fechas") {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedTextField(
+                        value = startDate,
+                        onValueChange = { startDate = it },
+                        label = { Text("Fecha Inicio", fontSize = 11.sp) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = endDate,
+                        onValueChange = { endDate = it },
+                        label = { Text("Fecha Fin", fontSize = 11.sp) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            if (filtered.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Sin movimientos en el periodo seleccionado", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        val scrollState = androidx.compose.foundation.rememberScrollState()
+                        Box(modifier = Modifier.horizontalScroll(scrollState)) {
+                            Column(modifier = Modifier.width(640.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Fecha", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(100.dp))
+                                    Text("Tipo", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(90.dp))
+                                    Text("Cantidad", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(90.dp))
+                                    Text("Producto", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(360.dp))
+                                }
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                filtered.forEach { m ->
+                                    val esIngreso = m.subtitle.contains("Ingreso")
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(m.dateString, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(100.dp))
+                                        Text(
+                                            if (esIngreso) "Entrada" else "Salida",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (esIngreso) Color(0xFF34C759) else Color(0xFFFF3B30),
+                                            modifier = Modifier.width(90.dp)
+                                        )
+                                        Text(
+                                            (if (esIngreso) "+" else "-") + m.amount.toInt().toString() + " u",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (esIngreso) Color(0xFF34C759) else Color(0xFFFF3B30),
+                                            modifier = Modifier.width(90.dp)
+                                        )
+                                        Text(
+                                            if (m.title.isNotBlank()) m.title else "Producto",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onBackground,
+                                            modifier = Modifier.width(360.dp),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -5101,6 +5374,8 @@ private fun NuevaVentaView(
     onClose: () -> Unit,
     onPaymentSuccess: (customerName: String, ticketItems: Map<PosProductEntity, Int>, totalAmount: Double, paymentMethod: String, transferAmount: Double, cashAmount: Double, tipoVenta: String) -> Unit,
     onDebeSuccess: (customerNames: List<String>, ticketItems: Map<PosProductEntity, Int>, totalAmount: Double, abonoAmount: Double, abonoMethod: String, tipoVenta: String, chico: Int) -> Unit,
+    onRegaloSuccess: (ticketItems: Map<PosProductEntity, Int>, totalAmount: Double) -> Unit,
+    validarClaveYo: suspend (String) -> Boolean,
     esBar: Boolean = false
 ) {
     var customerName by remember { mutableStateOf("") }
@@ -5114,6 +5389,15 @@ private fun NuevaVentaView(
 
     var showPaymentModal by remember { mutableStateOf(false) }
     var showDebeModal by remember { mutableStateOf(false) }
+
+    // Modo "YO" (Regalo de la Casa): se activa con 5 clics en "POS Activo".
+    var posActivoTaps by remember { mutableStateOf(0) }
+    var posActivoFirstTap by remember { mutableStateOf(0L) }
+    var modoRegalo by remember { mutableStateOf(false) }
+    var showRegaloClaveDialog by remember { mutableStateOf(false) }
+    var regaloClaveInput by remember { mutableStateOf("") }
+    var regaloValidando by remember { mutableStateOf(false) }
+    val regaloScope = rememberCoroutineScope()
 
     val context = LocalContext.current
 
@@ -5272,7 +5556,22 @@ private fun NuevaVentaView(
                         }
                     }
 
-                    iOSPill(text = "POS Activo")
+                    iOSPill(
+                        text = if (modoRegalo) "MODO YO" else "POS Activo",
+                        onClick = {
+                            val now = System.currentTimeMillis()
+                            if (now - posActivoFirstTap > 3000) {
+                                posActivoFirstTap = now
+                                posActivoTaps = 1
+                            } else {
+                                posActivoTaps++
+                            }
+                            if (posActivoTaps >= 5) {
+                                modoRegalo = !modoRegalo
+                                posActivoTaps = 0
+                            }
+                        }
+                    )
                 }
             }
 
@@ -5808,6 +6107,49 @@ private fun NuevaVentaView(
                     .fillMaxWidth()
             ) {
                 // TOTAL GRANDE Y EN NEGRITA ALINEADO A LA DERECHA
+                if (modoRegalo) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Total",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            Text(
+                                text = formatCurrency(totalAmount),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFF3B30),
+                                textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "$" + formatCurrency(0.0),
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color(0xFF34C759)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "A CARGO DE LA CASA",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFF3B30),
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.End
+                        )
+                    } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -5826,6 +6168,7 @@ private fun NuevaVentaView(
                         color = MaterialTheme.colorScheme.onBackground
                     )
                 }
+                    }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -5857,6 +6200,17 @@ private fun NuevaVentaView(
                         modifier = Modifier.fillMaxWidth().height(50.dp)
                     )
                 } else {
+                if (modoRegalo) {
+                    iOSButton(
+                        text = "Regalo de la Casa",
+                        onClick = {
+                            showRegaloClaveDialog = true
+                            regaloClaveInput = ""
+                        },
+                        enabled = hasActiveItems,
+                        modifier = Modifier.fillMaxWidth().height(50.dp)
+                    )
+                } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -5876,8 +6230,72 @@ private fun NuevaVentaView(
                     )
                 }
                 }
+                }
             }
         }
+    }
+
+    // DIÁLOGO CLAVE DINÁMICA PARA "REGALO DE LA CASA" (MODO YO)
+    if (showRegaloClaveDialog) {
+        AlertDialog(
+            onDismissRequest = { showRegaloClaveDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(20.dp),
+            title = {
+                Text(
+                    text = "Regalo de la Casa",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Este pedido (${formatCurrency(totalAmount)}) va por cuenta de la casa. Ingresa la clave dinámica del administrador para confirmar.",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = regaloClaveInput,
+                        onValueChange = { regaloClaveInput = it },
+                        label = { Text("Clave de verificación (6 dígitos)", fontSize = 12.sp) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (regaloValidando) return@Button
+                        regaloScope.launch {
+                            regaloValidando = true
+                            val ok = validarClaveYo(regaloClaveInput)
+                            regaloValidando = false
+                            if (ok) {
+                                val active = cartItems.filter { it.quantity > 0 }.associate { it.product to it.quantity }
+                                if (active.isNotEmpty()) {
+                                    onRegaloSuccess(active, totalAmount)
+                                    cartItems.forEach { it.quantity = 0 }
+                                    showRegaloClaveDialog = false
+                                    modoRegalo = false
+                                }
+                            } else {
+                                regaloClaveInput = ""
+                            }
+                        }
+                    },
+                    enabled = !regaloValidando,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759))
+                ) { Text(if (regaloValidando) "Verificando..." else "Confirmar Regalo", color = Color.White) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRegaloClaveDialog = false }) { Text("Cancelar") }
+            }
+        )
     }
 
     // DIÁLOGO DE SELECCIÓN DE MÉTODO DE PAGO ("Pago")

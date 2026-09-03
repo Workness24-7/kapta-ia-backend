@@ -967,6 +967,55 @@ class SheetsDatabaseService(
         }
     }
 
+    suspend fun obtenerClaveDinamica(empresa: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val jsonPayload = JSONObject().apply {
+                put("action", "obtener_clave_dinamica")
+                put("empresa", empresa)
+                put("codigo", empresa)
+            }
+            val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
+            val targetUrl: String = if (!webAppScriptUrl.isNullOrBlank()) webAppScriptUrl!! else APPS_SCRIPT_WEB_APP_URL
+            val request = Request.Builder().url(targetUrl).post(body).build()
+            client.newCall(request).execute().use { response ->
+                val str = response.body?.string() ?: ""
+                val json = JSONObject(str)
+                if (json.optString("status") == "success") {
+                    val data = json.optJSONObject("data")
+                    data?.optString("codigo")?.takeIf { it.isNotBlank() }
+                } else null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "obtenerClaveDinamica error: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun validarClaveDinamica(empresa: String, codigo: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val jsonPayload = JSONObject().apply {
+                put("action", "validar_clave_dinamica")
+                put("empresa", empresa)
+                put("codigo", codigo)
+                put("clave", codigo)
+            }
+            val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
+            val targetUrl: String = if (!webAppScriptUrl.isNullOrBlank()) webAppScriptUrl!! else APPS_SCRIPT_WEB_APP_URL
+            val request = Request.Builder().url(targetUrl).post(body).build()
+            client.newCall(request).execute().use { response ->
+                val str = response.body?.string() ?: ""
+                val json = JSONObject(str)
+                if (json.optString("status") == "success") {
+                    val data = json.optJSONObject("data")
+                    data?.optBoolean("valida", false) ?: false
+                } else false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "validarClaveDinamica error: ${e.message}")
+            false
+        }
+    }
+
     suspend fun actualizarStock(sheetName: String, stockData: List<Any>): Boolean =
         registrarInventario(sheetName, stockData)
 

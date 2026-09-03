@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import kotlin.math.abs
 import org.json.JSONArray
 import org.json.JSONObject
@@ -992,7 +993,7 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
                 category = "Ventas"
             )
         }
-        val expensesAsTx = txs.map { tx ->
+        val expensesAsTx = txs.filter { it.category != "Stock" }.map { tx ->
             FinancialTransaction(
                 id = tx.id,
                 title = if (tx.title.isNotBlank()) tx.title else "Gasto",
@@ -1125,6 +1126,7 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setCurrentUser(user: CompanyUserEntity?) {
         _currentUser.value = user
+        iniciarClaveDinamica()
         val isSuperAdmin = _isSuperAdminSession.value || user?.role.equals("superadmin", ignoreCase = true) || user?.role.equals("SuperAdmin", ignoreCase = true)
         val roleLabel = if (isSuperAdmin) "SUPER_ADMIN" else "BUSINESS"
         android.util.Log.d("KAPTA_ISOLATION", "[KAPTA_ISOLATION] Login/UserChanged: role=$roleLabel, activeCompanyCode='${activeCompanyCode.value}', selectedCompany='${_selectedCompany.value?.code ?: ""}'")
@@ -1145,7 +1147,73 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
         _selectedCompany.value = null
         _selectedRemoteCompany.value = null
         _isSuperAdminSession.value = false
+        detenerClaveDinamica()
         android.util.Log.d("KAPTA_ISOLATION", "[KAPTA_ISOLATION] Logout executed: role=None, activeCompanyCode='', selectedCompany=null")
+    }
+
+    // ----------------------------------------------------------------------------
+    // CLAVE DINÁMICA DEL ADMINISTRADOR (6 dígitos, cambia cada 1 min / al usarse)
+    // ----------------------------------------------------------------------------
+    private val _dynamicCode = MutableStateFlow<String?>(null)
+    val dynamicCode: StateFlow<String?> = _dynamicCode.asStateFlow()
+
+    private var dynamicJob: Job? = null
+
+    private fun esAdministrador(user: CompanyUserEntity?): Boolean {
+        return user?.role.equals("Administrador", ignoreCase = true) ||
+                user?.role.equals("admin", ignoreCase = true) ||
+                user?.role.equals("SuperAdmin", ignoreCase = true) ||
+                _isSuperAdminSession.value
+    }
+
+    fun iniciarClaveDinamica() {
+        detenerClaveDinamica()
+        val empresa = _currentUser.value?.companyCode?.takeIf { it.isNotBlank() }
+            ?: activeCompanyCode.value.takeIf { it.isNotBlank() }
+            ?: _selectedCompany.value?.code
+        if (empresa.isNullOrBlank()) return
+        // Se genera en backend para que todos los dispositivos vean la misma clave.
+        // Poll cada 30s para reflejar rotación de 1 min + uso.
+        dynamicJob = viewModelScope.launch {
+            while (true) {
+                try {
+                    val codigo = sheetsService.obtenerClaveDinamica(empresa)
+                    if (!codigo.isNullOrBlank()) _dynamicCode.value = codigo
+                } catch (_: Exception) { }
+                kotlinx.coroutines.delay(30_000L)
+            }
+        }
+        // fetch inmediato
+        viewModelScope.launch {
+            try {
+                val codigo = sheetsService.obtenerClaveDinamica(empresa)
+                if (!codigo.isNullOrBlank()) _dynamicCode.value = codigo
+            } catch (_: Exception) { }
+        }
+    }
+
+    fun detenerClaveDinamica() {
+        dynamicJob?.cancel()
+        dynamicJob = null
+        _dynamicCode.value = null
+    }
+
+    suspend fun validarClaveDinamica(codigo: String): Boolean {
+        val empresa = _currentUser.value?.companyCode?.takeIf { it.isNotBlank() }
+            ?: activeCompanyCode.value.takeIf { it.isNotBlank() }
+            ?: _selectedCompany.value?.code
+            ?: return false
+        val ok = try {
+            sheetsService.validarClaveDinamica(empresa, codigo.trim())
+        } catch (_: Exception) { false }
+        if (ok) {
+            // Regenera en backend al usarse; refrescar local inmediatamente
+            try {
+                val nuevo = sheetsService.obtenerClaveDinamica(empresa)
+                if (!nuevo.isNullOrBlank()) _dynamicCode.value = nuevo
+            } catch (_: Exception) { }
+        }
+        return ok
     }
 
     suspend fun loginWithServer(pais: String, codigo: String, correo: String, password: String): com.example.data.remote.LoginResultado {
@@ -2003,6 +2071,35 @@ Responde SOLO con un arreglo JSON (sin texto ni markdown) de este formato:
             }
             syncManager.triggerImmediateSync(repository)
             onSuccess()
+        }
+    }
+
+    /**
+     * Registra un movimiento de inventario en la tabla de movimientos (financial_transactions),
+     * aislado del resumen financiero con categoria "Stock".
+     * tipo: "INGRESO" | "VENTA" | "DEUDOR"
+     */
+    fun registrarMovimientoStock(companyCode: String, productName: String, cantidad: Int, tipo: String) {
+        viewModelScope.launch {
+            val dateStr = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
+            val subtitle = when (tipo) {
+                "INGRESO" -> "Ingreso de stock"
+                "VENTA" -> "Descuento por venta"
+                "DEUDOR" -> "Descuento por deudor"
+                else -> "Movimiento de stock"
+            }
+            repository.insertTransaction(
+                FinancialTransactionEntity(
+                    companyCode = companyCode,
+                    title = productName,
+                    subtitle = subtitle,
+                    amount = cantidad.toDouble(),
+                    dateString = dateStr,
+                    isExpense = false,
+                    category = "Stock",
+                    isSynced = false
+                )
+            )
         }
     }
 

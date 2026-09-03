@@ -1080,6 +1080,34 @@ def action_listar_soportes(params=None):
     return respuesta_success({"data": db.listar_soportes()})
 
 
+def action_obtener_clave_dinamica(params=None):
+    p = params or {}
+    empresa = str(p.get("empresa") or p.get("codigo") or p.get("codigo_empresa") or p.get("idEmpresa") or p.get("sheetName") or "").strip()
+    if not empresa:
+        return respuesta_error("Falta empresa/codigo para clave dinamica.")
+    cod = resolver_hoja(empresa) or empresa
+    row = db.obtener_clave_dinamica_db(cod)
+    if row is None:
+        return respuesta_error("No se pudo generar la clave.")
+    import time
+    ahora = int(time.time() * 1000)
+    segundos = max(0, (int(row.get("expira") or 0) - ahora) // 1000)
+    return respuesta_success({"codigo": row.get("codigo"), "expira": row.get("expira"), "segundosRestantes": segundos, "empresa": row.get("empresa")})
+
+
+def action_validar_clave_dinamica(params=None):
+    p = params or {}
+    empresa = str(p.get("empresa") or p.get("codigo") or p.get("codigo_empresa") or p.get("idEmpresa") or p.get("sheetName") or "").strip()
+    codigo = str(p.get("codigo") or p.get("clave") or p.get("code") or "").strip()
+    if not empresa or not codigo:
+        return respuesta_error("Falta empresa o codigo.")
+    cod = resolver_hoja(empresa) or empresa
+    res = db.validar_clave_dinamica_db(cod, codigo)
+    if res.get("ok"):
+        return respuesta_success({"valida": True, "nuevo_codigo": res.get("nuevo_codigo")})
+    return respuesta_success({"valida": False, "motivo": res.get("motivo"), "nuevo_codigo": res.get("nuevo_codigo")})
+
+
 def action_importar_inventario(params):
     """Carga masiva de inventario desde CSV/TXT.
     Columnas (7): Nombre, Categoria, Costo, Precio, PrecioMinimo(vacio=sin valor),
@@ -1149,6 +1177,10 @@ POST_ACTIONS = {
     "registrar_gasto": action_escribir_fila,
     "crear_usuario": action_escribir_fila,
     "append": action_escribir_fila,
+    "validar_clave_dinamica": action_validar_clave_dinamica,
+    "validar_clave": action_validar_clave_dinamica,
+    "obtener_clave_dinamica": action_obtener_clave_dinamica,
+    "obtener_clave": action_obtener_clave_dinamica,
 }
 
 
@@ -1163,6 +1195,9 @@ GET_ACTIONS = {
     "listar_finanzas_kapta": action_listar_finanzas_kapta,
     "listar_soportes": action_listar_soportes,
     "listar_todos_usuarios": action_listar_todos_usuarios,
+    "obtener_clave_dinamica": action_obtener_clave_dinamica,
+    "obtener_clave": action_obtener_clave_dinamica,
+    "get_clave": action_obtener_clave_dinamica,
 }
 
 

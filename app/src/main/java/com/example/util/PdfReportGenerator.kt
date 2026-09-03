@@ -30,6 +30,13 @@ data class PdfExpenseItem(
     val amount: Double
 )
 
+data class PdfInventoryMovement(
+    val dateStr: String,
+    val tipo: String, // "Salida" o "Entrada"
+    val cantidad: String, // e.g. "-5"
+    val producto: String
+)
+
 object PdfReportGenerator {
 
     private fun formatCurrency(amount: Double): String {
@@ -221,6 +228,86 @@ object PdfReportGenerator {
         pdfDocument.finishPage(page)
 
         val outputFile = File(context.cacheDir, "Reporte_Financiero_${company.code}.pdf")
+        val fos = FileOutputStream(outputFile)
+        pdfDocument.writeTo(fos)
+        fos.close()
+        pdfDocument.close()
+
+        return outputFile
+    }
+
+    fun generateInventoryMovementsPdf(
+        context: Context,
+        company: CompanyEntity,
+        periodLabel: String,
+        movements: List<PdfInventoryMovement>
+    ): File {
+        val pdfDocument = PdfDocument()
+        val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
+        val page = pdfDocument.startPage(pageInfo)
+        val canvas: Canvas = page.canvas
+
+        val paint = Paint().apply { isAntiAlias = true }
+        var y = 45f
+
+        paint.textSize = 20f
+        paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        paint.color = android.graphics.Color.parseColor("#0F172A")
+        paint.textAlign = Paint.Align.CENTER
+        canvas.drawText(company.name.ifBlank { "KAPTA POS" }, 297.5f, y, paint)
+
+        y += 22f
+        paint.textSize = 12f
+        paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        paint.color = android.graphics.Color.parseColor("#64748B")
+        canvas.drawText("MOVIMIENTOS DE INVENTARIO", 297.5f, y, paint)
+
+        y += 22f
+        paint.textSize = 11f
+        paint.color = android.graphics.Color.parseColor("#4F46E5")
+        paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        canvas.drawText("Periodo: $periodLabel", 297.5f, y, paint)
+
+        y += 25f
+        paint.color = android.graphics.Color.parseColor("#CBD5E1")
+        paint.strokeWidth = 1.5f
+        canvas.drawLine(40f, y, 555f, y, paint)
+
+        y += 28f
+        paint.textAlign = Paint.Align.LEFT
+        paint.textSize = 9.5f
+        paint.color = android.graphics.Color.parseColor("#475569")
+        paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        canvas.drawText("Fecha", 40f, y, paint)
+        canvas.drawText("Tipo", 120f, y, paint)
+        canvas.drawText("Cantidad", 220f, y, paint)
+        canvas.drawText("Producto", 320f, y, paint)
+
+        y += 8f
+        paint.color = android.graphics.Color.parseColor("#E2E8F0")
+        paint.strokeWidth = 1f
+        canvas.drawLine(40f, y, 555f, y, paint)
+
+        paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        paint.color = android.graphics.Color.parseColor("#1E293B")
+
+        if (movements.isEmpty()) {
+            y += 18f
+            canvas.drawText("Sin movimientos en el periodo seleccionado", 40f, y, paint)
+        } else {
+            movements.forEach { m ->
+                y += 18f
+                canvas.drawText(m.dateStr, 40f, y, paint)
+                canvas.drawText(m.tipo, 120f, y, paint)
+                canvas.drawText(m.cantidad, 220f, y, paint)
+                val prodTrunc = if (m.producto.length > 30) m.producto.take(28) + ".." else m.producto
+                canvas.drawText(prodTrunc, 320f, y, paint)
+            }
+        }
+
+        pdfDocument.finishPage(page)
+
+        val outputFile = File(context.cacheDir, "Movimientos_Inventario_${company.code}.pdf")
         val fos = FileOutputStream(outputFile)
         pdfDocument.writeTo(fos)
         fos.close()

@@ -96,6 +96,16 @@ CREATE TABLE IF NOT EXISTS empresas (
 );
 """
 
+SCHEMA_CLAVES_DINAMICAS = """
+CREATE TABLE IF NOT EXISTS claves_dinamicas (
+    empresa TEXT PRIMARY KEY,
+    codigo TEXT NOT NULL DEFAULT '',
+    expira BIGINT NOT NULL DEFAULT 0,
+    usada INTEGER NOT NULL DEFAULT 0,
+    actualizado TEXT DEFAULT ''
+);
+"""
+
 SCHEMA_FUNCIONES = """
 CREATE TABLE IF NOT EXISTS funciones_lib (
     id SERIAL PRIMARY KEY,
@@ -346,6 +356,7 @@ def init_db():
             cur.execute(SCHEMA_FINANZAS_KAPTA)
             cur.execute(SCHEMA_SOPORTE)
             cur.execute(SCHEMA_FUNCIONES)
+            cur.execute(SCHEMA_CLAVES_DINAMICAS)
             # Migración en caliente de columnas nuevas en empresas.
             cur.execute(
                 "SELECT column_name FROM information_schema.columns WHERE table_name='empresas'",
@@ -869,6 +880,73 @@ def actualizar_ultimo_acceso(empresa_codigo, correo, fecha):
                 (fecha, empresa_codigo, correo),
             )
         conn.commit()
+
+
+def obtener_clave_dinamica_db(empresa_codigo):
+    import time, random
+    empresa = (empresa_codigo or "").strip().upper()
+    if not empresa:
+        return None
+    ahora_ms = int(time.time() * 1000)
+    ventana_ms = 60_000
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT empresa, codigo, expira, usada, actualizado FROM claves_dinamicas WHERE empresa=%s", (empresa,))
+            row = cur.fetchone()
+            row = dict(row) if row else None
+            necesita_nueva = True
+            if row is not None:
+                expira = int(row.get("expira") or 0)
+                usada = int(row.get("usada") or 0)
+                if usada == 0 and expira > ahora_ms and str(row.get("codigo") or "").strip():
+                    necesita_nueva = False
+            if necesita_nueva:
+                nuevo_codigo = str(random.randint(0, 999999)).zfill(6)
+                nuevo_expira = ahora_ms + ventana_ms
+                cur.execute(
+                    """INSERT INTO claves_dinamicas (empresa, codigo, expira, usada, actualizado)
+                       VALUES (%s, %s, %s, 0, NOW()::text)
+                       ON CONFLICT (empresa) DO UPDATE SET codigo=%s, expira=%s, usada=0, actualizado=NOW()::text""",
+                    (empresa, nuevo_codigo, nuevo_expira, nuevo_codigo, nuevo_expira),
+                )
+                conn.commit()
+                return {"empresa": empresa, "codigo": nuevo_codigo, "expira": nuevo_expira, "usada": 0}
+            return row
+
+
+def validar_clave_dinamica_db(empresa_codigo, codigo_ingresado):
+    import time, random
+    empresa = (empresa_codigo or "").strip().upper()
+    codigo = (codigo_ingresado or "").strip()
+    if not empresa or not codigo:
+        return {"ok": False, "motivo": "faltan_datos"}
+    ahora_ms = int(time.time() * 1000)
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT empresa, codigo, expira, usada FROM claves_dinamicas WHERE empresa=%s", (empresa,))
+            row = cur.fetchone()
+            if row is None:
+                return {"ok": False, "motivo": "no_existe"}
+            row = dict(row)
+            almacenado = str(row.get("codigo") or "").strip()
+            usada = int(row.get("usada") or 0)
+            expira = int(row.get("expira") or 0)
+            if usada != 0:
+                nuevo = str(random.randint(0, 999999)).zfill(6)
+                cur.execute("UPDATE claves_dinamicas SET codigo=%s, expira=%s, usada=0, actualizado=NOW()::text WHERE empresa=%s", (nuevo, ahora_ms + 60_000, empresa))
+                conn.commit()
+                return {"ok": False, "motivo": "ya_usada", "nuevo_codigo": nuevo}
+            if expira > 0 and ahora_ms > expira:
+                nuevo = str(random.randint(0, 999999)).zfill(6)
+                cur.execute("UPDATE claves_dinamicas SET codigo=%s, expira=%s, usada=0, actualizado=NOW()::text WHERE empresa=%s", (nuevo, ahora_ms + 60_000, empresa))
+                conn.commit()
+                return {"ok": False, "motivo": "expirada", "nuevo_codigo": nuevo}
+            if almacenado != codigo:
+                return {"ok": False, "motivo": "incorrecta"}
+            nuevo = str(random.randint(0, 999999)).zfill(6)
+            cur.execute("UPDATE claves_dinamicas SET codigo=%s, expira=%s, usada=0, actualizado=NOW()::text WHERE empresa=%s", (nuevo, ahora_ms + 60_000, empresa))
+            conn.commit()
+            return {"ok": True, "nuevo_codigo": nuevo}
 
 
 def comprar_plan_db(codigo, plan, tiempo, monto, fecha_vencimiento, usuario=""):

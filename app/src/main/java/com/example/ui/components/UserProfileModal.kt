@@ -135,6 +135,7 @@ fun UserProfileModal(
     companies: List<CompanyEntity> = emptyList(),
     viewerIsSuperAdmin: Boolean = false,
     currentCompanyCode: String? = null,
+    dynamicCode: String? = null,
     onDarkModeToggle: (Boolean) -> Unit = {},
     onDeleteUser: ((CompanyUserEntity) -> Unit)? = null,
     onSaveUser: ((CompanyUserEntity) -> Unit)? = null,
@@ -419,6 +420,16 @@ fun UserProfileModal(
                                 labelColor = primaryTextColor,
                                 valueColor = valueTextColor
                             )
+                            if (!dynamicCode.isNullOrBlank() && (userRole.contains("Admin", ignoreCase = true) || userRole.contains("Administrador", ignoreCase = true))) {
+                                GroupedDivider(color = dividerColor)
+                                GroupedListRow(
+                                    label = "Clave de Verificación",
+                                    value = dynamicCode,
+                                    showChevron = false,
+                                    labelColor = primaryTextColor,
+                                    valueColor = Color(0xFF34C759)
+                                )
+                            }
                         }
                     }
 

@@ -235,16 +235,21 @@ fun iOSPill(
     text: String,
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
-    tinted: Boolean = true
+    tinted: Boolean = true,
+    onClick: (() -> Unit)? = null
 ) {
     val isDark = LocalIsDarkMode.current
     val bg = if (tinted) color.copy(alpha = if (isDark) 0.25f else 0.14f) else color
     val fg = if (tinted) color else Color.White
+    var mod = modifier
+        .clip(CircleShape)
+        .background(bg)
+        .padding(horizontal = 12.dp, vertical = 5.dp)
+    if (onClick != null) {
+        mod = mod.clickable { onClick() }
+    }
     Box(
-        modifier = modifier
-            .clip(CircleShape)
-            .background(bg)
-            .padding(horizontal = 12.dp, vertical = 5.dp)
+        modifier = mod
     ) {
         Text(
             text = text,
