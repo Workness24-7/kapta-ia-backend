@@ -14,6 +14,7 @@ import urllib.parse as _urlparse
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 import db
 
@@ -25,6 +26,12 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# PWA web (usable en iPhone/Android/PC) servida en /app/.
+try:
+    app.mount("/app", StaticFiles(directory="pwa", html=True), name="pwa")
+except Exception:
+    pass
 
 VERSION_API = "KAPTA-1.0.0"
 
