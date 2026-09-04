@@ -58,15 +58,17 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .formas { position: absolute; inset: 0; pointer-events: none; }
 .formas-atras { z-index: 1; }
 .formas-frente { z-index: 3; }
-.formas img { position: absolute; display: block; height: auto; }
+.formas img { position: absolute; display: block; height: auto; filter: blur(16px); }
 .fa-morada-tl { width: 30.7%; left: -6.6%; top: -9vh; }
 .fa-nube { width: 25.6%; right: -5.1%; top: -5vh; }
 .fa-destellos { width: 2.9%; left: 0; top: 52vh; }
 .fa-cian-bl { width: 32.2%; left: -8%; bottom: -19.5vh; }
-.fa-cinco { width: 135px; right: -25px; top: 300px; }
+.fa-cinco { width: 150px; right: -25px; top: 320px; }
+.fa-gris { width: 36%; right: -11%; bottom: -24vh; }
+.fa-blanca { width: 13%; left: 16%; top: 24%; }
 @media (max-width: 700px) {
   .fc-cuadro { width: 84px; right: -30px; top: -55px; left: auto; }
-  .fc-cian { width: 110px; left: 52%; top: auto; bottom: -75px; }
+  .fc-cian { width: 110px; left: 52%; top: auto; bottom: -150px; }
   .fc-blanca { width: 130px; left: auto; right: -90px; top: 120px; }
   .fa-cinco { width: 90px; right: -20px; top: 34vh; left: auto; }
   .fa-gris { width: 48%; right: -14%; top: 44%; left: auto; }
@@ -81,10 +83,10 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
   background-image: linear-gradient(#f4f4f4, #f4f4f4), linear-gradient(135deg, #ffffff, #a6a6a6);
   background-origin: border-box; background-clip: padding-box, border-box; }
 /* Formas ancladas a la tarjeta (no se mueven con el ancho de pantalla) */
-.glass-card > img[class^="fc-"] { position: absolute; display: block; pointer-events: none; }
+.glass-card > img[class^="fc-"] { position: absolute; display: block; pointer-events: none; filter: blur(10px); }
 .fc-blanca { width: 190px; left: calc(100% - 150px); top: 150px; z-index: -1; }
 .fc-cuadro { width: 140px; right: -100px; top: -75px; z-index: 1; }
-.fc-cian { width: 150px; left: 320px; top: 460px; z-index: 1; }
+.fc-cian { width: 120px; left: 70px; top: auto; bottom: -160px; z-index: 1; }
 .login-label { font-size: 14px; font-weight: 400; color: #010101; margin: 20px 0 10px; }
 .login-label:first-child { margin-top: 0; }
 .login-field { background: #f7f7f7; border: 1px solid transparent; border-radius: 20px; min-height: 58px;

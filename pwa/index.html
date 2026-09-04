@@ -66,18 +66,31 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .btn-mini.verde { background: var(--ok); }
 .volver { background: none; border: 0; color: var(--prim); font-weight: 700; font-size: 14px; margin-bottom: 8px; }
 /* Login redirección estilo app */
-.fondo-login { background: #f1f1f1 url(img/fondo-login.png?v=13) center top / cover no-repeat; min-height: 100dvh; }
+.fondo-login { background: #f1f1f1; min-height: 100dvh; }
 .login-stage { position: relative; width: 100%; max-width: 1366px; margin: 0 auto; min-height: 100dvh; overflow: hidden; }
 .login-wrap { width: 100%; max-width: 560px; margin: 0 auto; padding: clamp(24px, 6vh, 56px) 28px 40px; text-align: center; position: relative; z-index: 2; }
 /* Formas decorativas superpuestas (posiciones de la referencia) */
 .formas { position: absolute; inset: 0; pointer-events: none; }
 .formas-atras { z-index: 1; }
 .formas-frente { z-index: 3; }
-.formas img { position: absolute; display: block; height: auto; }
+.formas img { position: absolute; display: block; height: auto; filter: blur(16px); }
+.fa-morada-tl { width: 30.7%; left: -6.6%; top: -9vh; }
+.fa-nube { width: 25.6%; right: -5.1%; top: -5vh; }
+.fa-destellos { width: 2.9%; left: 0; top: 52vh; }
+.fa-cian-bl { width: 32.2%; left: -8%; bottom: -19.5vh; }
+.fa-cinco { width: 150px; right: -25px; top: 320px; }
+.fa-gris { width: 36%; right: -11%; bottom: -24vh; }
+.fa-blanca { width: 13%; left: 16%; top: 24%; }
 @media (max-width: 700px) {
   .fc-cuadro { width: 84px; right: -30px; top: -55px; left: auto; }
-  .fc-cian { width: 110px; left: 52%; top: auto; bottom: -75px; }
+  .fc-cian { width: 110px; left: 52%; top: auto; bottom: -150px; }
   .fc-blanca { width: 130px; left: auto; right: -90px; top: 120px; }
+  .fa-cinco { width: 90px; right: -20px; top: 34vh; left: auto; }
+  .fa-gris { width: 48%; right: -14%; top: 44%; left: auto; bottom: auto; }
+  .fa-morada-tl { width: 52%; left: -16%; top: -9vh; }
+  .fa-nube { width: 48%; right: -16%; top: -5vh; }
+  .fa-cian-bl { width: 56%; left: -26%; bottom: -19vh; }
+  .fa-destellos { width: 9%; left: 0; top: 46%; }
   .login-wrap { padding: 20px 16px 30px; }
   #brand-logo { max-width: 270px; margin-bottom: 22px; }
   .glass-card { padding: 22px 20px; }
@@ -96,10 +109,10 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
   background-image: linear-gradient(#f4f4f4, #f4f4f4), linear-gradient(135deg, #ffffff, #a6a6a6);
   background-origin: border-box; background-clip: padding-box, border-box; }
 /* Formas ancladas a la tarjeta (no se mueven con el ancho de pantalla) */
-.glass-card > img[class^="fc-"] { position: absolute; display: block; pointer-events: none; }
+.glass-card > img[class^="fc-"] { position: absolute; display: block; pointer-events: none; filter: blur(10px); }
 .fc-blanca { width: 190px; left: calc(100% - 170px); top: 150px; z-index: -1; }
 .fc-cuadro { width: 140px; right: -100px; top: -75px; z-index: 1; }
-.fc-cian { width: 150px; left: 320px; top: auto; bottom: -90px; z-index: 1; }
+.fc-cian { width: 120px; left: 70px; top: auto; bottom: -160px; z-index: 1; }
 .login-label { font-size: 14px; font-weight: 400; color: #010101; margin: 20px 0 10px; }
 .login-label:first-child { margin-top: 0; }
 .login-field { background: #f7f7f7; border: 1px solid transparent; border-radius: 20px; min-height: 58px;
@@ -171,6 +184,13 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
   <section id="p-negocio" class="pantalla fondo-login">
     <div class="login-stage">
     <div class="formas formas-atras" aria-hidden="true">
+      <img src="img/formas/morada-tl.png?v=10" class="fa-morada-tl" alt="">
+      <img src="img/formas/nube.png?v=10" class="fa-nube" alt="">
+      <img src="img/formas/destellos.png?v=10" class="fa-destellos" alt="">
+      <img src="img/formas/cian-bl.png?v=10" class="fa-cian-bl" alt="">
+      <img src="img/formas/cian-abajo.png?v=10" class="fa-cinco" alt="">
+      <img src="img/formas/gris.png?v=10" class="fa-gris" alt="">
+      <img src="img/formas/blanca.png?v=10" class="fa-blanca" alt="">
     </div>
     <div class="login-wrap">
       <img id="brand-logo" src="img/logo-slogan.png?v=10" alt="KAPTA IA — La inteligencia de tu negocio">

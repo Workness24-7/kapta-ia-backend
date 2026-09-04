@@ -1,7 +1,9 @@
-/* Service Worker: CSS dentro del HTML; fondo compuesto + shell offline, API a red, HTML fresco. */
-const CACHE = "kapta-pwa-v13";
+/* Service Worker: CSS dentro del HTML; formas individuales + shell offline, API a red, HTML fresco. */
+const CACHE = "kapta-pwa-v14";
 const SHELL = ["./app.js?v=11", "./manifest.webmanifest", "./img/logo-slogan.png?v=9",
-  "./img/fondo-login.png?v=13",
+  "./img/formas/morada-tl.png?v=10", "./img/formas/nube.png?v=10",
+  "./img/formas/destellos.png?v=10", "./img/formas/cian-bl.png?v=10",
+  "./img/formas/cian-abajo.png?v=10", "./img/formas/gris.png?v=10",
   "./img/flags/colombia.png?v=10", "./img/flags/mexico.png?v=10", "./img/flags/peru.png?v=10",
   "./img/flags/chile.png?v=10", "./img/flags/argentina.png?v=10", "./img/flags/ecuador.png?v=10",
   "./img/formas/blanca.png?v=10",
