@@ -73,10 +73,10 @@ function pintarPaises() {
   PAISES.forEach(([nombre, img]) => {
     const b = document.createElement("button");
     b.type = "button";
-    b.innerHTML = `<img src="img/flags/${img}.png" alt=""><span>${nombre}</span>`;
+    b.innerHTML = `<img src="img/flags/${img}.png?v=9" alt=""><span>${nombre}</span>`;
     b.addEventListener("click", () => {
       PAIS_SEL = nombre;
-      $("pais-sel").innerHTML = `<img id="pais-flag" src="img/flags/${img}.png" alt=""><span id="pais-nombre">${nombre}</span>`;
+      $("pais-sel").innerHTML = `<img id="pais-flag" src="img/flags/${img}.png?v=9" alt=""><span id="pais-nombre">${nombre}</span>`;
       box.classList.add("oculto");
     });
     box.appendChild(b);
