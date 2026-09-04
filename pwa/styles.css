@@ -51,13 +51,17 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .btn-mini.verde { background: var(--ok); }
 .volver { background: none; border: 0; color: var(--prim); font-weight: 700; font-size: 14px; margin-bottom: 8px; }
 /* Login redirección estilo app */
-.fondo-login { background: #F4F4F6; min-height: 100dvh; display: flex; align-items: center; justify-content: center; }
+.fondo-login { background: #f1f1f1; min-height: 100dvh; display: flex; align-items: center; justify-content: center; }
 .login-wrap { width: 100%; max-width: 560px; margin: 0 auto; padding: 32px 28px; text-align: center; }
 #brand-logo { width: 100%; max-width: 400px; margin: 0 auto 40px; display: block; }
-.glass-card { background: rgba(255,255,255,.78); border: 1px solid #E5E5EA; border-radius: 28px; padding: 30px 28px; box-shadow: 0 12px 40px #00000012; text-align: left; }
+.glass-card { background: #f4f4f4; border: 1px solid transparent; border-radius: 28px; padding: 30px 28px; box-shadow: 0 12px 40px #00000012; text-align: left;
+  background-image: linear-gradient(#f4f4f4, #f4f4f4), linear-gradient(135deg, #ffffff, #a6a6a6);
+  background-origin: border-box; background-clip: padding-box, border-box; }
 .login-label { font-size: 15px; font-weight: 600; color: #111; margin: 20px 0 10px; }
 .login-label:first-child { margin-top: 0; }
-.login-field { background: rgba(255,255,255,.9); border: 1px solid #DCDCE0; border-radius: 20px; min-height: 58px; }
+.login-field { background: #f7f7f7; border: 1px solid transparent; border-radius: 20px; min-height: 58px;
+  background-image: linear-gradient(#f7f7f7, #f7f7f7), linear-gradient(135deg, #ffffff, #a6a6a6);
+  background-origin: border-box; background-clip: padding-box, border-box; }
 #pais-btn { width: 100%; min-height: 58px; border: 0; background: none; display: flex; align-items: center; justify-content: space-between; padding: 8px 18px; font-size: 16px; font-weight: 600; color: #0F172A; cursor: pointer; }
 #pais-sel { display: flex; align-items: center; gap: 12px; }
 #pais-sel .ph { color: #9AA0AE; font-weight: 500; }
