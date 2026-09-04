@@ -1,6 +1,7 @@
 :root { --prim: #4F46E5; --bg: #F2F2F7; --card: #fff; --txt: #0F172A; --mut: #64748B; --ok: #34C759; --rojo: #EF4444; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-body { margin: 0; font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--txt); }
+body { margin: 0; font-family: 'DM Sans', -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--txt); }
+button, input, select, textarea { font-family: inherit; }
 .pantalla { min-height: 100dvh; }
 .oculto { display: none !important; }
 .centrado { max-width: 380px; margin: 0 auto; padding: 48px 24px; text-align: center; }
@@ -72,10 +73,11 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .login-id input::placeholder { color: #9AA0AE; }
 .login-div { width: 1px; height: 26px; background: #CBD5E1; margin: 0 12px; flex-shrink: 0; }
 .login-dom { color: #475569; font-size: 15px; font-weight: 500; white-space: nowrap; }
-.btn.degradado { background: linear-gradient(90deg, #5BC8E8, #818CF8 55%, #8B5CF6); color: #fff; margin-top: 26px; height: 58px; font-size: 17px; box-shadow: 0 10px 24px #818CF877; }
-.login-sep { display: flex; align-items: center; gap: 12px; margin: 28px 0 8px; }
+.btn.degradado { background: linear-gradient(90deg, #5BC8E8, #818CF8 55%, #8B5CF6); color: #fff; margin: 30px 0 6px; height: 58px; font-size: 17px; box-shadow: 0 10px 24px #818CF877; }
+.login-err:empty { display: none; }
+.login-err { margin: 10px 0 0; }
+.login-sep { display: flex; align-items: center; margin: 24px 0 4px; }
 .login-sep span { flex: 1; height: 1px; background: #E2E8F0; }
-.login-sep i { width: 8px; height: 8px; border: 1.5px solid #94A3B8; border-radius: 50%; }
 .login-ayuda { background: none; border: 0; width: 100%; color: #111 !important; font-size: 15px; font-weight: 600; padding: 10px; cursor: pointer; }
 .superbrand { display: flex; align-items: center; gap: 10px; background: linear-gradient(135deg, #4F46E5, #7C3AED); color: #fff; border-radius: 16px; padding: 12px 14px; margin-bottom: 12px; }
 .superbrand small { display: block; opacity: .85; font-size: 11px; }
