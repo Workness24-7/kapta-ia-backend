@@ -58,12 +58,12 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .formas-atras { z-index: 1; }
 .formas-frente { z-index: 3; }
 .formas img { position: absolute; display: block; }
-.fa-morada-tl { width: 360px; left: -70px; top: -70px; }
-.fa-nube { width: 340px; right: -70px; top: -40px; }
-.fa-destellos { width: 60px; left: 4px; top: 46%; }
-.fa-cian-bl { width: 420px; left: -110px; bottom: -130px; }
-.fa-gris { width: 260px; right: 156px; top: 350px; }
-.fa-blanca { width: 190px; left: 270px; bottom: 60px; }
+.fa-morada-tl { width: 420px; left: -90px; top: -70px; }
+.fa-nube { width: 350px; right: -70px; top: -40px; }
+.fa-destellos { width: 40px; left: 0; top: 400px; }
+.fa-cian-bl { width: 440px; left: -110px; bottom: -150px; }
+.fa-gris { width: 390px; right: -100px; top: 370px; }
+.fa-blanca { width: 195px; left: 345px; top: 160px; }
 .ff-cuadro { width: 140px; right: 186px; top: 120px; }
 .ff-frijol { width: 135px; right: -25px; top: 285px; }
 .ff-cian { width: 150px; left: 750px; bottom: -110px; }
@@ -71,12 +71,12 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
   .ff-cuadro { width: 84px; right: 2%; top: 12%; left: auto; }
   .ff-frijol { width: 76px; right: -24px; top: 38%; left: auto; }
   .ff-cian { width: 110px; left: 55%; bottom: -70px; }
-  .fa-gris { width: 170px; right: 4%; top: 44%; left: auto; }
-  .fa-blanca { width: 130px; left: 2%; bottom: 8%; }
-  .fa-morada-tl { width: 200px; left: -70px; top: -70px; }
-  .fa-nube { width: 200px; right: -70px; top: -40px; }
-  .fa-cian-bl { width: 210px; left: -110px; bottom: -130px; }
-  .fa-destellos { width: 44px; }
+  .fa-gris { width: 220px; right: -60px; top: 44%; left: auto; }
+  .fa-blanca { width: 130px; left: 8%; top: 22%; bottom: auto; }
+  .fa-morada-tl { width: 230px; left: -70px; top: -70px; }
+  .fa-nube { width: 220px; right: -70px; top: -40px; }
+  .fa-cian-bl { width: 240px; left: -110px; bottom: -150px; }
+  .fa-destellos { width: 32px; left: 0; top: 46%; }
 }
 #brand-logo { width: 100%; max-width: 400px; margin: 0 auto 40px; display: block; }
 .glass-card { background: #f4f4f4; border: 1px solid transparent; border-radius: 28px; padding: 30px 28px; box-shadow: 0 12px 40px #00000012; text-align: left;
