@@ -1,11 +1,11 @@
-/* Service Worker: CSS dentro del HTML; shell offline, API siempre a red, HTML siempre fresco. */
-const CACHE = "kapta-pwa-v9";
-const SHELL = ["./app.js?v=9", "./manifest.webmanifest", "./img/logo-slogan.png?v=9",
-  "./img/flags/colombia.png?v=9", "./img/flags/mexico.png?v=9", "./img/flags/peru.png?v=9",
-  "./img/flags/chile.png?v=9", "./img/flags/argentina.png?v=9", "./img/flags/ecuador.png?v=9",
-  "./img/formas/morada-tl.png?v=9", "./img/formas/nube.png?v=9", "./img/formas/destellos.png?v=9",
-  "./img/formas/cian-bl.png?v=9", "./img/formas/gris.png?v=9", "./img/formas/blanca.png?v=9",
-  "./img/formas/cuadro-mor.png?v=9", "./img/formas/frijol-der.png?v=9", "./img/formas/cian-abajo.png?v=9"];
+/* Service Worker: CSS dentro del HTML; fondo compuesto + shell offline, API a red, HTML fresco. */
+const CACHE = "kapta-pwa-v10";
+const SHELL = ["./app.js?v=10", "./manifest.webmanifest", "./img/logo-slogan.png?v=10",
+  "./img/fondo-login.png?v=10",
+  "./img/flags/colombia.png?v=10", "./img/flags/mexico.png?v=10", "./img/flags/peru.png?v=10",
+  "./img/flags/chile.png?v=10", "./img/flags/argentina.png?v=10", "./img/flags/ecuador.png?v=10",
+  "./img/formas/blanca.png?v=10",
+  "./img/formas/cuadro-mor.png?v=10", "./img/formas/frijol-der.png?v=10"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
