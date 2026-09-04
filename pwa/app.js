@@ -191,8 +191,8 @@ $("btn-codigo").addEventListener("click", async () => {
   if (code === "APTADMIN") { ver("superlogin"); return; }
   $("btn-codigo").disabled = true;
   try {
-    const r = await fetch(BASE + "?action=listar_empresas").then((x) => x.json());
-    const emp = ((r.data || {}).empresas || []).find((e) => (e.codigo || "").toUpperCase() === code);
+    const r = await fetch(BASE + "?action=resolver_empresa&codigo=" + encodeURIComponent(code)).then((x) => x.json());
+    const emp = (r.status === "success" && r.data && r.data.empresa) || null;
     if (!emp) { $("err-codigo").textContent = "Negocio no encontrado"; return; }
     SES = { code, negocio: emp.nombre || code };
     EMPRESA = emp;
@@ -217,8 +217,9 @@ $("btn-superlogin").addEventListener("click", async () => {
   try {
     const r = await api({ action: "login_superadmin", correo, password: clave });
     if (r.status !== "success") { $("err-super").textContent = r.message || "Credenciales inválidas"; return; }
-    SUPER = { correo };
+    SUPER = { correo, token: ((r.data || {}).token || "") };
     sessionStorage.setItem("kapta_super", correo);
+    sessionStorage.setItem("kapta_super_tok", SUPER.token);
     await cargarNegocios();
   } catch { $("err-super").textContent = "Sin conexión. Intenta de nuevo."; }
   $("btn-superlogin").disabled = false;
@@ -226,7 +227,8 @@ $("btn-superlogin").addEventListener("click", async () => {
 
 async function cargarNegocios() {
   try {
-    const r = await fetch(BASE + "?action=listar_empresas").then((x) => x.json());
+    const tok = (SUPER && SUPER.token) ? "&token=" + encodeURIComponent(SUPER.token) : "";
+    const r = await fetch(BASE + "?action=listar_empresas" + tok).then((x) => x.json());
     NEGOCIOS = ((r.data || {}).empresas || []);
   } catch { NEGOCIOS = []; }
   pintarNegocios();
@@ -357,6 +359,7 @@ async function entrarComoAdmin(emp) {
 $("btn-neg-salir").addEventListener("click", () => {
   SUPER = null; SES = null; ME = null;
   sessionStorage.removeItem("kapta_super");
+  sessionStorage.removeItem("kapta_super_tok");
   aplicarIdentidad(null);
   ver("negocio");
 });
@@ -464,13 +467,13 @@ async function recargar() {
   try {
     const [t, e] = await Promise.all([
       api({ action: "obtener_todo", sheetName: SES.code }),
-      fetch(BASE + "?action=listar_empresas").then((x) => x.json()).catch(() => null),
+      fetch(BASE + "?action=resolver_empresa&codigo=" + encodeURIComponent(SES.code)).then((x) => x.json()).catch(() => null),
     ]);
     if (t.status !== "success") { toast("No se pudo cargar"); return; }
     TODO = t.data;
     if (e && e.status === "success") {
-      const emp = (e.data.empresas || []).find((x) => (x.codigo || "").toUpperCase() === SES.code);
-      if (emp) EMPRESA = emp;
+      const emp = (e.data || {}).empresa || null;
+      if (emp && (emp.codigo || "").toUpperCase() === SES.code) EMPRESA = emp;
     }
     const urow = (TODO.usuarios || []).find((u) => (u[2] || "").toLowerCase() === (SES.correo || "").toLowerCase());
     ME = { row: urow || null, funciones: urow ? (urow[11] || "") : "", sec: null };
@@ -1267,13 +1270,15 @@ function imprimir(titulo, html) {
   SES = cargarSesion();
   const sup = sessionStorage.getItem("kapta_super");
   if (sup) {
-    SUPER = { correo: sup };
+    const tok = sessionStorage.getItem("kapta_super_tok") || "";
+    if (!tok) { ver("superlogin"); return; }
+    SUPER = { correo: sup, token: tok };
     cargarNegocios();
   } else if (SES && SES.code) {
     $("login-nombre").textContent = SES.negocio || SES.code;
-    fetch(BASE + "?action=listar_empresas").then((x) => x.json()).then((r) => {
-      const emp = ((r.data || {}).empresas || []).find((e) => (e.codigo || "").toUpperCase() === SES.code);
-      if (emp) { EMPRESA = emp; aplicarIdentidad(emp); }
+    fetch(BASE + "?action=resolver_empresa&codigo=" + encodeURIComponent(SES.code)).then((x) => x.json()).then((r) => {
+      const emp = (r.status === "success" && r.data && r.data.empresa) || null;
+      if (emp && (emp.codigo || "").toUpperCase() === SES.code) { EMPRESA = emp; aplicarIdentidad(emp); }
     }).catch(() => {}).finally(() => entrar());
   } else {
     const c = localStorage.getItem("kapta_code");

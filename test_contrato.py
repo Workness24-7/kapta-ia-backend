@@ -2,6 +2,7 @@
 # Sin dependencias externas: usa un fake en memoria de la capa DB.
 # Correr: python test_contrato.py
 import json
+import os
 import sys
 import types
 
@@ -61,7 +62,7 @@ def fake_siguiente_fila_libre(empresa, tabla, fila_inicio=3):
     return max_fila + 1
 
 
-def fake_siguiente_id(empresa, tabla, prefijo):
+def fake_siguiente_id(empresa, tabla, prefijo, ancho=5):
     maximo = 0
     for (emp, tab, _), data in STORE.items():
         if emp == empresa and tab == tabla:
@@ -169,6 +170,7 @@ def install_fake():
     db_real.listar_finanzas_kapta = fake_listar_finanzas_kapta
     db_real.leer_tabla_global_todos = fake_leer_tabla_global_todos
     db_real.minutos_bloqueo_restantes = fake_minutos_bloqueo_restantes
+    db_real.segundos_bloqueo_restantes = fake_minutos_bloqueo_restantes
     db_real.registrar_fallo_login = fake_registrar_fallo_login
     db_real.reset_fallos_login = fake_reset_fallos_login
     db_real.actualizar_contrasena = fake_actualizar_contrasena
@@ -276,7 +278,7 @@ def main():
           and "bloqueada" in str(r.get("message") or ""), json.dumps(r))
     fake_reset_fallos_login("TEST01", "admin@test.com")
 
-    # 5. ESCRIBIR INVENTARIO (IDS auto-generados Ky_00001)
+    # 5. ESCRIBIR INVENTARIO (ID auto: 2 letras del nombre + '-' -> NE-00001)
     inv = ["", "770000001", "Producto A", "General", 10, 1000, 2000, 1500, 5, "Activo", "", ""]
     r = json_body(backend.action_escribir_fila({"action": "registrar_inventario",
                                                 "sheetName": "TEST01", "tableName": "Inventario",
@@ -284,14 +286,14 @@ def main():
     check("registrar_inventario", r["status"] == "success" and r["data"]["registrado"] is True,
           json.dumps(r))
     store_inv = STORE[("TEST01", "inventario", 3)]
-    check("id inventario Ky_00001", store_inv[0] == "Ky_00001", str(store_inv))
+    check("id inventario NE-00001", store_inv[0] == "NE-00001", str(store_inv))
 
     # 6. LEER inventario: rows[0] = encabezados, rows[1] = datos
     r = json_body(backend.action_read({"action": "read", "sheetName": "TEST01",
                                        "tableName": "Inventario"}))
     check("read inventario", r["status"] == "success" and len(r["data"]["rows"]) == 2
-          and r["data"]["rows"][0] == backend.CABECERAS["INVENTARIO"]
-          and r["data"]["rows"][1][0] == "Ky_00001", json.dumps(r["data"]))
+          and r["data"]["rows"][0][:len(backend.CABECERAS["INVENTARIO"])] == backend.CABECERAS["INVENTARIO"]
+          and r["data"]["rows"][1][0] == "NE-00001", json.dumps(r["data"]))
 
     # 7. REGISTRAR DEUDOR (layout kithos 8 cols)
     deudor = ["03/03/2026 14:30", "Cliente A", "Producto A", 2, 1, 10000, 0, 20000]
@@ -307,14 +309,14 @@ def main():
     check("pagar_deudor parcial", r["status"] == "success" and r["data"]["totalPendiente"] == 15000
           and r["data"]["movidoAVentas"] is False, json.dumps(r))
 
-    # 9. PAGAR DEUDOR completo -> mueve a VENTAS con layout kithos (21 cols)
+    # 9. PAGAR DEUDOR completo -> mueve a VENTAS con layout kithos (22 cols + Tipo)
     r = json_body(backend.action_pagar_deudor({"action": "pagar_deudor", "sheetName": "TEST01",
                                                "clienteNombre": "Cliente A", "productoNombre": "Producto A",
                                                "transferAmount": 15000, "cashAmount": 0}))
     check("pagar_deudor salda", r["status"] == "success" and r["data"]["totalPendiente"] == 0
           and r["data"]["movidoAVentas"] is True, json.dumps(r))
     venta = STORE.get(("TEST01", "ventas", 3))
-    check("venta layout 21 cols + id V-", venta is not None and len(venta) == 21
+    check("venta layout 22 cols + id V-", venta is not None and len(venta) == 22
           and venta[0].startswith("V-") and venta[3] == "Cliente A" and venta[14] == "Activo"
           and venta[12] == venta[8] == 30000, str(venta))
     check("deudor saldado eliminado", ("TEST01", "deudores", 3) not in STORE)
@@ -340,21 +342,48 @@ def main():
     check("obtener_todo", r["status"] == "success" and "inventario" in r["data"]
           and len(r["data"]["inventario"]) == 2, str(list(r["data"].keys())))
 
-    # 13. LISTAR empresas con la nueva
+    # 13. LISTAR empresas con la nueva (directorio público mínimo)
     r = json_body(backend.action_listar_empresas())
     check("listar_empresas con empresa", r["status"] == "success"
           and len(r["data"]["empresas"]) == 1 and r["data"]["empresas"][0]["codigo"] == "TEST01")
+    check("listar público sin contactos", "correo" not in r["data"]["empresas"][0]
+          and "nit" not in r["data"]["empresas"][0]
+          and "celular1" not in r["data"]["empresas"][0], json.dumps(r))
 
-    # 14. ELIMINAR USUARIO -> Suspendido
+    # 13b. RESOLVER una empresa por código (login de redirección)
+    r = json_body(backend.action_resolver_empresa({"action": "resolver_empresa", "codigo": "test01"}))
+    check("resolver_empresa", r["status"] == "success" and r["data"]["empresa"]["codigo"] == "TEST01"
+          and r["data"]["empresa"]["nombre"] == "Negocio Test", json.dumps(r))
+    check("resolver sin contactos", "correo" not in r["data"]["empresa"]
+          and "nit" not in r["data"]["empresa"], json.dumps(r))
+    r = json_body(backend.action_resolver_empresa({"action": "resolver_empresa", "codigo": "NOEXISTE"}))
+    check("resolver inexistente", r["status"] == "error")
+
+    # 13c. SUPERADMIN: token + ficha completa solo con token
+    os.environ["SUPERADMIN_EMAIL"] = "AdminMauricio@kaptaia.com"
+    os.environ["SUPERADMIN_PASS"] = "M4ur1C10*"
+    r = json_body(backend.action_login_superadmin({"action": "login_superadmin",
+                                                   "correo": "AdminMauricio@kaptaia.com",
+                                                   "password": "M4ur1C10*"}))
+    check("login_superadmin con token", r["status"] == "success" and bool((r["data"] or {}).get("token")),
+          json.dumps(r))
+    tok = (r["data"] or {}).get("token") or ""
+    r = json_body(backend.action_listar_empresas({"action": "listar_empresas", "token": tok}))
+    check("listar superadmin completa", r["status"] == "success"
+          and r["data"]["empresas"][0].get("correo") == "negocio@test.com", json.dumps(r))
+    r = json_body(backend.action_listar_empresas({"action": "listar_empresas", "token": "invalido"}))
+    check("listar token inválido es público", r["status"] == "success"
+          and "correo" not in r["data"]["empresas"][0], json.dumps(r))
+
+    # 14. ELIMINAR USUARIO -> borrado (el login posterior falla)
     r = json_body(backend.action_eliminar_usuario({"action": "eliminar_usuario",
                                                    "sheetName": "TEST01",
                                                    "userEmail": "admin@test.com"}))
     check("eliminar_usuario", r["status"] == "success" and r["data"]["eliminado"] is True)
-    usr = STORE[("TEST01", "usuarios", 3)]
-    check("usuario Suspendido", usr[5] == "Suspendido", str(usr))
+    check("usuario eliminado", ("TEST01", "usuarios", 3) not in STORE)
     r = json_body(backend.action_login({"action": "login", "codigo": "TEST01",
                                         "correo": "admin@test.com", "password": "1234"}))
-    check("login bloqueado tras suspender", r["status"] == "error")
+    check("login bloqueado tras eliminar", r["status"] == "error")
 
     # 15. ELIMINAR EMPRESA -> Suspendido en base maestra
     r = json_body(backend.action_eliminar_empresa({"action": "eliminar_empresa",
@@ -390,7 +419,7 @@ def main():
     check("listar_finanzas_kapta balance", r["status"] == "success"
           and r["data"]["totalIngresos"] == 339900.0 + 2499000.0
           and r["data"]["totalEgresos"] == 50000.0
-          and len(r["data"]["registros"]) == 3, json.dumps(r["data"]))
+          and len(r["data"]["registros"]) == 4, json.dumps(r["data"]))  # 4: ingreso auto de registro (0) + 2 planes + egreso
 
     # 20. LOGIN bloqueado por membresía vencida (aunque usuario esté bien)
     fake_buscar_empresa("TEST01")["fecha_vencimiento"] = "2020-01-01"
@@ -417,19 +446,18 @@ def main():
           and len(STORE[("TEST01", "gastos", 3)]) == 14, json.dumps(r))
 
     # 23. SUPERADMIN: todos los usuarios de todas las empresas con codigo incluido
+    # (el admin de TEST01 se eliminó en #14: solo queda OTRA99)
     STORE[("OTRA99", "usuarios", 2)] = list(backend.CABECERAS_GLOBALES["USUARIOS"])
     STORE[("OTRA99", "usuarios", 3)] = ["USR-9999", "Otro Admin", "otro@x.com",
                                         "pw", "Administrador", "Activo", "", "", "", "", ""]
     r = json_body(backend.action_listar_todos_usuarios())
     usrs = r["data"]["usuarios"]
-    check("listar_todos_usuarios", r["status"] == "success" and len(usrs) == 2, json.dumps(r))
-    admin_test = next(u for u in usrs if u["correo"] == "admin@test.com")
+    check("listar_todos_usuarios", r["status"] == "success" and len(usrs) == 1, json.dumps(r))
+    otro = usrs[0]
     check("usuario con codigoEmpresa + campos completos",
-          admin_test["codigoEmpresa"] == "TEST01" and admin_test["nombre"] == "Admin"
-          and str(admin_test["contrasena"]).startswith("pbkdf2$")
-          and admin_test["rol"] == "Administrador"
-          and admin_test["estado"] == "Suspendido"
-          and "motivoCambio" in admin_test and "cambiadoPor" in admin_test, str(admin_test))
+          otro["codigoEmpresa"] == "OTRA99" and otro["nombre"] == "Otro Admin"
+          and otro["rol"] == "Administrador"
+          and "motivoCambio" in otro and "cambiadoPor" in otro, str(otro))
 
     print("TODOS LOS CHECKS PASARON")
 

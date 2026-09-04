@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import re
+import secrets
 import os
 import uuid
 import time as _time
@@ -194,7 +195,60 @@ def leer_hoja_rows(empresa, tabla_key, fila_inicio=2):
 # ===================================================
 # ACCIONES
 # ===================================================
+# Sesiones SuperAdmin en memoria (12h). Solo la ficha completa de empresas
+# exige este token; el directorio público y el resolver por código no.
+_SUPER_TOKENS = {}
+_DURACION_TOKEN_SUPER = 12 * 3600
+
+
+def _emitir_token_superadmin():
+    ahora = _time.time()
+    # ponytail: purga perezosa, sin hilos ni dependencias
+    for tok in [t for (t, exp) in _SUPER_TOKENS.items() if exp <= ahora]:
+        _SUPER_TOKENS.pop(tok, None)
+    tok = secrets.token_urlsafe(32)
+    _SUPER_TOKENS[tok] = ahora + _DURACION_TOKEN_SUPER
+    return tok
+
+
+def _super_token_valido(params):
+    try:
+        tok = str((params or {}).get("token") or "").strip()
+    except Exception:
+        return False
+    if not tok:
+        return False
+    exp = _SUPER_TOKENS.get(tok)
+    if not exp or exp <= _time.time():
+        _SUPER_TOKENS.pop(tok, None)
+        return False
+    return True
+
+
+def action_resolver_empresa(params=None):
+    """Ficha pública mínima de UN negocio por código (login de redirección).
+    Nunca expone el directorio ni datos de contacto, NIT o planes de nadie."""
+    codigo = _limpiar((params or {}).get("codigo"), 20).upper()
+    if not codigo:
+        return respuesta_error("Negocio no encontrado.")
+    emp = db.buscar_empresa(codigo)
+    if not emp or str(emp.get("estado") or "").strip().upper() == "ELIMINADO":
+        return respuesta_error("Negocio no encontrado.")
+    return respuesta_success({"empresa": {
+        "codigo": emp.get("codigo") or codigo, "nombre": emp.get("nombre") or "",
+        "pais": emp.get("pais") or "", "logoUrl": emp.get("logo_url") or "",
+        "listIconUrl": emp.get("list_icon_url") or "",
+        "colorPrimario": emp.get("color_primario") or "",
+        "colorSecundario": emp.get("color_secundario") or "",
+    }})
+
+
 def action_listar_empresas(params=None):
+    params = params or {}
+    # El login de redirección y los pickers solo ven el directorio público
+    # mínimo (sin contactos, NIT, planes ni finanzas): un robo masivo exige
+    # recorrer negocio por negocio. La ficha completa es solo SuperAdmin.
+    completo = _super_token_valido(params)
     try:
         db.purgar_empresas_eliminadas()
     except Exception:
@@ -204,6 +258,12 @@ def action_listar_empresas(params=None):
     empresas = [e for e in empresas if str(e.get("estado") or "").strip().upper() != "ELIMINADO"]
     lista = []
     for e in empresas:
+        if not completo:
+            lista.append({
+                "id": e["id"], "codigo": e["codigo"] or "", "nombre": e["nombre"] or "",
+                "pais": e["pais"] or "", "estado": e["estado"] or "",
+            })
+            continue
         lista.append({
             "id": e["id"], "codigo": e["codigo"] or "", "nombre": e["nombre"] or "",
             "nit": e["nit"] or "", "tipo": e["tipo"] or "", "pais": e["pais"] or "",
@@ -485,7 +545,7 @@ def action_login_superadmin(params):
     email_ok = str(os.getenv("SUPERADMIN_EMAIL") or "AdminMauricio@kaptaia.com").lower().strip()
     pass_ok = str(os.getenv("SUPERADMIN_PASS") or "M4ur1C10*")
     if correo == email_ok and password == pass_ok and correo:
-        return respuesta_success({"superadmin": True, "correo": correo})
+        return respuesta_success({"superadmin": True, "correo": correo, "token": _emitir_token_superadmin()})
     return respuesta_error("Credenciales de superadmin inválidas.")
 
 
@@ -1719,6 +1779,7 @@ GET_ACTIONS = {
     "listarempresas": action_listar_empresas,
     "getcompanies": action_listar_empresas,
     "get_companies": action_listar_empresas,
+    "resolver_empresa": action_resolver_empresa,
     "read": action_read,
     "ping": action_ping,
     "saludo": action_ping,
