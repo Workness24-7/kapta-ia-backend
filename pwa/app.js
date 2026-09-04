@@ -63,7 +63,7 @@ function ver(id) {
 
 // Países del selector (banderas locales).
 const PAISES = [["Colombia", "colombia"], ["México", "mexico"], ["Perú", "peru"], ["Chile", "chile"], ["Argentina", "argentina"], ["Ecuador", "ecuador"]];
-let PAIS_SEL = "Colombia";
+let PAIS_SEL = "";
 let PAISES_OK = false;
 function pintarPaises() {
   const box = $("pais-lista");
@@ -76,8 +76,7 @@ function pintarPaises() {
     b.innerHTML = `<img src="img/flags/${img}.png" alt=""><span>${nombre}</span>`;
     b.addEventListener("click", () => {
       PAIS_SEL = nombre;
-      $("pais-nombre").textContent = nombre;
-      $("pais-flag").src = `img/flags/${img}.png`;
+      $("pais-sel").innerHTML = `<img id="pais-flag" src="img/flags/${img}.png" alt=""><span id="pais-nombre">${nombre}</span>`;
       box.classList.add("oculto");
     });
     box.appendChild(b);
