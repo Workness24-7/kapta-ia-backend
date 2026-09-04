@@ -58,23 +58,25 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .formas-atras { z-index: 1; }
 .formas-frente { z-index: 3; }
 .formas img { position: absolute; display: block; }
-.fa-morada-tl { width: 300px; left: -90px; top: -70px; }
-.fa-nube { width: 300px; right: -70px; top: -40px; }
-.fa-destellos { width: 56px; left: 6px; top: 47%; }
-.fa-cian-bl { width: 320px; left: -110px; bottom: -90px; }
-.fa-gris { width: 260px; right: 12%; top: 44%; }
-.fa-blanca { width: 190px; left: 12%; bottom: 8%; }
-.ff-cuadro { width: 130px; right: 6%; top: 15%; }
-.ff-frijol { width: 120px; right: -30px; top: 38%; }
-.ff-cian { width: 150px; left: 46%; bottom: -45px; }
+.fa-morada-tl { width: 360px; left: -70px; top: -70px; }
+.fa-nube { width: 340px; right: -70px; top: -40px; }
+.fa-destellos { width: 60px; left: 4px; top: 46%; }
+.fa-cian-bl { width: 420px; left: -110px; bottom: -130px; }
+.fa-gris { width: 260px; right: 156px; top: 350px; }
+.fa-blanca { width: 190px; left: 270px; bottom: 60px; }
+.ff-cuadro { width: 140px; right: 186px; top: 120px; }
+.ff-frijol { width: 135px; right: -25px; top: 285px; }
+.ff-cian { width: 150px; left: 750px; bottom: -110px; }
 @media (max-width: 700px) {
-  .ff-cuadro { width: 84px; right: 2%; top: 12%; }
-  .ff-frijol { width: 76px; right: -24px; }
-  .fa-gris { width: 170px; right: 4%; }
-  .fa-blanca { width: 130px; left: 2%; }
-  .fa-morada-tl { width: 200px; }
-  .fa-nube { width: 200px; }
-  .fa-cian-bl { width: 210px; }
+  .ff-cuadro { width: 84px; right: 2%; top: 12%; left: auto; }
+  .ff-frijol { width: 76px; right: -24px; top: 38%; left: auto; }
+  .ff-cian { width: 110px; left: 55%; bottom: -70px; }
+  .fa-gris { width: 170px; right: 4%; top: 44%; left: auto; }
+  .fa-blanca { width: 130px; left: 2%; bottom: 8%; }
+  .fa-morada-tl { width: 200px; left: -70px; top: -70px; }
+  .fa-nube { width: 200px; right: -70px; top: -40px; }
+  .fa-cian-bl { width: 210px; left: -110px; bottom: -130px; }
+  .fa-destellos { width: 44px; }
 }
 #brand-logo { width: 100%; max-width: 400px; margin: 0 auto 40px; display: block; }
 .glass-card { background: #f4f4f4; border: 1px solid transparent; border-radius: 28px; padding: 30px 28px; box-shadow: 0 12px 40px #00000012; text-align: left;
