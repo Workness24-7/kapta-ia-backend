@@ -63,15 +63,13 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .fa-nube { width: 25.6%; right: -5.1%; top: -5vh; }
 .fa-destellos { width: 2.9%; left: 0; top: 52vh; }
 .fa-cian-bl { width: 32.2%; left: -8%; bottom: -19.5vh; }
-.fa-gris { width: 28.5%; right: -7.3%; top: 48vh; }
-.fa-blanca { width: 14.3%; left: 25.3%; top: 21vh; }
-.ff-cuadro { width: 10.2%; right: 13.6%; top: 15.6vh; }
 .ff-frijol { width: 9.9%; right: -1.8%; top: 37vh; }
-.ff-cian { width: 11%; left: 54.9%; bottom: -14.3vh; }
 @media (max-width: 700px) {
-  .ff-cuadro { width: 18%; right: 2%; top: 12%; left: auto; }
+  .fc-cuadro { width: 84px; right: -30px; top: -55px; left: auto; }
+  .fc-cian { width: 110px; left: 52%; top: auto; bottom: -75px; }
+  .fc-gris { width: 220px; left: auto; right: -140px; top: 100px; }
+  .fc-blanca { width: 130px; left: -70px; top: 300px; bottom: auto; }
   .ff-frijol { width: 16%; right: -6%; top: 38%; left: auto; }
-  .ff-cian { width: 24%; left: 55%; bottom: -9vh; }
   .fa-gris { width: 48%; right: -14%; top: 44%; left: auto; }
   .fa-blanca { width: 30%; left: 8%; top: 22%; bottom: auto; }
   .fa-morada-tl { width: 52%; left: -16%; top: -9vh; }
@@ -80,9 +78,15 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
   .fa-destellos { width: 9%; left: 0; top: 46%; }
 }
 #brand-logo { width: 100%; max-width: 400px; margin: 0 auto 40px; display: block; }
-.glass-card { background: #f4f4f4; border: 1px solid transparent; border-radius: 28px; padding: 30px 28px; box-shadow: 0 12px 40px #00000012; text-align: left;
+.glass-card { background: #f4f4f4; border: 1px solid transparent; border-radius: 28px; padding: 30px 28px; box-shadow: 0 12px 40px #00000012; text-align: left; position: relative;
   background-image: linear-gradient(#f4f4f4, #f4f4f4), linear-gradient(135deg, #ffffff, #a6a6a6);
   background-origin: border-box; background-clip: padding-box, border-box; }
+/* Formas ancladas a la tarjeta (no se mueven con el ancho de pantalla) */
+.glass-card > img[class^="fc-"] { position: absolute; display: block; pointer-events: none; }
+.fc-gris { width: 390px; left: 445px; top: 155px; z-index: -1; }
+.fc-blanca { width: 190px; left: -160px; top: 345px; z-index: -1; }
+.fc-cuadro { width: 140px; right: -245px; top: -75px; z-index: 1; }
+.fc-cian { width: 150px; left: 320px; top: 460px; z-index: 1; }
 .login-label { font-size: 14px; font-weight: 400; color: #010101; margin: 20px 0 10px; }
 .login-label:first-child { margin-top: 0; }
 .login-field { background: #f7f7f7; border: 1px solid transparent; border-radius: 20px; min-height: 58px;
