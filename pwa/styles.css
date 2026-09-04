@@ -54,25 +54,27 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .fondo-login { background: #f1f1f1; min-height: 100dvh; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
 .login-wrap { width: 100%; max-width: 560px; margin: 0 auto; padding: 32px 28px; text-align: center; position: relative; z-index: 2; }
 /* Formas decorativas superpuestas (posiciones de la referencia) */
-.formas { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
-.formas .f { position: absolute; display: block; filter: blur(2px); }
-.f-morada-tl { width: 300px; height: 190px; left: -90px; top: -70px; background: radial-gradient(closest-side, #a855f7, #8b5cf6cc 60%, transparent 75%); border-radius: 58% 42% 55% 45% / 60% 55% 45% 40%; transform: rotate(-12deg); }
-.f-nube-tr { width: 300px; height: 150px; right: -70px; top: -40px; background: radial-gradient(closest-side, #dbe7ef, #cfdde8cc 65%, transparent 78%); border-radius: 48% 52% 55% 45% / 62% 60% 40% 38%; }
-.f-cuadro-mor { width: 130px; height: 130px; right: 6%; top: 15%; background: linear-gradient(135deg, #8b5cf6, #7c3aed); border-radius: 34%; transform: rotate(14deg); filter: blur(1px); box-shadow: inset -8px -10px 22px #5b21b688, inset 8px 10px 22px #a78bfa88; }
-.f-frijol-ci { width: 120px; height: 190px; right: -30px; top: 38%; background: linear-gradient(160deg, #67e8f9, #22d3ee); border-radius: 52% 48% 46% 54% / 44% 46% 54% 56%; transform: rotate(8deg); box-shadow: inset -10px -12px 26px #0e749088, inset 10px 12px 26px #a5f3fc88; }
-.f-cian-bl { width: 320px; height: 300px; left: -110px; bottom: -90px; background: radial-gradient(closest-side, #67e8f9, #22d3eecc 60%, transparent 76%); border-radius: 55% 45% 52% 48% / 48% 55% 45% 52%; }
-.f-destello-l { width: 56px; height: 76px; left: 6px; top: 47%; background: linear-gradient(135deg, #ffffff, #dbe4ec); clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); filter: blur(.5px); }
-.f-gris-c { width: 260px; height: 240px; right: 12%; top: 44%; background: radial-gradient(closest-side, #eef1f4, #dfe4eacc 62%, transparent 78%); border-radius: 52% 48% 45% 55% / 55% 52% 48% 45%; filter: blur(3px); }
-.f-cian-bc { width: 150px; height: 130px; left: 46%; bottom: -45px; background: linear-gradient(150deg, #67e8f9, #22d3ee); border-radius: 48% 52% 55% 45% / 58% 55% 45% 42%; box-shadow: inset -8px -10px 22px #0e749088, inset 8px 10px 22px #a5f3fc88; }
-.f-blanca-bl { width: 190px; height: 170px; left: 12%; bottom: 8%; background: radial-gradient(closest-side, #ffffff, #eef1f4cc 65%, transparent 80%); border-radius: 55% 45% 50% 50% / 50% 55% 45% 50%; filter: blur(3px); }
+.formas { position: absolute; inset: 0; pointer-events: none; }
+.formas-atras { z-index: 1; }
+.formas-frente { z-index: 3; }
+.formas img { position: absolute; display: block; }
+.fa-morada-tl { width: 300px; left: -90px; top: -70px; }
+.fa-nube { width: 300px; right: -70px; top: -40px; }
+.fa-destellos { width: 56px; left: 6px; top: 47%; }
+.fa-cian-bl { width: 320px; left: -110px; bottom: -90px; }
+.fa-gris { width: 260px; right: 12%; top: 44%; }
+.fa-blanca { width: 190px; left: 12%; bottom: 8%; }
+.ff-cuadro { width: 130px; right: 6%; top: 15%; }
+.ff-frijol { width: 120px; right: -30px; top: 38%; }
+.ff-cian { width: 150px; left: 46%; bottom: -45px; }
 @media (max-width: 700px) {
-  .f-cuadro-mor { width: 84px; height: 84px; right: 2%; top: 12%; }
-  .f-frijol-ci { width: 76px; height: 120px; right: -24px; }
-  .f-gris-c { width: 170px; height: 160px; right: 4%; }
-  .f-blanca-bl { width: 130px; height: 120px; left: 2%; }
-  .f-morada-tl { width: 200px; height: 130px; }
-  .f-nube-tr { width: 200px; height: 100px; }
-  .f-cian-bl { width: 210px; height: 200px; }
+  .ff-cuadro { width: 84px; right: 2%; top: 12%; }
+  .ff-frijol { width: 76px; right: -24px; }
+  .fa-gris { width: 170px; right: 4%; }
+  .fa-blanca { width: 130px; left: 2%; }
+  .fa-morada-tl { width: 200px; }
+  .fa-nube { width: 200px; }
+  .fa-cian-bl { width: 210px; }
 }
 #brand-logo { width: 100%; max-width: 400px; margin: 0 auto 40px; display: block; }
 .glass-card { background: #f4f4f4; border: 1px solid transparent; border-radius: 28px; padding: 30px 28px; box-shadow: 0 12px 40px #00000012; text-align: left;
