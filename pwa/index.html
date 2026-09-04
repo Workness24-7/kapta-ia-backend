@@ -43,8 +43,12 @@
 
   <section id="p-negocios" class="pantalla oculto">
     <div class="tab">
+      <div class="superbrand"><span class="superlogo">🛡️</span><div><b>KAPTA IA</b><small>Consola maestra SuperAdmin</small></div></div>
       <h2>Negocios</h2>
+      <button id="btn-nuevo-negocio" class="btn primario">+ Nuevo Negocio</button>
+      <button id="btn-ver-soportes" class="btn link">Ver solicitudes de soporte</button>
       <div id="neg-lista"></div>
+      <div id="sop-lista" class="oculto"></div>
       <button id="btn-neg-salir" class="btn peligro">Cerrar sesión maestra</button>
     </div>
   </section>
@@ -65,7 +69,7 @@
   </section>
 
   <section id="p-pos" class="pantalla oculto">
-    <header id="pos-header"><img id="pos-logo" class="logo-mini oculto" alt=""><span id="pos-negocio">Negocio</span><span id="pos-usuario"></span></header>
+    <header id="pos-header"><img id="pos-logo" class="logo-mini oculto" alt=""><span id="pos-negocio">Negocio</span><span id="pos-usuario"></span><button id="btn-ayuda" class="hbtn" title="Ayuda">❓</button></header>
 
     <div id="t-inicio" class="tab">
       <h2>Resumen General del Negocio</h2>
@@ -82,6 +86,7 @@
       </div>
       <p id="venta-chico-info" class="muted oculto"></p>
       <input id="venta-buscar" placeholder="Buscar producto..." autocomplete="off">
+      <div class="chips" id="venta-cats"></div>
       <div id="venta-productos"></div>
       <div id="venta-carrito" class="oculto">
         <h3>Carrito <span id="carrito-total"></span></h3>
@@ -109,6 +114,7 @@
 
     <div id="t-deudores" class="tab oculto">
       <h2>Deudores</h2>
+      <button id="btn-nuevo-deudor" class="btn primario">+ Nuevo Deudor</button>
       <div id="deu-lista"></div>
       <div id="deu-detalle" class="oculto"></div>
     </div>

@@ -9,6 +9,7 @@ let SES = null, TODO = null, EMPRESA = null;
 let ME = null;               // {row, sec, admin}
 let SUPER = null;            // {correo} sesión maestra
 let NEGOCIOS = [];
+let VENTA_CAT = "Todos";
 let CARRITO = {};            // idx -> {qty, min}
 let DEU_SEL = null, CHICO_SEL = null;
 let FIN_FILTRO = "Mes", FIN_DESDE = "", FIN_HASTA = "";
@@ -138,10 +139,13 @@ function aplicarIdentidad(emp) {
   try {
     const root = document.documentElement;
     const prim = (emp && emp.colorPrimario) || "#4F46E5";
+    const sec = (emp && emp.colorSecundario) || prim;
     root.style.setProperty("--prim", prim);
     const meta = document.getElementById("meta-theme");
     if (meta) meta.setAttribute("content", prim);
-    const logo = (emp && emp.logoUrl) || "";
+    const header = $("pos-header");
+    if (header) header.style.borderBottom = `3px solid ${sec}`;
+    const logo = (emp && (emp.listIconUrl || emp.logoUrl)) || "";
     const ll = $("login-logo"), le = $("login-emoji"), pl = $("pos-logo");
     if (logo && ll && le && pl) {
       ll.src = logo; ll.classList.remove("oculto"); le.classList.add("oculto");
@@ -198,17 +202,118 @@ async function cargarNegocios() {
     const r = await fetch(BASE + "?action=listar_empresas").then((x) => x.json());
     NEGOCIOS = ((r.data || {}).empresas || []);
   } catch { NEGOCIOS = []; }
+  pintarNegocios();
+  ver("negocios");
+}
+
+function badgeEstado(e) {
+  const suspended = /suspend|eliminado/i.test(e.estado || "");
+  return `<span class="badge ${suspended ? "susp" : "activo"}">${esc(e.estado || "Activo")}</span>`;
+}
+
+function pintarNegocios() {
   const box = $("neg-lista");
   box.innerHTML = NEGOCIOS.length ? "" : '<div class="card">Sin negocios.</div>';
   NEGOCIOS.forEach((e) => {
+    const logo = e.listIconUrl || e.logoUrl || "";
     const div = document.createElement("div");
-    div.className = "card fila-deu";
-    div.innerHTML = `<div><b>${esc(e.nombre || e.codigo)}</b><small>${esc(e.codigo || "")} • ${esc(e.plan || "")} • ${esc(e.estado || "")}</small></div><button class="btn-mini">Entrar</button>`;
-    div.querySelector("button").addEventListener("click", () => entrarComoAdmin(e));
+    div.className = "card";
+    div.innerHTML = `<div class="fila-deu">
+      <div style="display:flex;gap:10px;align-items:center">${logo ? `<img class="logo-neg" src="${logo}" alt="">` : `<span style="font-size:28px">🏪</span>`}
+      <div><b>${esc(e.nombre || e.codigo)}</b><br><small>${esc(e.codigo || "")} • ${esc(e.ciudad || "")}</small><br>
+      <span class="badge plan">${esc(e.plan || "")}</span>${badgeEstado(e)}</div></div>
+      <div class="cant"><button class="btn-mini" data-a="entrar">Entrar</button></div></div>
+      <div class="fila-btns"><button class="btn-mini" data-a="stats">📊 Ver datos</button>
+      <button class="btn-mini" data-a="susp">${/suspend|eliminado/i.test(e.estado || "") ? "Reactivar" : "Suspender"}</button>
+      <button class="btn-mini" data-a="del">🗑️ Eliminar</button></div>
+      <div data-d="stats"></div>`;
+    div.querySelectorAll("button").forEach((b) => b.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      const a = b.dataset.a;
+      if (a === "entrar") entrarComoAdmin(e);
+      else if (a === "stats") verStatsNegocio(e, div.querySelector('[data-d="stats"]'));
+      else if (a === "susp") {
+        const nuevo = /suspend|eliminado/i.test(e.estado || "") ? "Activo" : "Suspendido";
+        if (!confirm(`¿${nuevo === "Activo" ? "Reactivar" : "Suspender"} ${e.nombre}?`)) return;
+        const r = await api({ action: "actualizar_empresa", codigo: e.codigo, estado: nuevo });
+        toast(r.status === "success" ? "Negocio actualizado" : (r.message || "No se pudo actualizar"));
+        await cargarNegocios();
+      } else if (a === "del") {
+        if (!confirm(`¿Eliminar ${e.nombre}? Se borrará en 2 días.`)) return;
+        const r = await api({ action: "eliminar_empresa", empresaNombre: e.nombre || e.codigo });
+        toast(r.status === "success" ? "Negocio eliminado" : (r.message || "No se pudo eliminar"));
+        await cargarNegocios();
+      }
+    }));
     box.appendChild(div);
   });
-  ver("negocios");
 }
+
+async function verStatsNegocio(e, box) {
+  if (box.innerHTML) { box.innerHTML = ""; return; }
+  box.innerHTML = "<small>Cargando...</small>";
+  try {
+    const r = await api({ action: "obtener_todo", sheetName: e.codigo });
+    if (r.status !== "success") { box.innerHTML = "<small>No se pudo cargar.</small>"; return; }
+    const d = r.data || {};
+    const inv = (d.inventario || []).filter((x) => x[2] && x[2] !== "Nom_Producto");
+    const ven = (d.ventas || []).filter((x) => x[5] && x[5] !== "Producto");
+    const deu = (d.deudores || []).filter((x) => x[1] && x[1] !== "Nom_Cliente");
+    const usu = (d.usuarios || []).filter((x) => x[2] && x[2] !== "Correo");
+    const pend = deu.reduce((a, x) => a + Math.max(0, num(x[7]) - num(x[5]) - num(x[6])), 0);
+    box.innerHTML = `<small>📦 ${inv.length} productos • 💰 ${ventasMes(ven)} en ventas del mes • 👤 ${fmt(pend)} por cobrar • 👥 ${usu.length} usuarios • 📞 ${esc(e.celular1 || "—")} • Vence: ${esc(e.fechaVencimiento || "—")}</small>`;
+  } catch { box.innerHTML = "<small>Sin conexión.</small>"; }
+}
+const ventasMes = (ven) => fmt(ven.filter((v) => esMesActual(v[1])).reduce((a, v) => a + num(v[12]), 0));
+
+$("btn-nuevo-negocio").addEventListener("click", () => {
+  openModal(`<h2>Nuevo Negocio</h2>
+    <input id="n-nombre" placeholder="Nombre *">
+    <div class="fila"><input id="n-codigo" placeholder="Código *" autocapitalize="none"><input id="n-ciudad" placeholder="Ciudad"></div>
+    <div class="fila"><input id="n-tel" placeholder="Teléfono" inputmode="tel"><input id="n-nit" placeholder="NIT" inputmode="numeric"></div>
+    <input id="n-email" placeholder="Correo admin *">
+    <input id="n-pass" type="password" placeholder="Contraseña admin *">
+    <div class="fila"><select id="n-plan"><option>Básico</option><option>Premium</option><option>MAX IA</option></select>
+    <select id="n-tiempo"><option>1 Mes</option><option>3 Meses</option><option>6 Meses</option><option>1 Año</option><option>Permanente</option></select></div>
+    <select id="n-tipo"><option>Bar</option><option>Restaurante</option><option>Café</option><option>Licorería</option><option>Tienda</option><option>Otro</option></select>
+    <p id="n-err" class="error"></p>
+    <button class="btn exito" id="n-guardar">Crear Negocio</button>
+    <button class="btn link" id="n-cancelar">Cancelar</button>`);
+  $("n-cancelar").addEventListener("click", closeModal);
+  $("n-guardar").addEventListener("click", async () => {
+    const nombre = $("n-nombre").value.trim(), codigo = $("n-codigo").value.trim().toUpperCase();
+    const email = $("n-email").value.trim(), pass = $("n-pass").value;
+    if (!nombre || !codigo) { $("n-err").textContent = "Nombre y código son obligatorios"; return; }
+    if (!EMAIL_RE.test(email)) { $("n-err").textContent = "Correo admin inválido"; return; }
+    if (!pass) { $("n-err").textContent = "Contraseña admin obligatoria"; return; }
+    const r = await api({ action: "registrar_empresa", nombre, codigo,
+      ciudad: $("n-ciudad").value.trim(), celular1: $("n-tel").value.trim(), nit: $("n-nit").value.trim(),
+      correo: email, adminNombre: "Administrador", adminCorreo: email, adminPassword: pass,
+      plan: $("n-plan").value, tiempo: $("n-tiempo").value, tipo: $("n-tipo").value, pais: "Colombia" });
+    if (r.status !== "success") { $("n-err").textContent = r.message || "No se pudo crear"; return; }
+    closeModal(); toast("Negocio creado: " + codigo);
+    await cargarNegocios();
+  });
+});
+
+$("btn-ver-soportes").addEventListener("click", async () => {
+  const box = $("sop-lista");
+  if (!box.classList.contains("oculto")) { box.classList.add("oculto"); box.innerHTML = ""; return; }
+  box.classList.remove("oculto");
+  box.innerHTML = "<small>Cargando...</small>";
+  try {
+    const r = await api({ action: "listar_soportes" });
+    const list = ((r.data || {}).data || r.data?.soportes || r.data || []);
+    const arr = Array.isArray(list) ? list : [];
+    box.innerHTML = "<h3>Solicitudes de soporte</h3>" + (arr.length ? "" : "<div class='card'>Sin solicitudes.</div>");
+    arr.forEach((s) => {
+      const div = document.createElement("div");
+      div.className = "card";
+      div.innerHTML = `<b>${esc(s.tipo_solicitud || s.tipo || "Soporte")}</b><br><small>${esc(s.solicitante || "")} • ${esc(s.fecha_solicitud || s.fecha || "")}</small><br>${esc(s.observaciones || s.mensaje || "")}`;
+      box.appendChild(div);
+    });
+  } catch { box.innerHTML = "<small>Sin conexión.</small>"; }
+});
 
 async function entrarComoAdmin(emp) {
   SES = { code: (emp.codigo || "").toUpperCase(), negocio: emp.nombre || emp.codigo, correo: emp.correo || SUPER.correo, nombre: "SuperAdmin", rol: "Administrador", super: true };
@@ -270,8 +375,46 @@ async function entrar() {
   } catch {
     armarDock(FULL());
   }
+  $("btn-regalo").style.display = ME.admin ? "" : "none";
   tab("inicio");
 }
+$("btn-ayuda").addEventListener("click", () => {
+  openModal(`<h2>Solicitar Soporte</h2>
+    <select id="s-tipo"><option>Error en la app</option><option>Duda de uso</option><option>Planes y pagos</option><option>Otro</option></select>
+    <input id="s-msg" placeholder="Cuéntanos qué pasa">
+    <p id="s-err" class="error"></p>
+    <button class="btn exito" id="s-enviar">Enviar</button>
+    <button class="btn link" id="s-cancelar">Cancelar</button>`);
+  $("s-cancelar").addEventListener("click", closeModal);
+  $("s-enviar").addEventListener("click", async () => {
+    const msg = $("s-msg").value.trim();
+    if (!msg) { $("s-err").textContent = "Escribe tu mensaje"; return; }
+    const r = await api({ action: "registrar_soporte", tipo_solicitud: $("s-tipo").value, observaciones: msg + ` (${SES.nombre})`, solicitante: SES.code });
+    if (r.status !== "success") { $("s-err").textContent = r.message || "No se pudo enviar"; return; }
+    closeModal(); toast("Solicitud enviada. Te contactaremos pronto.");
+  });
+});
+
+$("btn-nuevo-deudor").addEventListener("click", () => {
+  openModal(`<h2>Nuevo Deudor</h2>
+    <input id="nd-cliente" placeholder="Cliente *">
+    <input id="nd-prod" placeholder="Producto / concepto *">
+    <div class="fila"><input id="nd-cant" type="number" value="1" inputmode="numeric"><input id="nd-precio" type="number" placeholder="Precio c/u *"></div>
+    <p id="nd-err" class="error"></p>
+    <button class="btn exito" id="nd-guardar">Registrar</button>
+    <button class="btn link" id="nd-cancelar">Cancelar</button>`);
+  $("nd-cancelar").addEventListener("click", closeModal);
+  $("nd-guardar").addEventListener("click", async () => {
+    const cliente = $("nd-cliente").value.trim(), prod = $("nd-prod").value.trim();
+    const cant = Math.max(1, parseInt($("nd-cant").value || "1", 10)), pu = num($("nd-precio").value);
+    if (!cliente || !prod || pu <= 0) { $("nd-err").textContent = "Completa cliente, producto y precio"; return; }
+    const r = await api({ action: "registrar_deudor", tableName: "Deudores",
+      data: [fechaHora(), cliente, prod, cant, "", 0, 0, cant * pu, "Normal", "", 0] });
+    if (r.status !== "success") { $("nd-err").textContent = r.message || "No se pudo registrar"; return; }
+    closeModal(); toast("Deudor registrado");
+    await recargar(); pintarDeudores();
+  });
+});
 $("btn-salir").addEventListener("click", () => {
   if (SES && SES.super && SUPER) {
     SES = null; ME = null;
@@ -377,13 +520,25 @@ function pintarVenta() {
     $("venta-chico-info").textContent = `Bolirrana ${mesa} • próximo chico: ${chicoActivo(mesa)}`;
   } else $("venta-chico-info").classList.add("oculto");
   const q = ($("venta-buscar").value || "").toLowerCase();
-  const list = invRows().filter((p) => !q || p[2].toLowerCase().includes(q));
+  const cats = ["Todos", ...new Set(invRows().map((p) => (p[3] || "General").trim()).filter(Boolean))];
+  $("venta-cats").innerHTML = "";
+  cats.forEach((c) => {
+    const b = document.createElement("button");
+    b.textContent = c;
+    b.classList.toggle("on", (VENTA_CAT || "Todos") === c);
+    b.addEventListener("click", () => { VENTA_CAT = c; pintarVenta(); });
+    $("venta-cats").appendChild(b);
+  });
+  const list = invRows().filter((p) =>
+    (!q || p[2].toLowerCase().includes(q)) &&
+    ((VENTA_CAT || "Todos") === "Todos" || (p[3] || "General").trim() === VENTA_CAT));
   $("venta-productos").innerHTML = list.length ? "" : '<div class="card">Sin productos.</div>';
   list.forEach((p) => {
     const idx = (TODO.inventario || []).indexOf(p);
+    const img = p[12] ? `<img class="thumb" src="${p[12]}" alt="" loading="lazy">` : "";
     const div = document.createElement("div");
     div.className = "card fila-prod";
-    div.innerHTML = `<div><b>${esc(p[2])}</b><small>Stock: ${p[4]} • ${p[3] || ""}</small></div>
+    div.innerHTML = `${img}<div><b>${esc(p[2])}</b><small>Stock: ${p[4]} • ${esc(p[3] || "")}</small></div>
       <div class="cant"><span class="precio">${fmt(p[6])}</span><button>+</button></div>`;
     div.querySelector("button").addEventListener("click", () => {
       CARRITO[idx] = CARRITO[idx] || { qty: 0, min: false };
@@ -531,9 +686,10 @@ function pintarInventario() {
   $("inv-lista").innerHTML = list.length ? "" : '<div class="card">Sin productos en inventario.</div>';
   list.forEach((p) => {
     const idx = (TODO.inventario || []).indexOf(p);
+    const img = p[12] ? `<img class="thumb" src="${p[12]}" alt="" loading="lazy">` : "";
     const div = document.createElement("div");
     div.className = "card fila-prod";
-    div.innerHTML = `<div><b>${esc(p[2])}</b><small>${esc(p[3] || "")} • Stock: ${p[4]} • ${fmt(p[6])} c/u</small></div>
+    div.innerHTML = `${img}<div><b>${esc(p[2])}</b><small>${esc(p[3] || "")} • Stock: ${p[4]} • ${fmt(p[6])} c/u</small></div>
       <div class="cant"><button data-a="stock">+ Stock</button>${s.invEditar ? '<button data-a="edit">✏️</button>' : ""}${s.invEliminar ? '<button data-a="del">🗑️</button>' : ""}</div>`;
     div.querySelectorAll("button").forEach((b) => b.addEventListener("click", async () => {
       if (b.dataset.a === "stock") {
