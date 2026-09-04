@@ -60,6 +60,33 @@ function ver(id) {
   document.querySelectorAll(".pantalla").forEach((s) => s.classList.add("oculto"));
   $("p-" + id).classList.remove("oculto");
 }
+
+// Países del selector (banderas locales).
+const PAISES = [["Colombia", "colombia"], ["México", "mexico"], ["Perú", "peru"], ["Chile", "chile"], ["Argentina", "argentina"], ["Ecuador", "ecuador"]];
+let PAIS_SEL = "Colombia";
+let PAISES_OK = false;
+function pintarPaises() {
+  const box = $("pais-lista");
+  if (!box || PAISES_OK) return;
+  PAISES_OK = true;
+  box.innerHTML = "";
+  PAISES.forEach(([nombre, img]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.innerHTML = `<img src="img/flags/${img}.png" alt=""><span>${nombre}</span>`;
+    b.addEventListener("click", () => {
+      PAIS_SEL = nombre;
+      $("pais-nombre").textContent = nombre;
+      $("pais-flag").src = `img/flags/${img}.png`;
+      box.classList.add("oculto");
+    });
+    box.appendChild(b);
+  });
+  $("pais-btn").addEventListener("click", () => box.classList.toggle("oculto"));
+}
+$("btn-empresa-ayuda").addEventListener("click", () => {
+  toast("Pide tu identificador al administrador de tu negocio o al soporte Kapta IA.");
+});
 function tab(nombre) {
   stopClave();
   document.querySelectorAll(".tab").forEach((t) => t.classList.add("oculto"));
@@ -1232,6 +1259,7 @@ function imprimir(titulo, html) {
     // Fuerza la última versión del worker en cada arranque.
     navigator.serviceWorker.ready.then((r) => { try { r.update(); } catch { /* noop */ } }).catch(() => {});
   }
+  pintarPaises();
   try {
     const vv = document.getElementById("app-version");
     if (vv) vv.textContent = VERSION_PWA;
@@ -1268,6 +1296,7 @@ function imprimir(titulo, html) {
   } else {
     const c = localStorage.getItem("kapta_code");
     if (c) $("in-codigo").value = c;
+    pintarPaises();
     ver("negocio");
   }
   $("in-codigo").addEventListener("change", () => localStorage.setItem("kapta_code", $("in-codigo").value.trim()));

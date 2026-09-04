@@ -1,6 +1,8 @@
 /* Service Worker: shell offline, API siempre a red, HTML siempre fresco. */
-const CACHE = "kapta-pwa-v3";
-const SHELL = ["./styles.css", "./app.js", "./manifest.webmanifest"];
+const CACHE = "kapta-pwa-v4";
+const SHELL = ["./styles.css", "./app.js", "./manifest.webmanifest", "./img/logo-slogan.png",
+  "./img/flags/colombia.png", "./img/flags/mexico.png", "./img/flags/peru.png",
+  "./img/flags/chile.png", "./img/flags/argentina.png", "./img/flags/ecuador.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
