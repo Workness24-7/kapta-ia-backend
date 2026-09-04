@@ -59,8 +59,8 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .formas-atras { z-index: 1; }
 .formas-frente { z-index: 3; }
 .formas img { position: absolute; display: block; height: auto; }
-.fa-morada-tl { width: 30.7%; left: -6.6%; top: -9vh; }
-.fa-nube { width: 25.6%; right: -5.1%; top: -5vh; }
+.fa-morada-tl { width: 24%; left: -7%; top: -24vh; }
+.fa-nube { width: 23%; right: -5.1%; top: -8vh; }
 .fa-destellos { width: 2.9%; left: 0; top: 52vh; }
 .fa-cian-bl { width: 32.2%; left: -8%; bottom: -19.5vh; }
 .fa-cinco { width: 150px; right: -25px; top: 320px; }
