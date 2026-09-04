@@ -1141,6 +1141,8 @@ function formUsuario(u) {
       else sec[g.key] = boxes.filter((b) => b.checked).map((b) => b.value);
     }));
     if (sec.invLectura) ["invCarga", "invMovimientos", "invCrear", "invEditar", "invEliminar", "invGuardar", "invHacer"].forEach((k) => (sec[k] = false));
+    const ningunDock = !["Inicio", "Ventas", "Finanzas", "Inventario"].some((v) => dock[v]);
+    if (ningunDock && !confirm("Este usuario no tendrá acceso a ninguna vista (todo desactivado). ¿Guardar de todos modos?")) return;
     const caps = new Set();
     if (dock.Ventas) ["ventas", "deudores", "clientes"].forEach((c) => caps.add(c));
     if (dock.Finanzas) ["gastos", "reporte"].forEach((c) => caps.add(c));
