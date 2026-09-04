@@ -1,4 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
+const VERSION_PWA = "PWA-2026-09-04c";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -377,6 +378,10 @@ async function entrar() {
   }
   $("btn-regalo").style.display = ME.admin ? "" : "none";
   tab("inicio");
+  try {
+    const cv = document.getElementById("cuenta-version");
+    if (cv) cv.textContent = VERSION_PWA;
+  } catch { /* noop */ }
 }
 $("btn-ayuda").addEventListener("click", () => {
   openModal(`<h2>Solicitar Soporte</h2>
