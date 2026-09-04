@@ -1263,23 +1263,6 @@ function imprimir(titulo, html) {
     const vv = document.getElementById("app-version");
     if (vv) vv.textContent = VERSION_PWA;
   } catch { /* noop */ }
-  // Diagnóstico de red visible sin entrar.
-  try {
-    const dot = document.getElementById("net-estado");
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 12000);
-    fetch(BASE + "?action=ping", { signal: ctrl.signal }).then((r) => r.json()).then((j) => {
-      clearTimeout(t);
-      if (dot) {
-        const ok = j && j.status === "success";
-        dot.textContent = ok ? "● En línea con el servidor" : "● El servidor no responde";
-        dot.style.color = ok ? "#34C759" : "#EF4444";
-      }
-    }).catch(() => {
-      clearTimeout(t);
-      if (dot) { dot.textContent = "● Sin conexión al servidor (revisa tu internet)"; dot.style.color = "#EF4444"; }
-    });
-  } catch { /* noop */ }
   const tel = $("cuenta-tel");
   SES = cargarSesion();
   const sup = sessionStorage.getItem("kapta_super");
