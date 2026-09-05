@@ -67,6 +67,8 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
   #p-pos .tab { padding: 20px 28px 20px 116px; }
   #t-inicio { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 4px 28px; align-items: start; }
   #t-inicio > h2 { grid-column: 1 / -1; }
+  #resumen { grid-column: 1; grid-row: 2; }
+  #bloque-perfil { grid-column: 1; grid-row: 3; }
   #bloque-acciones { grid-column: 2; grid-row: 2; }
   #bloque-alertas { grid-column: 2; grid-row: 3; }
 }
@@ -84,6 +86,47 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .k-rojo { --gb2: #e10000; --ibg: #ffe2e2; }
 .k-amarillo { --gb2: #847b00; --ibg: #fffce2; }
 .k-cian { --gb2: #00847c; --ibg: #e2ffff; }
+#t-inicio .sec-t { font-size: 20px; font-weight: 700; color: #0F172A; margin: 26px 0 14px; }
+.alerta-head { display: flex; align-items: center; justify-content: space-between; }
+.alerta-head .sec-t { margin: 26px 0 14px; }
+/* Resumen de perfil */
+.perfil-card { position: relative; display: flex; gap: 18px; align-items: center; border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#f4f4f4,#f4f4f4) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 22px 24px; box-shadow: 0 10px 26px rgba(0,0,0,.05); }
+.perfil-foto { width: 84px; height: 84px; border-radius: 50%; border: 2px solid transparent; background: linear-gradient(#f4f4f4,#f4f4f4) padding-box, linear-gradient(135deg, #5ce1e6, #8c52ff) border-box; display: flex; align-items: center; justify-content: center; font-size: 34px; font-weight: 800; color: #0F172A; flex-shrink: 0; }
+.perfil-datos { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.perfil-datos b { font-size: 14.9px; font-weight: 700; color: #010101; }
+.perfil-datos i { font-style: normal; font-size: 9.9px; background: linear-gradient(135deg, #5ce1e6, #8c52ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.perfil-datos small { font-size: 10.9px; color: #010101; }
+.perfil-clave { position: absolute; top: 18px; right: 20px; border: 2px solid transparent; border-radius: 999px; padding: 6px 18px; font-size: 15px; font-weight: 800; background: linear-gradient(#f4f4f4,#f4f4f4) padding-box, linear-gradient(135deg, #5ce1e6, #8c52ff) border-box; }
+.perfil-clave i { font-style: normal; letter-spacing: 1px; background: linear-gradient(135deg, #5ce1e6, #8c52ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.perfil-menu { position: absolute; right: 20px; bottom: 14px; border: 0; background: none; cursor: pointer; padding: 4px; }
+.perfil-menu img { width: 30px; height: auto; display: block; opacity: .55; }
+/* Acciones rápidas */
+#acciones.acc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.accb { border: 1.5px solid transparent; border-radius: 23px; padding: 18px 6px 14px; display: flex; flex-direction: column; align-items: center; gap: 10px; cursor: pointer; font-size: 10.9px; font-weight: 600; font-family: inherit; }
+.accb img { width: 52px; height: 52px; object-fit: contain; }
+.accb.acc-venta { background: linear-gradient(#f6faff,#f6faff) padding-box, linear-gradient(135deg, #ffffff, #00847c) border-box; color: #0011ac; }
+.accb.acc-gasto { background: linear-gradient(#f7f6ff,#f7f6ff) padding-box, linear-gradient(135deg, #ffffff, #8c52ff) border-box; color: #8a00ac; }
+.accb.acc-agregar { background: linear-gradient(#f6fff9,#f6fff9) padding-box, linear-gradient(135deg, #ffffff, #008451) border-box; color: #00aa5d; }
+.accb.acc-deudores { background: linear-gradient(#fffef3,#fffef3) padding-box, linear-gradient(135deg, #ffffff, #847b00) border-box; color: #847b00; }
+/* Alerta de stock */
+.vista-dock { display: flex; align-items: center; gap: 2px; border: 1.5px solid transparent; border-radius: 999px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 4px; margin: 26px 0 14px; }
+.vista-dock button { border: 0; background: none; border-radius: 999px; width: 52px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.vista-dock button img { width: 24px; height: 24px; opacity: .5; }
+.vista-dock button.on { background: #a3a3a3; }
+.vista-dock button.on img { opacity: 1; filter: brightness(0) invert(1); }
+#alerta-box { border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#f4f4f4,#f4f4f4) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 14px; box-shadow: 0 10px 26px rgba(0,0,0,.05); }
+#alertas { display: flex; flex-direction: column; gap: 12px; max-height: 430px; overflow-y: auto; padding: 2px; }
+.acard { display: flex; align-items: center; gap: 12px; border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 10px 12px; }
+.acard .athumb { width: 52px; height: 52px; border-radius: 16px; border: 1.5px solid transparent; background: linear-gradient(#edf0f2,#edf0f2) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.acard .athumb img { width: 100%; height: 100%; object-fit: cover; }
+.acard .ainfo { flex: 1; min-width: 0; }
+.acard .ainfo b { font-size: 10.9px; font-weight: 700; color: #010101; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acard .ainfo small { font-size: 10.9px; color: #3f3f46; }
+.abadge { border: 2px solid transparent; border-radius: 999px; padding: 5px 12px; font-size: 10px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
+.abadge.abajo { background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #e10000) border-box; color: #ab0101; }
+.abadge.amedio { background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #847b00) border-box; color: #847b00; }
+.aplus { width: 40px; height: 40px; border: 0; background: none; cursor: pointer; padding: 0; flex-shrink: 0; }
+.aplus img { width: 40px; height: 40px; display: block; }
 @media (max-width: 900px) {
   #pos-header { margin: 8px 10px 0; padding: 8px 12px; gap: 10px; top: 8px; }
   #pos-negocio { font-size: 14px; max-width: 28vw; }
@@ -101,6 +144,8 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 }
 @media (max-width: 560px) {
   #resumen.kpi-resumen { grid-template-columns: 1fr; }
+  #acciones.acc-grid { grid-template-columns: repeat(2, 1fr); }
+  .perfil-clave { top: 14px; right: 14px; padding: 5px 14px; font-size: 13px; }
 }
 .tab { padding: 14px 16px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -328,8 +373,9 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
     <div id="t-inicio" class="tab">
       <h2>Resumen General</h2>
       <div id="resumen" class="kpi-resumen"></div>
-      <div id="bloque-acciones"><h3>Acciones rápidas</h3><div class="grid2" id="acciones"></div></div>
-      <div id="bloque-alertas"><h3>Alertas de stock</h3><div id="alertas"></div></div>
+      <div id="bloque-perfil"><h3 class="sec-t">Resumen de perfil</h3><div id="perfil"></div></div>
+      <div id="bloque-acciones"><h3 class="sec-t">Acciones rápidas</h3><div id="acciones" class="acc-grid"></div></div>
+      <div id="bloque-alertas"><div class="alerta-head"><h3 class="sec-t">Alerta de Stock</h3><div class="vista-dock" id="vista-dock"><button data-v="lista" class="on" title="Vista lista"><img src="img/pos/alerta/lista.png?v=1" alt=""></button><button data-v="recuadro" title="Vista recuadro"><img src="img/pos/alerta/recuadro.png?v=1" alt=""></button></div></div><div id="alerta-box"><div id="alertas"></div></div></div>
     </div>
 
     <div id="t-venta" class="tab oculto">
@@ -415,7 +461,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>
 

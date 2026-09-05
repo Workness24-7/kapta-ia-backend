@@ -129,6 +129,10 @@ if ($("dock-search")) $("dock-search").addEventListener("click", () => {
   if (!$("t-inventario").classList.contains("oculto") && $("inv-buscar")) { $("inv-buscar").focus(); return; }
   toast("Busca desde Venta o Inventario");
 });
+if ($("vista-dock")) $("vista-dock").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+  if (b.dataset.v !== "lista") { toast("La vista recuadro llega pronto"); return; }
+  $("vista-dock").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+}));
 
 // ---------- permisos (mismo esquema JSON que Android) ----------
 const FULL = () => ({ resumen: ["ventas", "gastos", "deudores", "clientes"], acciones: ["venta", "gasto", "agregar", "deudores"], alertas: true, ventasResumen: ["hoy", "semana", "mes"], ventasRanking: true, ventasVerMas: true, ventasVerInventario: true, finPdf: true, finFiltros: ["dia", "mes", "rango"], finVentas: true, finGastos: true, finRegistrar: true, invCarga: true, invMovimientos: true, invCrear: true, invEditar: true, invEliminar: true, invGuardar: true, invHacer: true, invLectura: false, _dockVentas: true, _dockFinanzas: true, _dockInventario: true, _tabDeudores: true });
@@ -572,16 +576,13 @@ function pintarResumen() {
     `<div class="kcard ${cls}"${go ? ` data-ir="${go}"` : ""}><span class="kico"><img src="img/pos/resumen/${icon}?v=1" alt=""></span><h4>${titulo}</h4><div class="knum">${numHtml}</div><div class="ksub">${sub}</div></div>`
   ).join("") : '<div class="card">Sin tarjetas activas.</div>';
   box.querySelectorAll("[data-ir]").forEach((d) => d.addEventListener("click", () => tab(d.dataset.ir)));
-  NOTIF_N = s.alertas ? invRows().filter((p) => num(p[4]) <= num(p[8] || 0)).length : 0;
-  const dot = $("notif-dot");
-  if (dot) dot.style.display = NOTIF_N ? "" : "none";
-  const accs = [["venta", "🛒", "Nueva venta", "venta"], ["gasto", "💸", "Gasto", "finanzas"], ["agregar", "➕", "Agregar", "inventario"], ["deudores", "👤", "Deudores", "deudores"]]
+  const accs = [["venta", "acc-venta", "Venta.png", "Venta", "venta"], ["gasto", "acc-gasto", "Gasto.png", "Gasto", "finanzas"], ["agregar", "acc-agregar", "Agregar.png", "Agregar", "inventario"], ["deudores", "acc-deudores", "Deudores.png", "Deudores", "deudores"]]
     .filter(([k]) => s.acciones.includes(k));
   $("bloque-acciones").classList.toggle("oculto", !accs.length);
   $("acciones").innerHTML = "";
-  accs.forEach(([k, ico, txt, go]) => {
+  accs.forEach(([k, cls, icon, txt, go]) => {
     const b = document.createElement("button");
-    b.className = "acc"; b.innerHTML = `${ico}<span>${txt}</span>`;
+    b.className = "accb " + cls; b.innerHTML = `<img src="img/pos/acciones/${icon}?v=1" alt=""><span>${txt}</span>`;
     b.addEventListener("click", () => {
       if (k === "gasto") { tab("finanzas"); setTimeout(() => abrirGasto(), 100); }
       else tab(go);
@@ -590,11 +591,59 @@ function pintarResumen() {
   });
   $("bloque-alertas").classList.toggle("oculto", !s.alertas);
   if (s.alertas) {
-    const alertas = invRows().filter((p) => num(p[4]) <= num(p[8] || 0));
-    $("alertas").innerHTML = alertas.length
-      ? alertas.map((p) => `<div class="card"><b>${esc(p[2])}</b><br><small>Quedan ${p[4]} (alerta: ${p[8] || 0})</small></div>`).join("")
-      : '<div class="card">¡Todo en orden! Stock suficiente.</div>';
+    const items = invRows().map((p) => [p, alertaDe(p)]).filter(([, n]) => n > 0);
+    NOTIF_N = items.length;
+    const dot = $("notif-dot");
+    if (dot) dot.style.display = NOTIF_N ? "" : "none";
+    const abox = $("alertas");
+    if (!items.length) {
+      abox.innerHTML = '<div class="card">¡Todo en orden! Stock suficiente.</div>';
+    } else {
+      abox.innerHTML = items.map(([p]) => {
+        const idx = (TODO.inventario || []).indexOf(p);
+        const n = alertaDe(p);
+        const img = p[12] ? `<img src="${esc(p[12])}" alt="" loading="lazy">` : "";
+        return `<div class="acard"><span class="athumb">${img}</span><span class="ainfo"><b>${esc(p[2])}</b><small>Quedan ${p[4]} und</small></span><span class="abadge ${n === 2 ? "abajo" : "amedio"}">${n === 2 ? "Stock Bajo" : "Stock Medio"}</span><button class="aplus" data-i="${idx}" title="Agregar stock"><img src="img/pos/alerta/agregar2.png?v=1" alt="+"></button></div>`;
+      }).join("");
+      abox.querySelectorAll(".aplus").forEach((b) => b.addEventListener("click", async () => {
+        const p = TODO.inventario[Number(b.dataset.i)];
+        if (!p) return;
+        const c = prompt("¿Cuántas unidades ingresan de " + p[2] + "?", "10");
+        const n = parseInt(c || "", 10);
+        if (!n || n <= 0) return;
+        const ant = num(p[4]), nvo = ant + n;
+        await actualizarStock(p, nvo);
+        await logMov(p, "Entrada", n, ant, nvo, "Ingreso de stock");
+        toast("Stock actualizado"); await recargar();
+      }));
+    }
+  } else {
+    NOTIF_N = 0;
+    const dot = $("notif-dot");
+    if (dot) dot.style.display = "none";
   }
+  pintarPerfil();
+}
+// 0 sin alerta · 1 stock medio (<= 1.5x mínimo) · 2 stock bajo (<= mínimo)
+function alertaDe(p) {
+  const stock = num(p[4]), min = num(p[8] || 0);
+  if (stock <= min) return 2;
+  if (min > 0 && stock <= min * 1.5) return 1;
+  return 0;
+}
+async function pintarPerfil() {
+  const box = $("perfil");
+  if (!box) return;
+  const nombre = (SES && SES.nombre) || "", rol = (SES && SES.rol) || "", correo = (SES && SES.correo) || "";
+  const tel = (EMPRESA && EMPRESA.celular1) || "";
+  const ini = (nombre || "?").trim().charAt(0).toUpperCase();
+  box.innerHTML = `<div class="perfil-card"><span class="perfil-foto">${esc(ini)}</span><span class="perfil-datos"><b>${esc(nombre)}</b><i>${esc(rol)}</i><small>${esc(correo)}</small><small>${esc(tel)}</small></span><span class="perfil-clave"><i id="perfil-clave-txt">••••••</i></span><button class="perfil-menu" id="perfil-puntos" title="Mi cuenta"><img src="img/pos/trespuntos.png?v=1" alt=""></button></div>`;
+  $("perfil-puntos").addEventListener("click", () => tab("cuenta"));
+  try {
+    const r = await api({ action: "obtener_clave_dinamica", empresa: SES.code, codigo: SES.code });
+    const cod = ((r.data || {}).codigo || "").trim();
+    if (cod && $("perfil-clave-txt")) $("perfil-clave-txt").textContent = cod;
+  } catch {}
 }
 
 // ---------- venta ----------
