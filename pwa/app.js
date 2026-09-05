@@ -229,6 +229,15 @@ function pintarPlanBar(emp) {
   else if (/PREMIUM/i.test(plan)) g = "linear-gradient(135deg, #5ce1e6, #8c52ff)";
   else g = "linear-gradient(135deg, #ffffff, #5ce1e6)";
   bar.style.background = g;
+  const nom = $("pos-negocio");
+  if (nom) {
+    const basico = !/PRUEBA/.test(estado) && !/MAX/i.test(plan) && !/PREMIUM/i.test(plan);
+    if (basico) {
+      nom.style.background = "none"; nom.style.webkitBackgroundClip = ""; nom.style.backgroundClip = ""; nom.style.color = "#010101";
+    } else {
+      nom.style.background = g; nom.style.webkitBackgroundClip = "text"; nom.style.backgroundClip = "text"; nom.style.color = "transparent";
+    }
+  }
 }
 function refrescarChrome() {
   try {
@@ -637,7 +646,7 @@ async function pintarPerfil() {
   const nombre = (SES && SES.nombre) || "", rol = (SES && SES.rol) || "", correo = (SES && SES.correo) || "";
   const tel = (EMPRESA && EMPRESA.celular1) || "";
   const ini = (nombre || "?").trim().charAt(0).toUpperCase();
-  box.innerHTML = `<div class="perfil-card"><span class="perfil-foto">${esc(ini)}</span><span class="perfil-datos"><b>${esc(nombre)}</b><i>${esc(rol)}</i><small>${esc(correo)}</small><small>${esc(tel)}</small></span><span class="perfil-clave"><i id="perfil-clave-txt">••••••</i></span><button class="perfil-menu" id="perfil-puntos" title="Mi cuenta"><img src="img/pos/trespuntos.png?v=1" alt=""></button></div>`;
+  box.innerHTML = `<div class="perfil-card"><span class="perfil-foto">${esc(ini)}</span><span class="perfil-datos"><b>${esc(nombre)}</b><i>${esc(rol)}</i><small>${esc(correo)}</small>${tel ? `<small>${esc(tel)}</small>` : ""}</span><span class="perfil-clave"><i id="perfil-clave-txt">••••••</i></span><button class="perfil-menu" id="perfil-puntos" title="Mi cuenta"><img src="img/pos/trespuntos.png?v=1" alt=""></button></div>`;
   $("perfil-puntos").addEventListener("click", () => tab("cuenta"));
   try {
     const r = await api({ action: "obtener_clave_dinamica", empresa: SES.code, codigo: SES.code });
