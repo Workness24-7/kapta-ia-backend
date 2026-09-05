@@ -61,26 +61,28 @@ function ver(id) {
   $("p-" + id).classList.remove("oculto");
 }
 
-// Países del selector (banderas locales).
+// Países del selector (banderas locales). Por defecto: Colombia.
 const PAISES = [["Colombia", "colombia"], ["México", "mexico"], ["Perú", "peru"], ["Chile", "chile"], ["Argentina", "argentina"], ["Ecuador", "ecuador"]];
-let PAIS_SEL = "";
+let PAIS_SEL = "Colombia";
 let PAISES_OK = false;
 function pintarPaises() {
   const box = $("pais-lista");
   if (!box || PAISES_OK) return;
   PAISES_OK = true;
   box.innerHTML = "";
+  const elegir = ([nombre, img]) => {
+    PAIS_SEL = nombre;
+    $("pais-sel").innerHTML = `<img id="pais-flag" src="img/flags/${img}.png?v=10" alt=""><span id="pais-nombre">${nombre}</span>`;
+    box.classList.add("oculto");
+  };
   PAISES.forEach(([nombre, img]) => {
     const b = document.createElement("button");
     b.type = "button";
-    b.innerHTML = `<img src="img/flags/${img}.png?v=9" alt=""><span>${nombre}</span>`;
-    b.addEventListener("click", () => {
-      PAIS_SEL = nombre;
-      $("pais-sel").innerHTML = `<img id="pais-flag" src="img/flags/${img}.png?v=9" alt=""><span id="pais-nombre">${nombre}</span>`;
-      box.classList.add("oculto");
-    });
+    b.innerHTML = `<img src="img/flags/${img}.png?v=10" alt=""><span>${nombre}</span>`;
+    b.addEventListener("click", () => elegir([nombre, img]));
     box.appendChild(b);
   });
+  elegir(PAISES[0]);
   $("pais-btn").addEventListener("click", () => box.classList.toggle("oculto"));
 }
 $("btn-empresa-ayuda").addEventListener("click", () => {
