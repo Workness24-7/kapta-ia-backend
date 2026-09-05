@@ -59,6 +59,9 @@ function horaDe(fecha) { const p = String(fecha || "").split(" "); return p.leng
 function ver(id) {
   document.querySelectorAll(".pantalla").forEach((s) => s.classList.add("oculto"));
   $("p-" + id).classList.remove("oculto");
+  // El selector de país debe funcionar siempre que se muestre este login
+  // (al volver de otras pantallas pintarPaises ya no corría y el botón moría).
+  if (id === "negocio") pintarPaises();
 }
 
 // Países del selector (banderas locales). Por defecto: Colombia.
