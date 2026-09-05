@@ -240,6 +240,7 @@ def action_resolver_empresa(params=None):
         "listIconUrl": emp.get("list_icon_url") or "",
         "colorPrimario": emp.get("color_primario") or "",
         "colorSecundario": emp.get("color_secundario") or "",
+        "plan": emp.get("plan") or "", "estado": emp.get("estado") or "",
     }})
 
 

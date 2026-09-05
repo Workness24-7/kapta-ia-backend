@@ -7,6 +7,7 @@ const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
 let SES = null, TODO = null, EMPRESA = null;
+let NOTIF_N = 0;
 let ME = null;               // {row, sec, admin}
 let SUPER = null;            // {correo} sesión maestra
 let NEGOCIOS = [];
@@ -99,22 +100,35 @@ function tab(nombre) {
   if (nombre === "cuenta") pintarCuenta();
 }
 function armarDock(sec) {
-  const tabs = [["inicio", "🏠", "Inicio"]];
-  if (sec._dockVentas) tabs.push(["venta", "🛒", "Venta"]);
-  if (sec._dockInventario) tabs.push(["inventario", "📦", "Inventario"]);
-  if (sec._tabDeudores) tabs.push(["deudores", "👤", "Deudores"]);
-  if (sec._dockFinanzas) tabs.push(["finanzas", "💰", "Finanzas"]);
-  if (ME.admin) tabs.push(["usuarios", "👥", "Usuarios"]);
-  tabs.push(["cuenta", "👨‍💼", "Cuenta"]);
+  const tabs = [["inicio", "Inicio"]];
+  if (sec._dockVentas) tabs.push(["venta", "Venta"]);
+  if (sec._dockInventario) tabs.push(["inventario", "Inventario"]);
+  if (ME.admin) tabs.push(["usuarios", "Usuarios"]);
+  if (sec._dockFinanzas) tabs.push(["finanzas", "Finanzas"]);
+  if (sec._tabDeudores) tabs.push(["deudores", "Deudores"]);
   $("dock").innerHTML = "";
-  tabs.forEach(([k, ico, txt], i) => {
+  tabs.forEach(([k, txt], i) => {
     const b = document.createElement("button");
     b.dataset.tab = k; if (!i) b.classList.add("on");
-    b.innerHTML = `${ico}<span>${txt}</span>`;
+    b.title = txt;
+    b.innerHTML = `<img src="img/pos/dock/${DOCK_ICONS[k]}?v=1" alt="${txt}">`;
     b.addEventListener("click", () => tab(k));
     $("dock").appendChild(b);
   });
 }
+const DOCK_ICONS = { inicio: "Inicio.png", venta: "Venta.png", inventario: "Inventario.png", usuarios: "Admin.png", finanzas: "Finanzas.png", deudores: "Deudores.png" };
+if ($("btn-yo")) $("btn-yo").addEventListener("click", () => tab("cuenta"));
+if ($("pos-avatar")) $("pos-avatar").addEventListener("click", () => tab("cuenta"));
+if ($("btn-soporte")) $("btn-soporte").addEventListener("click", () => $("btn-ayuda").click());
+if ($("btn-notif")) $("btn-notif").addEventListener("click", () => {
+  tab("inicio");
+  toast(NOTIF_N > 0 ? `${NOTIF_N} producto(s) con stock bajo` : "Sin alertas de stock");
+});
+if ($("dock-search")) $("dock-search").addEventListener("click", () => {
+  if (!$("t-venta").classList.contains("oculto") && $("venta-buscar")) { $("venta-buscar").focus(); return; }
+  if (!$("t-inventario").classList.contains("oculto") && $("inv-buscar")) { $("inv-buscar").focus(); return; }
+  toast("Busca desde Venta o Inventario");
+});
 
 // ---------- permisos (mismo esquema JSON que Android) ----------
 const FULL = () => ({ resumen: ["ventas", "gastos", "deudores", "clientes"], acciones: ["venta", "gasto", "agregar", "deudores"], alertas: true, ventasResumen: ["hoy", "semana", "mes"], ventasRanking: true, ventasVerMas: true, ventasVerInventario: true, finPdf: true, finFiltros: ["dia", "mes", "rango"], finVentas: true, finGastos: true, finRegistrar: true, invCarga: true, invMovimientos: true, invCrear: true, invEditar: true, invEliminar: true, invGuardar: true, invHacer: true, invLectura: false, _dockVentas: true, _dockFinanzas: true, _dockInventario: true, _tabDeudores: true });
@@ -179,16 +193,46 @@ function aplicarIdentidad(emp) {
     if (header) header.style.borderBottom = `3px solid ${sec}`;
     const logo = (emp && (emp.listIconUrl || emp.logoUrl)) || "";
     const ll = $("login-logo"), le = $("login-emoji"), pl = $("pos-logo");
+    const fb = $("pos-logo-fb");
     if (logo && ll && le && pl) {
       ll.src = logo; ll.classList.remove("oculto"); le.classList.add("oculto");
       pl.src = logo; pl.classList.remove("oculto");
+      if (fb) fb.classList.add("oculto");
     } else if (ll && le && pl) {
       ll.classList.add("oculto"); le.classList.remove("oculto");
       pl.classList.add("oculto");
+      if (fb) { fb.textContent = ((emp && emp.nombre) || "K").trim().charAt(0).toUpperCase(); fb.classList.remove("oculto"); }
     }
+    refrescarChrome();
   } catch { /* HTML en caché de versión anterior: no bloquea el ingreso */ }
 }
 
+function planDesdeTODO() {
+  try {
+    const rows = (TODO && TODO.config_negocio) || [];
+    const r = rows.find((x) => String(x[0] || "").toUpperCase() === "PLAN");
+    return (r && r[1]) || "";
+  } catch { return ""; }
+}
+function pintarPlanBar(emp) {
+  const bar = $("pos-planbar");
+  if (!bar) return;
+  const plan = ((emp && emp.plan) || planDesdeTODO() || "").trim();
+  const estado = ((emp && emp.estado) || "").trim().toUpperCase();
+  let g;
+  if (/PRUEBA/.test(estado)) g = "linear-gradient(135deg, #5ce1e6, #0012ff)";
+  else if (/MAX/i.test(plan)) g = "linear-gradient(135deg, #8c52ff, #ff7a00)";
+  else if (/PREMIUM/i.test(plan)) g = "linear-gradient(135deg, #5ce1e6, #8c52ff)";
+  else g = "linear-gradient(135deg, #ffffff, #5ce1e6)";
+  bar.style.background = g;
+}
+function refrescarChrome() {
+  try {
+    const av = $("avatar-letra");
+    if (av) av.textContent = ((SES && SES.nombre) || (EMPRESA && EMPRESA.nombre) || "?").trim().charAt(0).toUpperCase() || "?";
+  } catch {}
+  try { pintarPlanBar(EMPRESA); } catch {}
+}
 $("btn-codigo").addEventListener("click", async () => {
   const code = $("in-codigo").value.trim().toUpperCase();
   $("err-codigo").textContent = "";
@@ -488,6 +532,7 @@ async function recargar() {
     $("pos-usuario").textContent = SES.nombre + " • " + SES.rol;
     pintarCuentaInfo();
     pintarResumen(); pintarVenta(); pintarInventario(); pintarDeudores(); pintarFinanzas(); pintarUsuarios();
+    refrescarChrome();
   } catch { toast("Sin conexión"); }
 }
 if ($("btn-recargar")) $("btn-recargar").addEventListener("click", recargar);
@@ -503,19 +548,33 @@ const kpi = (t, v) => `<div class="kpi"><small>${t}</small><b>${v}</b></div>`;
 // ---------- inicio ----------
 function pintarResumen() {
   const s = ME.sec;
-  const tarjetas = [["ventas", "Ventas hoy", fmt(venRows().filter((v) => esHoy(v[1])).reduce((a, v) => a + num(v[12]), 0))],
-    ["gastos", "Gastos del mes", fmt(gasRows().filter((g) => esMesActual(g[1])).reduce((a, g) => a + num(g[7]), 0))],
-    ["deudores", "Deudores", (() => { const d = agruparDeudores(); return d.length + " • " + fmt(d.reduce((a, x) => a + x.pendiente, 0)); })()],
-    ["clientes", "Alertas stock", String(invRows().filter((p) => num(p[4]) <= num(p[8] || 0)).length)]]
-    .filter(([k]) => s.resumen.includes(k));
-  $("resumen").innerHTML = tarjetas.length ? "" : '<div class="card">Sin tarjetas activas.</div>';
-  for (let i = 0; i < tarjetas.length; i += 2) {
-    const fila = document.createElement("div");
-    fila.className = "grid2";
-    fila.style.marginBottom = "10px";
-    tarjetas.slice(i, i + 2).forEach(([, t, v]) => { fila.innerHTML += kpi(t, v); });
-    $("resumen").appendChild(fila);
-  }
+  const totVentasHoy = venRows().filter((v) => esHoy(v[1])).reduce((a, v) => a + num(v[12]), 0);
+  const totGastosMes = gasRows().filter((g) => esMesActual(g[1])).reduce((a, g) => a + num(g[7]), 0);
+  const deud = agruparDeudores();
+  const totDeuda = deud.reduce((a, x) => a + x.pendiente, 0);
+  const cliAct = (() => {
+    const set = new Set(deud.map((d) => d.nombre));
+    venRows().filter((v) => esHoy(v[1])).forEach((v) => {
+      const c = (v[3] || "").trim();
+      if (c && !/^cliente mostrador$/i.test(c)) set.add(c);
+    });
+    return set.size;
+  })();
+  const miles = (n) => Math.round(n).toLocaleString("es-CO");
+  const cards = [
+    ["ventas", "k-verde", "Ventas.png", "Ventas del dia", `<small>$</small>${miles(totVentasHoy)}`, "En tiempo Real (Clic)", "finanzas"],
+    ["gastos", "k-rojo", "Gastos.png", "Gastos del mes", `<small>$</small>${miles(totGastosMes)}`, "Total Acumulado", ""],
+    ["deudores", "k-amarillo", "Deudores.png", "Deudores", `${deud.length} <span class="pers">Personas</span>`, `Total: $ ${miles(totDeuda)} (Clic)`, "deudores"],
+    ["clientes", "k-cian", "cliente_Activos.png", "Clientes Activos", `${cliAct} <span class="pers">Personas</span>`, "En el establecimiento", ""],
+  ].filter(([k]) => s.resumen.includes(k));
+  const box = $("resumen");
+  box.innerHTML = cards.length ? cards.map(([, cls, icon, titulo, numHtml, sub, go]) =>
+    `<div class="kcard ${cls}"${go ? ` data-ir="${go}"` : ""}><span class="kico"><img src="img/pos/resumen/${icon}?v=1" alt=""></span><h4>${titulo}</h4><div class="knum">${numHtml}</div><div class="ksub">${sub}</div></div>`
+  ).join("") : '<div class="card">Sin tarjetas activas.</div>';
+  box.querySelectorAll("[data-ir]").forEach((d) => d.addEventListener("click", () => tab(d.dataset.ir)));
+  NOTIF_N = s.alertas ? invRows().filter((p) => num(p[4]) <= num(p[8] || 0)).length : 0;
+  const dot = $("notif-dot");
+  if (dot) dot.style.display = NOTIF_N ? "" : "none";
   const accs = [["venta", "🛒", "Nueva venta", "venta"], ["gasto", "💸", "Gasto", "finanzas"], ["agregar", "➕", "Agregar", "inventario"], ["deudores", "👤", "Deudores", "deudores"]]
     .filter(([k]) => s.acciones.includes(k));
   $("bloque-acciones").classList.toggle("oculto", !accs.length);

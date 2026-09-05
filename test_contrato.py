@@ -356,6 +356,8 @@ def main():
           and r["data"]["empresa"]["nombre"] == "Negocio Test", json.dumps(r))
     check("resolver sin contactos", "correo" not in r["data"]["empresa"]
           and "nit" not in r["data"]["empresa"], json.dumps(r))
+    check("resolver trae plan y estado", r["data"]["empresa"].get("plan") == "Básico"
+          and r["data"]["empresa"].get("estado") == "PRUEBA", json.dumps(r))
     r = json_body(backend.action_resolver_empresa({"action": "resolver_empresa", "codigo": "NOEXISTE"}))
     check("resolver inexistente", r["status"] == "error")
 
