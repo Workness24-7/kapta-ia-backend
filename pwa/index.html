@@ -67,7 +67,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
   #p-pos .tab { padding: 20px 28px 20px 116px; }
   /* Vista única en computador: sin scroll de página, todo se adapta */
   #t-inicio.tab { height: calc(100dvh - 122px); overflow: hidden; display: grid; grid-template-columns: 1.08fr .92fr; grid-template-rows: auto minmax(0,1fr) auto; gap: 2px 24px; align-items: stretch; padding-bottom: 12px; }
-  #t-inicio > h2 { grid-column: 1 / -1; margin-bottom: 6px; font-weight: 400; color: #000; }
+  #t-inicio > h2 { grid-column: 1; grid-row: 1; margin-bottom: 6px; font-weight: 400; color: #000; }
   #resumen { grid-column: 1; grid-row: 2; height: 100%; min-height: 0; }
   #resumen.kpi-resumen { grid-template-rows: 1fr 1fr; }
   .kcard { display: flex; flex-direction: column; justify-content: space-between; }
@@ -118,8 +118,8 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .perfil-menu img { width: 30px; height: auto; display: block; opacity: .55; }
 /* Acciones rápidas */
 #acciones.acc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-.accb { border: 1.5px solid transparent; border-radius: 23px; padding: 22px 6px 18px; display: flex; flex-direction: column; align-items: center; gap: 12px; cursor: pointer; font-size: 10.9px; font-weight: 600; font-family: inherit; }
-.accb img { width: 72px; height: 72px; object-fit: contain; }
+.accb { border: 1.5px solid transparent; border-radius: 23px; padding: 24px 6px 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; cursor: pointer; font-size: 10.9px; font-weight: 600; font-family: inherit; }
+.accb img { width: 88px; height: 88px; object-fit: contain; }
 .accb.acc-venta { background: linear-gradient(#f6faff,#f6faff) padding-box, linear-gradient(135deg, #ffffff, #00847c) border-box; color: #0011ac; }
 .accb.acc-gasto { background: linear-gradient(#f7f6ff,#f7f6ff) padding-box, linear-gradient(135deg, #ffffff, #8c52ff) border-box; color: #8a00ac; }
 .accb.acc-agregar { background: linear-gradient(#f6fff9,#f6fff9) padding-box, linear-gradient(135deg, #ffffff, #008451) border-box; color: #00aa5d; }
