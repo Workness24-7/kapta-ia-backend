@@ -1,6 +1,6 @@
 /* Service Worker: CSS dentro del HTML; formas individuales + shell offline, API a red, HTML fresco. */
-const CACHE = "kapta-pwa-v16";
-const SHELL = ["./app.js?v=12", "./manifest.webmanifest", "./img/logo-slogan.png?v=9",
+const CACHE = "kapta-pwa-v17";
+const SHELL = ["./app.js?v=13", "./manifest.webmanifest", "./img/logo-slogan.png?v=9",
   "./img/formas/morada-tl.png?v=10", "./img/formas/nube.png?v=10",
   "./img/formas/destellos.png?v=10", "./img/formas/cian-bl.png?v=10",
   "./img/formas/cian-abajo.png?v=10", "./img/formas/gris.png?v=10",

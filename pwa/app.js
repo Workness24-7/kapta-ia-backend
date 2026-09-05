@@ -490,7 +490,7 @@ async function recargar() {
     pintarResumen(); pintarVenta(); pintarInventario(); pintarDeudores(); pintarFinanzas(); pintarUsuarios();
   } catch { toast("Sin conexión"); }
 }
-$("btn-recargar").addEventListener("click", recargar);
+if ($("btn-recargar")) $("btn-recargar").addEventListener("click", recargar);
 
 const invRows = () => (TODO.inventario || []).filter((x) => x[2] && x[2] !== "Nom_Producto");
 const venRows = () => (TODO.ventas || []).filter((x) => x[5] && x[5] !== "Producto");
