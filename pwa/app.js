@@ -189,12 +189,9 @@ function aplicarIdentidad(emp) {
   try {
     const root = document.documentElement;
     const prim = (emp && emp.colorPrimario) || "#4F46E5";
-    const sec = (emp && emp.colorSecundario) || prim;
     root.style.setProperty("--prim", prim);
     const meta = document.getElementById("meta-theme");
     if (meta) meta.setAttribute("content", prim);
-    const header = $("pos-header");
-    if (header) header.style.borderBottom = `3px solid ${sec}`;
     const logo = (emp && (emp.listIconUrl || emp.logoUrl)) || "";
     const ll = $("login-logo"), le = $("login-emoji"), pl = $("pos-logo");
     const fb = $("pos-logo-fb");
@@ -229,15 +226,6 @@ function pintarPlanBar(emp) {
   else if (/PREMIUM/i.test(plan)) g = "linear-gradient(135deg, #5ce1e6, #8c52ff)";
   else g = "linear-gradient(135deg, #ffffff, #5ce1e6)";
   bar.style.background = g;
-  const nom = $("pos-negocio");
-  if (nom) {
-    const basico = !/PRUEBA/.test(estado) && !/MAX/i.test(plan) && !/PREMIUM/i.test(plan);
-    if (basico) {
-      nom.style.background = "none"; nom.style.webkitBackgroundClip = ""; nom.style.backgroundClip = ""; nom.style.color = "#010101";
-    } else {
-      nom.style.background = g; nom.style.webkitBackgroundClip = "text"; nom.style.backgroundClip = "text"; nom.style.color = "transparent";
-    }
-  }
 }
 function refrescarChrome() {
   try {

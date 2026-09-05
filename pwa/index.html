@@ -43,8 +43,8 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 #pos-logo-sq img { width: 100%; height: 100%; object-fit: cover; }
 #pos-logo-fb { font-size: 20px; font-weight: 800; color: #0F172A; }
 #pos-nombre-col { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-#pos-planbar { display: block; height: 12px; width: min(430px, 34vw); border-radius: 999px; background: linear-gradient(135deg, #ffffff, #5ce1e6); }
-#pos-negocio { font-weight: 800; font-size: 15px; color: #010101; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#pos-planbar { display: block; height: 8px; width: min(430px, 34vw); border-radius: 999px; background: linear-gradient(135deg, #ffffff, #5ce1e6); }
+#pos-negocio { font-weight: 800; font-size: 19px; color: #010101; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #btn-ayuda { display: none; }
 #btn-yo { border: 2px solid transparent; border-radius: 999px; padding: 8px 26px; font-weight: 800; font-size: 15px; cursor: pointer; background: linear-gradient(#f4f4f4,#f4f4f4) padding-box, linear-gradient(135deg, #5ce1e6, #8c52ff) border-box; flex-shrink: 0; }
 #btn-yo span { background: linear-gradient(135deg, #5ce1e6, #8c52ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -66,22 +66,23 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 @media (min-width: 901px) {
   #p-pos .tab { padding: 20px 28px 20px 116px; }
   /* Vista única en computador: sin scroll de página, todo se adapta */
-  #t-inicio.tab { height: calc(100dvh - 122px); overflow: hidden; display: grid; grid-template-columns: 1.08fr .92fr; grid-template-rows: auto auto minmax(0,1fr); gap: 2px 24px; align-items: start; }
+  #t-inicio.tab { height: calc(100dvh - 122px); overflow: hidden; display: grid; grid-template-columns: 1.08fr .92fr; grid-template-rows: auto minmax(0,1fr) auto; gap: 2px 24px; align-items: stretch; padding-bottom: 12px; }
   #t-inicio > h2 { grid-column: 1 / -1; margin-bottom: 6px; }
-  #resumen { grid-column: 1; grid-row: 2; }
-  #bloque-perfil { grid-column: 1; grid-row: 3; min-height: 0; overflow: hidden; }
-  #bloque-acciones { grid-column: 2; grid-row: 2; }
-  #bloque-alertas { grid-column: 2; grid-row: 3; height: 100%; min-height: 0; display: flex; flex-direction: column; }
+  #resumen { grid-column: 1; grid-row: 2; height: 100%; min-height: 0; }
+  #resumen.kpi-resumen { grid-template-rows: 1fr 1fr; }
+  .kcard { display: flex; flex-direction: column; justify-content: space-between; }
+  #bloque-perfil { grid-column: 1; grid-row: 3; min-height: 0; }
+  #col-der { grid-column: 2; grid-row: 2 / span 2; min-height: 0; display: flex; flex-direction: column; }
+  #bloque-acciones .sec-t { margin-top: 0; }
+  #bloque-alertas { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   #alerta-box { flex: 1; min-height: 0; display: flex; }
   #alertas { flex: 1; min-height: 0; max-height: none; }
   #t-inicio .sec-t { margin: 16px 0 10px; }
   .alerta-head .sec-t, .vista-dock { margin: 16px 0 10px; }
   .kcard { padding: 16px 20px; }
   .kcard .knum { font-size: clamp(28px, 4vw, 48px); }
-  .kcard .kico { width: 52px; height: 52px; }
   .acard { padding: 8px 12px; }
-  .acard .athumb { width: 48px; height: 48px; }
-  .aplus, .aplus img { width: 36px; height: 36px; }
+  .acard .athumb { width: 56px; height: 56px; }
   #alertas { gap: 10px; }
   .perfil-card { padding: 18px 22px; }
   .perfil-foto { width: 76px; height: 76px; font-size: 30px; }
@@ -94,8 +95,8 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .kcard .knum small { font-size: 16px; font-weight: 700; }
 .kcard .knum .pers { font-size: 10.9px; font-weight: 400; }
 .kcard .ksub { font-size: 10.9px; font-weight: 400; color: #010101; margin-top: 8px; }
-.kcard .kico { position: absolute; top: 16px; right: 16px; width: 56px; height: 56px; border-radius: 20px; border: 1.5px solid transparent; background: linear-gradient(var(--ibg, #e2fff1),var(--ibg, #e2fff1)) padding-box, linear-gradient(135deg, #ffffff, var(--gb2, #a6a6a6)) border-box; display: flex; align-items: center; justify-content: center; }
-.kcard .kico img { width: 32px; height: 32px; object-fit: contain; }
+.kcard .kico { position: absolute; top: 16px; right: 16px; width: 60px; height: 60px; border-radius: 20px; border: 1.5px solid transparent; background: linear-gradient(var(--ibg, #e2fff1),var(--ibg, #e2fff1)) padding-box, linear-gradient(135deg, #ffffff, var(--gb2, #a6a6a6)) border-box; display: flex; align-items: center; justify-content: center; }
+.kcard .kico img { width: 36px; height: 36px; object-fit: contain; }
 .k-verde { --gb2: #008451; --ibg: #e2fff1; }
 .k-rojo { --gb2: #e10000; --ibg: #ffe2e2; }
 .k-amarillo { --gb2: #847b00; --ibg: #fffce2; }
@@ -116,8 +117,8 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .perfil-menu img { width: 30px; height: auto; display: block; opacity: .55; }
 /* Acciones rápidas */
 #acciones.acc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-.accb { border: 1.5px solid transparent; border-radius: 23px; padding: 18px 6px 14px; display: flex; flex-direction: column; align-items: center; gap: 10px; cursor: pointer; font-size: 10.9px; font-weight: 600; font-family: inherit; }
-.accb img { width: 52px; height: 52px; object-fit: contain; }
+.accb { border: 1.5px solid transparent; border-radius: 23px; padding: 22px 6px 18px; display: flex; flex-direction: column; align-items: center; gap: 12px; cursor: pointer; font-size: 10.9px; font-weight: 600; font-family: inherit; }
+.accb img { width: 72px; height: 72px; object-fit: contain; }
 .accb.acc-venta { background: linear-gradient(#f6faff,#f6faff) padding-box, linear-gradient(135deg, #ffffff, #00847c) border-box; color: #0011ac; }
 .accb.acc-gasto { background: linear-gradient(#f7f6ff,#f7f6ff) padding-box, linear-gradient(135deg, #ffffff, #8c52ff) border-box; color: #8a00ac; }
 .accb.acc-agregar { background: linear-gradient(#f6fff9,#f6fff9) padding-box, linear-gradient(135deg, #ffffff, #008451) border-box; color: #00aa5d; }
@@ -142,8 +143,9 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .aplus { width: 40px; height: 40px; border: 0; background: none; cursor: pointer; padding: 0; flex-shrink: 0; }
 .aplus img { width: 40px; height: 40px; display: block; }
 @media (max-width: 900px) {
+  #col-der { display: contents; }
   #pos-header { margin: 8px 10px 0; padding: 8px 12px; gap: 10px; top: 8px; }
-  #pos-negocio { font-size: 14px; max-width: 28vw; }
+  #pos-negocio { font-size: 16px; max-width: 28vw; }
   #pos-planbar { width: 140px; }
   #btn-yo { padding: 6px 16px; font-size: 13px; }
   #btn-notif, #pos-avatar { width: 40px; height: 40px; }
@@ -387,9 +389,11 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
     <div id="t-inicio" class="tab">
       <h2>Resumen General</h2>
       <div id="resumen" class="kpi-resumen"></div>
-      <div id="bloque-perfil"><h3 class="sec-t">Resumen de perfil</h3><div id="perfil"></div></div>
+      <div id="col-der">
       <div id="bloque-acciones"><h3 class="sec-t">Acciones rápidas</h3><div id="acciones" class="acc-grid"></div></div>
       <div id="bloque-alertas"><div class="alerta-head"><h3 class="sec-t">Alerta de Stock</h3><div class="vista-dock" id="vista-dock"><button data-v="lista" class="on" title="Vista lista"><img src="img/pos/alerta/lista.png?v=1" alt=""></button><button data-v="recuadro" title="Vista recuadro"><img src="img/pos/alerta/recuadro.png?v=1" alt=""></button></div></div><div id="alerta-box"><div id="alertas"></div></div></div>
+      </div>
+      <div id="bloque-perfil"><h3 class="sec-t">Resumen de perfil</h3><div id="perfil"></div></div>
     </div>
 
     <div id="t-venta" class="tab oculto">
@@ -475,7 +479,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=16"></script>
+<script src="app.js?v=17"></script>
 </body>
 </html>
 
