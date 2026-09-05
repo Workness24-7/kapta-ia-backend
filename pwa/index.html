@@ -10,8 +10,8 @@
 <meta name="apple-mobile-web-app-title" content="Kapta IA">
 <title>Kapta IA</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="img/logo-app.png?v=1">
-<link rel="apple-touch-icon" href="img/logo-app.png?v=1">
+<link rel="icon" href="img/logo-app.png?v=2">
+<link rel="apple-touch-icon" href="img/logo-app.png?v=2">
 <style>
 :root { --prim: #4F46E5; --bg: #F2F2F7; --card: #fff; --txt: #0F172A; --mut: #64748B; --ok: #34C759; --rojo: #EF4444; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -65,6 +65,8 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 /* Sección 3: contenido + resumen general */
 @media (min-width: 901px) {
   #p-pos { padding-bottom: 0; }
+  /* En inicio: la página nunca scrollea; solo la lista de alertas (y solo si desborda) */
+  #p-pos:has(> #t-inicio:not(.oculto)) { height: 100dvh; overflow: hidden; }
   #p-pos .tab { padding: 20px 28px 0 116px; }
   #t-inicio.tab { height: calc(100dvh - 90px); overflow: hidden; display: grid; grid-template-columns: 1.08fr .92fr; grid-template-rows: auto minmax(0,1fr) auto; gap: 2px 24px; align-items: stretch; padding-bottom: 0; }
   #t-inicio > h2 { grid-column: 1; grid-row: 1; margin-bottom: 6px; font-weight: 400; color: #000; }
