@@ -150,8 +150,33 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .abadge.amedio { background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #847b00) border-box; color: #847b00; }
 .aplus { width: 40px; height: 40px; border: 0; background: none; cursor: pointer; padding: 0; flex-shrink: 0; }
 .aplus img { width: 40px; height: 40px; display: block; }
-/* Venta rápida: cubre la sección 1 */
-#venta-rapida { display: flex; flex-direction: column; min-height: 0; }
+/* Agregar Stock y Mercancia (dock sobre alerta de stock) */
+.ag-buscar { width: 100%; border: 1.5px solid transparent; border-radius: 13px; background: linear-gradient(#ffffff,#ffffff) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 14px 20px; font-size: 13.9px; font-family: inherit; color: #010101; outline: none; margin: 0 0 10px; }
+.ag-buscar::placeholder { color: #a6a6a6; }
+.ag-sug { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.ag-sug button { border: 1.5px solid transparent; border-radius: 13px; background: linear-gradient(#ffffff,#ffffff) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 10px 16px; font-size: 12px; text-align: left; cursor: pointer; color: #010101; font-family: inherit; }
+.ag-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 4px 2px 10px; }
+.ag-card { border: 1.5px solid transparent; border-radius: 11px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 10px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.ag-foto { display: flex; align-items: center; justify-content: center; border: 1.5px solid transparent; border-radius: 10px; background: linear-gradient(#edf0f2,#edf0f2) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; aspect-ratio: 1; overflow: hidden; }
+.ag-foto img { width: 100%; height: 100%; object-fit: cover; }
+.ag-nom { font-size: 6.5px; font-weight: 400; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ag-nom.lg { font-size: 10.9px; font-weight: 700; flex: 1; min-width: 0; }
+.ag-row { display: flex; gap: 6px; align-items: stretch; }
+.ag-qty { width: 100%; min-width: 0; border: 1.5px solid transparent; border-radius: 8px; background: linear-gradient(#ffffff,#ffffff) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; text-align: center; font-size: 14px; color: #010101; padding: 6px 2px; outline: none; font-family: inherit; }
+.ag-row .ag-qty { flex: 0 0 34px; }
+.ag-add { flex: 1; border: 0; border-radius: 11px; background: linear-gradient(135deg, #5ce1e6, #8c52ff); color: #fff; font-size: 7px; font-weight: 800; cursor: pointer; padding: 8px 4px; font-family: inherit; white-space: nowrap; }
+.ag-lista { display: flex; flex-direction: column; gap: 14px; padding: 4px 2px 10px; }
+.ag-lrow { display: flex; align-items: center; gap: 10px; border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 10px 14px; }
+.ag-foto.sm { width: 52px; height: 52px; aspect-ratio: auto; flex-shrink: 0; }
+.ag-lrow .ag-qty { flex: 0 0 56px; }
+.ag-menmas { border: 0; background: none; cursor: pointer; padding: 2px; flex-shrink: 0; display: flex; }
+.ag-menmas img { width: 26px; height: 26px; object-fit: contain; display: block; }
+.ag-commit { position: sticky; bottom: 0; width: 100%; border: 0; border-radius: 18px; background: linear-gradient(135deg, #5ce1e6, #8c52ff); color: #fff; font-size: 12.3px; font-weight: 800; cursor: pointer; padding: 13px; font-family: inherit; margin-top: 4px; }
+@media (max-width: 1100px) {
+  .ag-grid { grid-template-columns: repeat(2, 1fr); }
+}
+/* Venta rápida: dock grande que contiene buscadores, tarjetas y total */
+#venta-rapida { display: flex; flex-direction: column; gap: 12px; min-height: 0; border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#f4f4f4,#f4f4f4) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 14px; box-shadow: 0 10px 26px rgba(0,0,0,.05); }
 .vr-modos { display: flex; gap: 4px; border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 5px; }
 .vr-modos button { flex: 1; border: 0; background: none; border-radius: 18px; padding: 10px 4px; font-size: 15.9px; font-weight: 500; color: #a6a6a6; cursor: pointer; font-family: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vr-modos button.on { background: #a6a6a6; color: #f4f4f4; }
@@ -446,6 +471,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
           <input id="vr-buscar" placeholder="Busca productos" autocomplete="off">
           <span id="vr-cliente-box"><input id="vr-cliente" placeholder="Cliente" autocomplete="off"><button id="vr-cliente-x" class="oculto" title="Quitar cliente"><img src="img/pos/acciones/Eliminar_cliente.png?v=1" alt=""></button></span>
         </div>
+        <div id="vr-sug" class="ag-sug oculto"></div>
         <div id="vr-lista"><div class="vr-grid" id="vr-grid"></div></div>
         <div class="vr-total"><span class="vr-total-t">Total</span><span class="vr-total-n" id="vr-total">$ 0</span><span class="vr-total-btns"><button id="vr-paga">Paga</button><button id="vr-debe">Debe</button></span></div>
       </div>
@@ -534,7 +560,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=18"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>
 

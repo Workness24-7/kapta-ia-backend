@@ -1,5 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-04c";
+const VERSION_PWA = "PWA-2026-09-07";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -131,9 +131,83 @@ if ($("dock-search")) $("dock-search").addEventListener("click", () => {
   toast("Busca desde Venta o Inventario");
 });
 if ($("vista-dock")) $("vista-dock").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
-  if (b.dataset.v !== "lista") { toast("La vista recuadro llega pronto"); return; }
+  AG_VISTA = b.dataset.v === "recuadro" ? "recuadro" : "lista";
   $("vista-dock").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+  if (AG_ABIERTO) agRender(); else pintarAlertas();
 }));
+// ---------- agregar stock (dock sobre alerta de stock, vistas lista/recuadro) ----------
+let AG_VISTA = "lista", AG_ABIERTO = false, AG_SEL = {}, AG_Q = "";
+const agAbierta = () => AG_ABIERTO;
+function agTitulo() {
+  const h = document.querySelector(".alerta-head .sec-t");
+  if (h) h.textContent = AG_ABIERTO ? "Agregar Stock y Mercancia" : "Alerta de Stock";
+}
+function agAbrir() {
+  AG_ABIERTO = true; AG_Q = "";
+  agTitulo(); agRender();
+}
+function agCerrar() {
+  if (!AG_ABIERTO) return;
+  AG_ABIERTO = false; AG_SEL = {}; AG_Q = "";
+  agTitulo(); pintarAlertas();
+}
+function agToggle() { AG_ABIERTO ? agCerrar() : agAbrir(); }
+function agIdx(p) { return (TODO.inventario || []).indexOf(p); }
+function agRender() {
+  if (!TODO) return;
+  const box = $("alertas");
+  const sel = Object.keys(AG_SEL).map(Number).filter((i) => TODO.inventario[i]).map((i) => [i, TODO.inventario[i]]);
+  const q = (AG_Q || "").toLowerCase().trim();
+  const sug = q ? invRows().filter((p) => (p[2] || "").toLowerCase().includes(q) && !AG_SEL.hasOwnProperty(agIdx(p))).slice(0, 6) : [];
+  let h = `<input id="ag-buscar" class="ag-buscar" placeholder="Buscar producto" autocomplete="off" value="${esc(AG_Q || "")}">`;
+  h += `<div id="ag-sug" class="ag-sug${sug.length ? "" : " oculto"}">${sug.map((p) => `<button data-i="${agIdx(p)}">${esc(p[2])}</button>`).join("")}</div>`;
+  if (!sel.length) h += `<div class="card">Busca y selecciona productos para agregar stock.</div>`;
+  else if (AG_VISTA === "recuadro") {
+    h += `<div class="ag-grid">${sel.map(([i, p]) => `<div class="ag-card"><span class="ag-foto">${p[12] ? `<img src="${esc(p[12])}" alt="" loading="lazy">` : ""}</span><b class="ag-nom">${esc(p[2])}</b><span class="ag-row"><input class="ag-qty" data-i="${i}" inputmode="numeric" value="${AG_SEL[i] || 1}"><button class="ag-add" data-i="${i}">Agregar</button></span></div>`).join("")}</div>`;
+  } else {
+    h += `<div class="ag-lista">${sel.map(([i, p]) => `<div class="ag-lrow"><span class="ag-foto sm">${p[12] ? `<img src="${esc(p[12])}" alt="" loading="lazy">` : ""}</span><b class="ag-nom lg">${esc(p[2])}</b><button class="ag-menmas" data-i="${i}" data-d="-1" title="Quitar uno"><img src="img/pos/alerta/menos_stock.png?v=1" alt="−"></button><input class="ag-qty" data-i="${i}" inputmode="numeric" value="${AG_SEL[i] || 1}"><button class="ag-menmas" data-i="${i}" data-d="1" title="Agregar uno"><img src="img/pos/alerta/mas_stock.png?v=1" alt="+"></button></div>`).join("")}</div>`;
+  }
+  if (sel.length) h += `<button id="ag-commit" class="ag-commit">Agregar Stock</button>`;
+  box.innerHTML = h;
+  const inp = $("ag-buscar");
+  if (inp) {
+    inp.addEventListener("input", () => { AG_Q = inp.value; agRender(); const r = $("ag-buscar"); if (r) { r.focus(); r.setSelectionRange(r.value.length, r.value.length); } });
+    // ponytail: sin dropdown-keyboard; clic o Enter agrega la primera coincidencia
+    inp.addEventListener("keydown", (e) => { if (e.key === "Enter" && sug.length) { const i = agIdx(sug[0]); AG_SEL[i] = 1; AG_Q = ""; agRender(); } });
+  }
+  box.querySelectorAll("#ag-sug button").forEach((b) => b.addEventListener("click", () => { AG_SEL[b.dataset.i] = AG_SEL[b.dataset.i] || 1; AG_Q = ""; agRender(); }));
+  box.querySelectorAll(".ag-qty").forEach((c) => c.addEventListener("input", () => {
+    c.value = c.value.replace(/\D/g, "").slice(0, 5);
+    const v = parseInt(c.value || "0", 10);
+    AG_SEL[c.dataset.i] = isNaN(v) ? 0 : v;
+  }));
+  box.querySelectorAll(".ag-menmas").forEach((b) => b.addEventListener("click", () => {
+    AG_SEL[b.dataset.i] = Math.max(0, (AG_SEL[b.dataset.i] || 0) + Number(b.dataset.d));
+    agRender();
+  }));
+  box.querySelectorAll(".ag-add").forEach((b) => b.addEventListener("click", () => {
+    AG_SEL[b.dataset.i] = (AG_SEL[b.dataset.i] || 0) + 1;
+    agRender();
+  }));
+  const cm = $("ag-commit");
+  if (cm) cm.addEventListener("click", agCommit);
+}
+async function agCommit() {
+  const ids = Object.keys(AG_SEL).filter((i) => AG_SEL[i] > 0 && TODO.inventario[Number(i)]);
+  if (!ids.length) { toast("Escribe una cantidad mayor a 0"); return; }
+  try {
+    for (const i of ids) {
+      const p = TODO.inventario[Number(i)], n = AG_SEL[i];
+      const ant = num(p[4]), nvo = ant + n;
+      await actualizarStock(p, nvo);
+      await logMov(p, "Entrada", n, ant, nvo, "Ingreso de stock");
+    }
+    AG_SEL = {}; AG_Q = "";
+    toast("Stock actualizado");
+    await recargar();
+    if (AG_ABIERTO) agRender();
+  } catch { toast("Error de conexión"); }
+}
 // ---------- venta rápida (dock sobre la sección 1, comparte CARRITO) ----------
 let VR_MODO = "Normal", VR_Q = "";
 const VR_MODOS_DEF = ["Normal", "Bolirrana", "Dados"];
@@ -149,6 +223,7 @@ function vrModos() {
 function vrGuardarModos(m) { try { localStorage.setItem("kapta_modos_" + SES.code, JSON.stringify(m)); } catch {} }
 function vrAbrir() {
   VR_Q = ""; if ($("vr-buscar")) $("vr-buscar").value = "";
+  CARRITO = {};
   if ($("vr-cliente") && !$("vr-cliente").value) $("vr-cliente-x").classList.add("oculto");
   $("resumen").classList.add("oculto"); $("bloque-perfil").classList.add("oculto");
   $("venta-rapida").classList.remove("oculto");
@@ -183,12 +258,25 @@ function vrRender() {
     VR_MODO = nom; vrRender();
   });
   mb.appendChild(more);
-  const q = (VR_Q || "").toLowerCase();
-  const list = invRows().filter((p) => !q || (p[2] || "").toLowerCase().includes(q));
+  const q = (VR_Q || "").toLowerCase().trim();
+  const enCarro = (idx) => CARRITO[idx] && CARRITO[idx].qty > 0;
+  const sug = q ? invRows().filter((p) => (p[2] || "").toLowerCase().includes(q) && !enCarro((TODO.inventario || []).indexOf(p))).slice(0, 6) : [];
+  const sb = $("vr-sug");
+  if (sb) {
+    sb.classList.toggle("oculto", !sug.length);
+    sb.innerHTML = sug.map((p) => `<button data-i="${(TODO.inventario || []).indexOf(p)}">${esc(p[2])}</button>`).join("");
+    sb.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+      CARRITO[b.dataset.i] = { qty: 1, min: false };
+      VR_Q = ""; if ($("vr-buscar")) $("vr-buscar").value = "";
+      vrRender();
+    }));
+  }
+  const ids = Object.keys(CARRITO).filter((i) => enCarro(i) && TODO.inventario[Number(i)]);
   const g = $("vr-grid");
-  g.innerHTML = list.length ? "" : '<div class="card">Sin productos.</div>';
-  list.forEach((p) => {
-    const idx = (TODO.inventario || []).indexOf(p);
+  g.innerHTML = ids.length ? "" : '<div class="card">Busca productos para agregar a la venta.</div>';
+  ids.forEach((i) => {
+    const p = TODO.inventario[Number(i)];
+    const idx = Number(i);
     const it = CARRITO[idx] || { qty: 0, min: false };
     const tieneMin = num(p[7]) > 0;
     const usaMin = it.min && tieneMin;
@@ -257,6 +345,16 @@ async function vrCobrar(fiabl) {
   } catch { toast("Error de conexión"); }
 }
 if ($("vr-buscar")) $("vr-buscar").addEventListener("input", () => { VR_Q = $("vr-buscar").value; vrRender(); });
+if ($("vr-buscar")) $("vr-buscar").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || !TODO) return;
+  const q = ($("vr-buscar").value || "").toLowerCase().trim();
+  if (!q) return;
+  const p = invRows().find((x) => (x[2] || "").toLowerCase().includes(q) && !(CARRITO[(TODO.inventario || []).indexOf(x)] || {}).qty);
+  if (!p) return;
+  CARRITO[(TODO.inventario || []).indexOf(p)] = { qty: 1, min: false };
+  VR_Q = ""; $("vr-buscar").value = "";
+  vrRender();
+});
 if ($("vr-cliente")) $("vr-cliente").addEventListener("input", () => {
   $("vr-cliente-x").classList.toggle("oculto", !$("vr-cliente").value.trim());
 });
@@ -715,45 +813,51 @@ function pintarResumen() {
     b.className = "accb " + cls; b.innerHTML = `<img src="img/pos/acciones/${icon}?v=1" alt=""><span>${txt}</span>`;
     b.addEventListener("click", () => {
       if (k === "venta") { vrAbierta() ? vrCerrar() : vrAbrir(); return; }
-      if (k === "gasto") { tab("finanzas"); setTimeout(() => abrirGasto(), 100); }
-      else tab(go);
+      if (k === "agregar") { agToggle(); return; }
+      if (k === "gasto") { agCerrar(); tab("finanzas"); setTimeout(() => abrirGasto(), 100); return; }
+      agCerrar();
+      tab(go);
     });
     $("acciones").appendChild(b);
   });
   $("bloque-alertas").classList.toggle("oculto", !s.alertas);
   if (s.alertas) {
-    const items = invRows().map((p) => [p, alertaDe(p)]).filter(([, n]) => n > 0);
-    NOTIF_N = items.length;
-    const dot = $("notif-dot");
-    if (dot) dot.style.display = NOTIF_N ? "" : "none";
-    const abox = $("alertas");
-    if (!items.length) {
-      abox.innerHTML = '<div class="card">¡Todo en orden! Stock suficiente.</div>';
-    } else {
-      abox.innerHTML = items.map(([p]) => {
-        const idx = (TODO.inventario || []).indexOf(p);
-        const n = alertaDe(p);
-        const img = p[12] ? `<img src="${esc(p[12])}" alt="" loading="lazy">` : "";
-        return `<div class="acard"><span class="athumb">${img}</span><span class="ainfo"><b>${esc(p[2])}</b><small>Quedan ${p[4]} und</small></span><span class="abadge ${n === 2 ? "abajo" : "amedio"}">${n === 2 ? "Stock Bajo" : "Stock Medio"}</span><button class="aplus" data-i="${idx}" title="Agregar stock"><img src="img/pos/alerta/agregar2.png?v=1" alt="+"></button></div>`;
-      }).join("");
-      abox.querySelectorAll(".aplus").forEach((b) => b.addEventListener("click", async () => {
-        const p = TODO.inventario[Number(b.dataset.i)];
-        if (!p) return;
-        const c = prompt("¿Cuántas unidades ingresan de " + p[2] + "?", "10");
-        const n = parseInt(c || "", 10);
-        if (!n || n <= 0) return;
-        const ant = num(p[4]), nvo = ant + n;
-        await actualizarStock(p, nvo);
-        await logMov(p, "Entrada", n, ant, nvo, "Ingreso de stock");
-        toast("Stock actualizado"); await recargar();
-      }));
-    }
+    if (AG_ABIERTO) { agTitulo(); agRender(); }
+    else { agTitulo(); pintarAlertas(); }
   } else {
     NOTIF_N = 0;
     const dot = $("notif-dot");
     if (dot) dot.style.display = "none";
   }
   pintarPerfil();
+}
+function pintarAlertas() {
+  const items = invRows().map((p) => [p, alertaDe(p)]).filter(([, n]) => n > 0);
+  NOTIF_N = items.length;
+  const dot = $("notif-dot");
+  if (dot) dot.style.display = NOTIF_N ? "" : "none";
+  const abox = $("alertas");
+  if (!items.length) {
+    abox.innerHTML = '<div class="card">¡Todo en orden! Stock suficiente.</div>';
+  } else {
+    abox.innerHTML = items.map(([p]) => {
+      const idx = (TODO.inventario || []).indexOf(p);
+      const n = alertaDe(p);
+      const img = p[12] ? `<img src="${esc(p[12])}" alt="" loading="lazy">` : "";
+      return `<div class="acard"><span class="athumb">${img}</span><span class="ainfo"><b>${esc(p[2])}</b><small>Quedan ${p[4]} und</small></span><span class="abadge ${n === 2 ? "abajo" : "amedio"}">${n === 2 ? "Stock Bajo" : "Stock Medio"}</span><button class="aplus" data-i="${idx}" title="Agregar stock"><img src="img/pos/alerta/agregar2.png?v=1" alt="+"></button></div>`;
+    }).join("");
+    abox.querySelectorAll(".aplus").forEach((b) => b.addEventListener("click", async () => {
+      const p = TODO.inventario[Number(b.dataset.i)];
+      if (!p) return;
+      const c = prompt("¿Cuántas unidades ingresan de " + p[2] + "?", "10");
+      const n = parseInt(c || "", 10);
+      if (!n || n <= 0) return;
+      const ant = num(p[4]), nvo = ant + n;
+      await actualizarStock(p, nvo);
+      await logMov(p, "Entrada", n, ant, nvo, "Ingreso de stock");
+      toast("Stock actualizado"); await recargar();
+    }));
+  }
 }
 // 0 sin alerta · 1 stock medio (<= 1.5x mínimo) · 2 stock bajo (<= mínimo)
 function alertaDe(p) {
