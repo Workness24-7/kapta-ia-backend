@@ -3,6 +3,7 @@ const VERSION_PWA = "PWA-2026-09-04c";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
+const fmtM = (n) => "$ " + Math.round(Number(n) || 0).toLocaleString("es-CO");
 const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
@@ -112,7 +113,7 @@ function armarDock(sec) {
     b.dataset.tab = k; if (!i) b.classList.add("on");
     b.title = txt;
     b.innerHTML = `<img src="img/pos/dock/${DOCK_ICONS[k]}?v=1" alt="${txt}">`;
-    b.addEventListener("click", () => tab(k));
+    b.addEventListener("click", () => { if (k === "inicio") vrCerrar(); tab(k); });
     $("dock").appendChild(b);
   });
 }
@@ -133,6 +134,137 @@ if ($("vista-dock")) $("vista-dock").querySelectorAll("button").forEach((b) => b
   if (b.dataset.v !== "lista") { toast("La vista recuadro llega pronto"); return; }
   $("vista-dock").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
 }));
+// ---------- venta rápida (dock sobre la sección 1, comparte CARRITO) ----------
+let VR_MODO = "Normal", VR_Q = "";
+const VR_MODOS_DEF = ["Normal", "Bolirrana", "Dados"];
+const H2_RESUMEN = "Resumen General";
+function vrAbierta() { const v = $("venta-rapida"); return !!(v && !v.classList.contains("oculto")); }
+function vrModos() {
+  try {
+    const arr = JSON.parse(localStorage.getItem("kapta_modos_" + SES.code) || "null");
+    if (Array.isArray(arr) && arr.length) return arr;
+  } catch {}
+  return [...VR_MODOS_DEF];
+}
+function vrGuardarModos(m) { try { localStorage.setItem("kapta_modos_" + SES.code, JSON.stringify(m)); } catch {} }
+function vrAbrir() {
+  VR_Q = ""; if ($("vr-buscar")) $("vr-buscar").value = "";
+  if ($("vr-cliente") && !$("vr-cliente").value) $("vr-cliente-x").classList.add("oculto");
+  $("resumen").classList.add("oculto"); $("bloque-perfil").classList.add("oculto");
+  $("venta-rapida").classList.remove("oculto");
+  document.querySelector("#t-inicio > h2").textContent = "Venta Rapida";
+  vrRender();
+}
+function vrCerrar() {
+  if (!vrAbierta()) return;
+  $("venta-rapida").classList.add("oculto");
+  $("resumen").classList.remove("oculto"); $("bloque-perfil").classList.remove("oculto");
+  document.querySelector("#t-inicio > h2").textContent = H2_RESUMEN;
+}
+function vrRender() {
+  if (!vrAbierta() || !TODO) return;
+  const modos = vrModos();
+  if (!modos.includes(VR_MODO)) VR_MODO = modos[0];
+  const mb = $("vr-modos");
+  mb.innerHTML = "";
+  modos.forEach((m) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = m; b.classList.toggle("on", m === VR_MODO);
+    b.addEventListener("click", () => { VR_MODO = m; vrRender(); });
+    mb.appendChild(b);
+  });
+  const more = document.createElement("button");
+  more.type = "button"; more.textContent = "+"; more.className = "vr-mas"; more.title = "Agregar modo";
+  more.addEventListener("click", () => {
+    const nom = ((prompt("Nombre del nuevo modo:", "") || "").trim());
+    if (!nom) return;
+    const arr = vrModos();
+    if (!arr.includes(nom)) { arr.push(nom); vrGuardarModos(arr); }
+    VR_MODO = nom; vrRender();
+  });
+  mb.appendChild(more);
+  const q = (VR_Q || "").toLowerCase();
+  const list = invRows().filter((p) => !q || (p[2] || "").toLowerCase().includes(q));
+  const g = $("vr-grid");
+  g.innerHTML = list.length ? "" : '<div class="card">Sin productos.</div>';
+  list.forEach((p) => {
+    const idx = (TODO.inventario || []).indexOf(p);
+    const it = CARRITO[idx] || { qty: 0, min: false };
+    const tieneMin = num(p[7]) > 0;
+    const usaMin = it.min && tieneMin;
+    const pu = usaMin ? num(p[7]) : num(p[6]);
+    const card = document.createElement("div");
+    card.className = "vrcard";
+    card.innerHTML = `${it.qty > 0 ? `<span class="vrbadge">${it.qty}</span>` : ""}`
+      + `<span class="vrfoto">${p[12] ? `<img src="${esc(p[12])}" alt="" loading="lazy">` : ""}</span>`
+      + `<b>${esc(p[2])}</b>`
+      + `<span class="vrprecio-row"><span class="vrprecio${usaMin ? " min" : ""}">$ ${miles(pu)} c/u</span>`
+      + (tieneMin ? `<button class="vrswitch${usaMin ? " on" : ""}" title="Precio mínimo"></button>` : "") + `</span>`;
+    const bump = (d) => {
+      CARRITO[idx] = CARRITO[idx] || { qty: 0, min: false };
+      CARRITO[idx].qty = Math.max(0, CARRITO[idx].qty + d);
+      vrRender();
+    };
+    const badge = card.querySelector(".vrbadge");
+    if (badge) badge.addEventListener("click", (ev) => { ev.stopPropagation(); bump(1); });
+    card.querySelector(".vrfoto").addEventListener("click", () => bump(-1));
+    const sw = card.querySelector(".vrswitch");
+    if (sw) sw.addEventListener("click", () => {
+      CARRITO[idx] = CARRITO[idx] || { qty: 0, min: false };
+      CARRITO[idx].min = !CARRITO[idx].min;
+      vrRender();
+    });
+    g.appendChild(card);
+  });
+  const tot = Object.keys(CARRITO).reduce((a, i) => {
+    const p = TODO.inventario[Number(i)], it = CARRITO[i];
+    if (!p || !it || !it.qty) return a;
+    return a + it.qty * precioEfectivo(p, it.min);
+  }, 0);
+  $("vr-total").textContent = fmtM(tot);
+}
+const miles = (n) => Math.round(Number(n) || 0).toLocaleString("es-CO");
+async function vrCobrar(fiabl) {
+  const ids = Object.keys(CARRITO).filter((i) => CARRITO[i].qty > 0);
+  if (!ids.length) { toast("Agrega productos primero"); return; }
+  const modo = VR_MODO || "Normal";
+  const esBol = modo === "Bolirrana";
+  const mesa = 1;
+  const chico = esBol ? chicoActivo(mesa) : 0;
+  let cliente = ($("vr-cliente").value || "").trim();
+  if (!cliente) cliente = esBol ? `Bolirrana ${mesa}` : "Cliente Mostrador";
+  try {
+    for (const i of ids) {
+      const p = TODO.inventario[Number(i)], it = CARRITO[i], q = it.qty;
+      const pu = precioEfectivo(p, it.min), sub = q * pu;
+      const ant = num(p[4]), nvo = Math.max(0, ant - q);
+      if (fiabl || esBol) {
+        await api({ action: "registrar_deudor", tableName: "Deudores",
+          data: [fechaHora(), cliente, p[2], q, it.min ? "SI" : "", 0, 0, sub, esBol ? `Bolirrana(${mesa})` : modo, "", chico] });
+        await logMov(p, "Salida", q, ant, nvo, "Descuento por deudor");
+      } else {
+        await api({ action: "registrar_venta", tableName: "Ventas",
+          data: ["", hoyISO(), horaHM(), cliente, p[0], p[2], q, pu, sub, "", 0, sub, sub, SES.nombre, "Activo", "", "", "", "", "", "", modo] });
+        await logMov(p, "Salida", q, ant, nvo, "Descuento por venta");
+      }
+      await actualizarStock(p, nvo);
+    }
+    if (esBol) chicoSiguiente(mesa, chico);
+    CARRITO = {}; $("vr-cliente").value = ""; $("vr-cliente-x").classList.add("oculto");
+    toast("Registrado");
+    await recargar();
+    if (vrAbierta()) vrRender();
+  } catch { toast("Error de conexión"); }
+}
+if ($("vr-buscar")) $("vr-buscar").addEventListener("input", () => { VR_Q = $("vr-buscar").value; vrRender(); });
+if ($("vr-cliente")) $("vr-cliente").addEventListener("input", () => {
+  $("vr-cliente-x").classList.toggle("oculto", !$("vr-cliente").value.trim());
+});
+if ($("vr-cliente-x")) $("vr-cliente-x").addEventListener("click", () => {
+  $("vr-cliente").value = ""; $("vr-cliente-x").classList.add("oculto"); $("vr-cliente").focus();
+});
+if ($("vr-paga")) $("vr-paga").addEventListener("click", () => vrCobrar(false));
+if ($("vr-debe")) $("vr-debe").addEventListener("click", () => vrCobrar(true));
 
 // ---------- permisos (mismo esquema JSON que Android) ----------
 const FULL = () => ({ resumen: ["ventas", "gastos", "deudores", "clientes"], acciones: ["venta", "gasto", "agregar", "deudores"], alertas: true, ventasResumen: ["hoy", "semana", "mes"], ventasRanking: true, ventasVerMas: true, ventasVerInventario: true, finPdf: true, finFiltros: ["dia", "mes", "rango"], finVentas: true, finGastos: true, finRegistrar: true, invCarga: true, invMovimientos: true, invCrear: true, invEditar: true, invEliminar: true, invGuardar: true, invHacer: true, invLectura: false, _dockVentas: true, _dockFinanzas: true, _dockInventario: true, _tabDeudores: true });
@@ -534,6 +666,7 @@ async function recargar() {
     pintarCuentaInfo();
     pintarResumen(); pintarVenta(); pintarInventario(); pintarDeudores(); pintarFinanzas(); pintarUsuarios();
     refrescarChrome();
+    if (vrAbierta()) vrRender();
   } catch { toast("Sin conexión"); }
 }
 if ($("btn-recargar")) $("btn-recargar").addEventListener("click", recargar);
@@ -581,6 +714,7 @@ function pintarResumen() {
     const b = document.createElement("button");
     b.className = "accb " + cls; b.innerHTML = `<img src="img/pos/acciones/${icon}?v=1" alt=""><span>${txt}</span>`;
     b.addEventListener("click", () => {
+      if (k === "venta") { vrAbierta() ? vrCerrar() : vrAbrir(); return; }
       if (k === "gasto") { tab("finanzas"); setTimeout(() => abrirGasto(), 100); }
       else tab(go);
     });

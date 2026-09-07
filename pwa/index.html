@@ -75,6 +75,8 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
   #resumen.kpi-resumen { grid-template-rows: 1fr 1fr; }
   .kcard { display: flex; flex-direction: column; justify-content: space-between; min-height: 0; overflow: hidden; }
   #bloque-perfil { grid-column: 1; grid-row: 3; min-height: 0; }
+  #venta-rapida { grid-column: 1; grid-row: 2 / span 2; gap: 12px; }
+  #vr-lista { scrollbar-width: thin; }
   #col-der { grid-column: 2; grid-row: 1 / span 3; min-height: 0; display: flex; flex-direction: column; }
   #bloque-acciones .sec-t { margin-top: 0; }
   #t-inicio #bloque-acciones .sec-t { margin: 0 0 10px; }
@@ -148,8 +150,45 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .abadge.amedio { background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #847b00) border-box; color: #847b00; }
 .aplus { width: 40px; height: 40px; border: 0; background: none; cursor: pointer; padding: 0; flex-shrink: 0; }
 .aplus img { width: 40px; height: 40px; display: block; }
+/* Venta rápida: cubre la sección 1 */
+#venta-rapida { display: flex; flex-direction: column; min-height: 0; }
+.vr-modos { display: flex; gap: 4px; border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 5px; }
+.vr-modos button { flex: 1; border: 0; background: none; border-radius: 18px; padding: 10px 4px; font-size: 15.9px; font-weight: 500; color: #a6a6a6; cursor: pointer; font-family: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vr-modos button.on { background: #a6a6a6; color: #f4f4f4; }
+.vr-modos .vr-mas { flex: 0 0 54px; }
+.vr-busca { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+.vr-busca input { width: 100%; border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#ffffff,#ffffff) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 14px 20px; font-size: 13.9px; font-family: inherit; color: #010101; outline: none; }
+.vr-busca input::placeholder { color: #a6a6a6; }
+#vr-cliente-box { position: relative; display: block; }
+#vr-cliente-box input { padding-right: 44px; }
+#vr-cliente-x { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); border: 0; background: none; cursor: pointer; padding: 4px; }
+#vr-cliente-x img { width: 22px; height: 22px; display: block; }
+#vr-lista { flex: 1; min-height: 0; overflow-y: auto; }
+.vr-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 18px 4px 8px; }
+.vrcard { position: relative; border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 12px; min-width: 0; }
+.vrbadge { position: absolute; top: -16px; right: -8px; width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #5ce1e6, #8c52ff); color: #fff; font-size: 20px; font-weight: 800; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 6px 14px rgba(115,100,240,.35); }
+.vrfoto { display: flex; align-items: center; justify-content: center; border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#edf0f2,#edf0f2) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; aspect-ratio: 1; overflow: hidden; cursor: pointer; }
+.vrfoto img { width: 100%; height: 100%; object-fit: cover; }
+.vrcard > b { display: block; font-size: 9.9px; font-weight: 700; color: #000; margin: 8px 2px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vrprecio-row { display: flex; gap: 8px; align-items: stretch; }
+.vrprecio { flex: 2; border: 1.5px solid transparent; border-radius: 20px; background: linear-gradient(#e2fff1,#e2fff1) padding-box, linear-gradient(135deg, #ffffff, #00aa5d) border-box; color: #00aa5d; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 7px 4px; white-space: nowrap; }
+.vrprecio.min { background: linear-gradient(#fffce2,#fffce2) padding-box, linear-gradient(135deg, #ffffff, #847b00) border-box; color: #847b00; }
+.vrswitch { flex: 1; min-width: 44px; border: 1.5px solid transparent; border-radius: 20px; background: linear-gradient(#f7f7f7,#f7f7f7) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; cursor: pointer; position: relative; }
+.vrswitch::after { content: ""; position: absolute; top: 3px; bottom: 3px; left: 4px; width: calc(50% - 4px); border-radius: 999px; background: #a6a6a6; transition: left .15s ease; }
+.vrswitch.on::after { left: calc(50% + 0px); }
+.vr-total { display: flex; align-items: center; gap: 12px; border: 1.5px solid transparent; border-radius: 7px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 10px 14px; }
+.vr-total-t { font-size: 13.9px; font-weight: 800; color: #000; }
+.vr-total-n { flex: 1; text-align: right; font-size: 17.1px; font-weight: 500; color: #000; white-space: nowrap; }
+.vr-total-btns { display: flex; flex-direction: column; gap: 6px; }
+.vr-total-btns button { border: 1.5px solid transparent; border-radius: 20px; padding: 5px 24px; font-size: 8.6px; font-weight: 700; cursor: pointer; font-family: inherit; }
+#vr-paga { background: linear-gradient(#e2fff1,#e2fff1) padding-box, linear-gradient(135deg, #ffffff, #00aa5d) border-box; color: #00aa5d; }
+#vr-debe { background: linear-gradient(#ffeee2,#ffeee2) padding-box, linear-gradient(135deg, #ffffff, #ff8a00) border-box; color: #ff8a00; }
+@media (max-width: 1300px) {
+  .vr-grid { grid-template-columns: repeat(2, 1fr); }
+}
 @media (max-width: 900px) {
   #col-der { display: contents; }
+  #vr-lista { max-height: 52vh; }
   #pos-header { margin: 8px 10px 0; padding: 8px 12px; gap: 10px; top: 8px; }
   #pos-negocio { font-size: 16px; max-width: 28vw; }
   #pos-planbar { width: 140px; }
@@ -401,6 +440,15 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
       <div id="bloque-alertas"><div class="alerta-head"><h3 class="sec-t">Alerta de Stock</h3><div class="vista-dock" id="vista-dock"><button data-v="lista" class="on" title="Vista lista"><img src="img/pos/alerta/lista.png?v=1" alt=""></button><button data-v="recuadro" title="Vista recuadro"><img src="img/pos/alerta/recuadro.png?v=1" alt=""></button></div></div><div id="alerta-box"><div id="alertas"></div></div></div>
       </div>
       <div id="bloque-perfil"><h3 class="sec-t">Resumen de perfil</h3><div id="perfil"></div></div>
+      <div id="venta-rapida" class="oculto">
+        <div class="vr-modos" id="vr-modos"></div>
+        <div class="vr-busca">
+          <input id="vr-buscar" placeholder="Busca productos" autocomplete="off">
+          <span id="vr-cliente-box"><input id="vr-cliente" placeholder="Cliente" autocomplete="off"><button id="vr-cliente-x" class="oculto" title="Quitar cliente"><img src="img/pos/acciones/Eliminar_cliente.png?v=1" alt=""></button></span>
+        </div>
+        <div id="vr-lista"><div class="vr-grid" id="vr-grid"></div></div>
+        <div class="vr-total"><span class="vr-total-t">Total</span><span class="vr-total-n" id="vr-total">$ 0</span><span class="vr-total-btns"><button id="vr-paga">Paga</button><button id="vr-debe">Debe</button></span></div>
+      </div>
     </div>
 
     <div id="t-venta" class="tab oculto">
@@ -486,7 +534,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=17"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>
 

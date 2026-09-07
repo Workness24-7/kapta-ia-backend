@@ -1,6 +1,6 @@
 /* Service Worker: CSS dentro del HTML; formas individuales + shell offline, API a red, HTML fresco. */
-const CACHE = "kapta-pwa-v21";
-const SHELL = ["./app.js?v=17", "./manifest.webmanifest", "./img/logo-app.png?v=2", "./img/logo-slogan.png?v=9",
+const CACHE = "kapta-pwa-v22";
+const SHELL = ["./app.js?v=18", "./manifest.webmanifest", "./img/logo-app.png?v=2", "./img/logo-slogan.png?v=9",
   "./img/formas/morada-tl.png?v=10", "./img/formas/nube.png?v=10",
   "./img/formas/destellos.png?v=10", "./img/formas/cian-bl.png?v=10",
   "./img/formas/cian-abajo.png?v=10", "./img/formas/gris.png?v=10",
@@ -18,7 +18,8 @@ const SHELL = ["./app.js?v=17", "./manifest.webmanifest", "./img/logo-app.png?v=
   "./img/pos/acciones/Venta.png?v=1", "./img/pos/acciones/Gasto.png?v=1",
   "./img/pos/acciones/Agregar.png?v=1", "./img/pos/acciones/Deudores.png?v=1",
   "./img/pos/alerta/lista.png?v=1", "./img/pos/alerta/recuadro.png?v=1",
-  "./img/pos/alerta/agregar2.png?v=1", "./img/pos/trespuntos.png?v=1"];
+  "./img/pos/alerta/agregar2.png?v=1", "./img/pos/trespuntos.png?v=1",
+  "./img/pos/acciones/Eliminar_cliente.png?v=1"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
