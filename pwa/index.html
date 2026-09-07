@@ -154,17 +154,24 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .ag-buscar { width: 100%; border: 1.5px solid transparent; border-radius: 13px; background: linear-gradient(#ffffff,#ffffff) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 14px 20px; font-size: 13.9px; font-family: inherit; color: #010101; outline: none; margin: 0 0 10px; }
 .ag-buscar::placeholder { color: #a6a6a6; }
 .ag-sug { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
-.ag-sug button { border: 1.5px solid transparent; border-radius: 13px; background: linear-gradient(#ffffff,#ffffff) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 10px 16px; font-size: 12px; text-align: left; cursor: pointer; color: #010101; font-family: inherit; }
+.ag-sug button { border: 1.5px solid transparent; border-radius: 13px; background: linear-gradient(#ffffff,#ffffff) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 10px 16px; font-size: 13px; text-align: left; cursor: pointer; color: #010101; font-family: inherit; }
+/* Sugerencias flotantes: no estiran el dock */
+.ag-busca-box { position: relative; }
+#vr-busca-box { position: relative; display: block; min-width: 0; }
+.ag-sug.flot { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40; margin: 0; background: linear-gradient(#ffffff,#ffffff) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; border: 1.5px solid transparent; border-radius: 14px; box-shadow: 0 14px 30px rgba(0,0,0,.12); padding: 6px; max-height: 230px; overflow-y: auto; }
+.ag-sug.flot button { border: 0; background: none; border-radius: 10px; width: 100%; padding: 11px 14px; font-size: 13px; }
+.ag-sug.flot button:hover { background: #f1f1f5; }
+.ag-sug.flot button.usar { color: #0011ac; font-weight: 700; }
 .ag-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 4px 2px 10px; }
-.ag-card { border: 1.5px solid transparent; border-radius: 11px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 10px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.ag-card { border: 1.5px solid transparent; border-radius: 11px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 12px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .ag-foto { display: flex; align-items: center; justify-content: center; border: 1.5px solid transparent; border-radius: 10px; background: linear-gradient(#edf0f2,#edf0f2) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; aspect-ratio: 1; overflow: hidden; }
 .ag-foto img { width: 100%; height: 100%; object-fit: cover; }
-.ag-nom { font-size: 6.5px; font-weight: 400; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ag-nom.lg { font-size: 10.9px; font-weight: 700; flex: 1; min-width: 0; }
+.ag-nom { font-size: 10px; font-weight: 600; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ag-nom.lg { font-size: 12px; font-weight: 700; flex: 1; min-width: 0; }
 .ag-row { display: flex; gap: 6px; align-items: stretch; }
-.ag-qty { width: 100%; min-width: 0; border: 1.5px solid transparent; border-radius: 8px; background: linear-gradient(#ffffff,#ffffff) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; text-align: center; font-size: 14px; color: #010101; padding: 6px 2px; outline: none; font-family: inherit; }
-.ag-row .ag-qty { flex: 0 0 34px; }
-.ag-add { flex: 1; border: 0; border-radius: 11px; background: linear-gradient(135deg, #5ce1e6, #8c52ff); color: #fff; font-size: 7px; font-weight: 800; cursor: pointer; padding: 8px 4px; font-family: inherit; white-space: nowrap; }
+.ag-qty { width: 100%; min-width: 0; border: 1.5px solid transparent; border-radius: 8px; background: linear-gradient(#ffffff,#ffffff) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; text-align: center; font-size: 15px; color: #010101; padding: 6px 2px; outline: none; font-family: inherit; }
+.ag-row .ag-qty { flex: 0 0 46px; }
+.ag-add { flex: 1; border: 0; border-radius: 11px; background: linear-gradient(135deg, #5ce1e6, #8c52ff); color: #fff; font-size: 10px; font-weight: 800; cursor: pointer; padding: 10px 4px; font-family: inherit; white-space: nowrap; }
 .ag-lista { display: flex; flex-direction: column; gap: 14px; padding: 4px 2px 10px; }
 .ag-lrow { display: flex; align-items: center; gap: 10px; border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 10px 14px; }
 .ag-foto.sm { width: 52px; height: 52px; aspect-ratio: auto; flex-shrink: 0; }
@@ -191,14 +198,14 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 #vr-lista { flex: 1; min-height: 0; overflow-y: auto; }
 .vr-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 18px 4px 8px; }
 .vrcard { position: relative; border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 12px; min-width: 0; }
-.vrbadge { position: absolute; top: -16px; right: -8px; width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #5ce1e6, #8c52ff); color: #fff; font-size: 20px; font-weight: 800; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 6px 14px rgba(115,100,240,.35); }
+.vrbadge { position: absolute; top: -16px; right: -8px; width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #5ce1e6, #8c52ff); color: #fff; font-size: 20px; font-weight: 800; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 6px 14px rgba(115,100,240,.35); touch-action: manipulation; }
 .vrfoto { display: flex; align-items: center; justify-content: center; border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#edf0f2,#edf0f2) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; aspect-ratio: 1; overflow: hidden; cursor: pointer; }
 .vrfoto img { width: 100%; height: 100%; object-fit: cover; }
-.vrcard > b { display: block; font-size: 9.9px; font-weight: 700; color: #000; margin: 8px 2px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vrcard > b { display: block; font-size: 13px; font-weight: 700; color: #000; margin: 8px 2px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vrprecio-row { display: flex; gap: 8px; align-items: stretch; }
 .vrprecio { flex: 2; border: 1.5px solid transparent; border-radius: 20px; background: linear-gradient(#e2fff1,#e2fff1) padding-box, linear-gradient(135deg, #ffffff, #00aa5d) border-box; color: #00aa5d; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 7px 4px; white-space: nowrap; }
 .vrprecio.min { background: linear-gradient(#fffce2,#fffce2) padding-box, linear-gradient(135deg, #ffffff, #847b00) border-box; color: #847b00; }
-.vrswitch { flex: 1; min-width: 44px; border: 1.5px solid transparent; border-radius: 20px; background: linear-gradient(#f7f7f7,#f7f7f7) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; cursor: pointer; position: relative; }
+.vrswitch { flex: 1; min-width: 52px; border: 1.5px solid transparent; border-radius: 20px; background: linear-gradient(#f7f7f7,#f7f7f7) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; cursor: pointer; position: relative; touch-action: manipulation; }
 .vrswitch::after { content: ""; position: absolute; top: 3px; bottom: 3px; left: 4px; width: calc(50% - 4px); border-radius: 999px; background: #a6a6a6; transition: left .15s ease; }
 .vrswitch.on::after { left: calc(50% + 0px); }
 .vr-total { display: flex; align-items: center; gap: 12px; border: 1.5px solid transparent; border-radius: 7px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 10px 14px; }
@@ -468,10 +475,9 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
       <div id="venta-rapida" class="oculto">
         <div class="vr-modos" id="vr-modos"></div>
         <div class="vr-busca">
-          <input id="vr-buscar" placeholder="Busca productos" autocomplete="off">
-          <span id="vr-cliente-box"><input id="vr-cliente" placeholder="Cliente" autocomplete="off"><button id="vr-cliente-x" class="oculto" title="Quitar cliente"><img src="img/pos/acciones/Eliminar_cliente.png?v=1" alt=""></button></span>
+          <span id="vr-busca-box"><input id="vr-buscar" placeholder="Busca productos" autocomplete="off"><div id="vr-sug" class="ag-sug flot oculto"></div></span>
+          <span id="vr-cliente-box"><input id="vr-cliente" placeholder="Cliente" autocomplete="off"><button id="vr-cliente-x" class="oculto" title="Quitar cliente"><img src="img/pos/acciones/Eliminar_cliente.png?v=1" alt=""></button><div id="vr-cli-sug" class="ag-sug flot oculto"></div></span>
         </div>
-        <div id="vr-sug" class="ag-sug oculto"></div>
         <div id="vr-lista"><div class="vr-grid" id="vr-grid"></div></div>
         <div class="vr-total"><span class="vr-total-t">Total</span><span class="vr-total-n" id="vr-total">$ 0</span><span class="vr-total-btns"><button id="vr-paga">Paga</button><button id="vr-debe">Debe</button></span></div>
       </div>

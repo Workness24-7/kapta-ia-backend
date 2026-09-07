@@ -159,8 +159,8 @@ function agRender() {
   const sel = Object.keys(AG_SEL).map(Number).filter((i) => TODO.inventario[i]).map((i) => [i, TODO.inventario[i]]);
   const q = (AG_Q || "").toLowerCase().trim();
   const sug = q ? invRows().filter((p) => (p[2] || "").toLowerCase().includes(q) && !AG_SEL.hasOwnProperty(agIdx(p))).slice(0, 6) : [];
-  let h = `<input id="ag-buscar" class="ag-buscar" placeholder="Buscar producto" autocomplete="off" value="${esc(AG_Q || "")}">`;
-  h += `<div id="ag-sug" class="ag-sug${sug.length ? "" : " oculto"}">${sug.map((p) => `<button data-i="${agIdx(p)}">${esc(p[2])}</button>`).join("")}</div>`;
+  let h = `<div class="ag-busca-box"><input id="ag-buscar" class="ag-buscar" placeholder="Buscar producto" autocomplete="off" value="${esc(AG_Q || "")}">`;
+  h += `<div id="ag-sug" class="ag-sug flot${sug.length ? "" : " oculto"}">${sug.map((p) => `<button data-i="${agIdx(p)}">${esc(p[2])}</button>`).join("")}</div></div>`;
   if (!sel.length) h += `<div class="card">Busca y selecciona productos para agregar stock.</div>`;
   else if (AG_VISTA === "recuadro") {
     h += `<div class="ag-grid">${sel.map(([i, p]) => `<div class="ag-card"><span class="ag-foto">${p[12] ? `<img src="${esc(p[12])}" alt="" loading="lazy">` : ""}</span><b class="ag-nom">${esc(p[2])}</b><span class="ag-row"><input class="ag-qty" data-i="${i}" inputmode="numeric" value="${AG_SEL[i] || 1}"><button class="ag-add" data-i="${i}">Agregar</button></span></div>`).join("")}</div>`;
@@ -171,7 +171,14 @@ function agRender() {
   box.innerHTML = h;
   const inp = $("ag-buscar");
   if (inp) {
-    inp.addEventListener("input", () => { AG_Q = inp.value; agRender(); const r = $("ag-buscar"); if (r) { r.focus(); r.setSelectionRange(r.value.length, r.value.length); } });
+    inp.addEventListener("input", () => {
+      const s = inp.selectionStart, e = inp.selectionEnd;
+      AG_Q = inp.value; agRender();
+      const r = $("ag-buscar");
+      if (r) { r.focus(); try { r.setSelectionRange(s, e); } catch {} }
+    });
+    inp.addEventListener("focus", () => { const s = $("ag-sug"); if (s && s.children.length) s.classList.remove("oculto"); });
+    inp.addEventListener("blur", () => setTimeout(() => { const s = $("ag-sug"); if (s) s.classList.add("oculto"); }, 150));
     // ponytail: sin dropdown-keyboard; clic o Enter agrega la primera coincidencia
     inp.addEventListener("keydown", (e) => { if (e.key === "Enter" && sug.length) { const i = agIdx(sug[0]); AG_SEL[i] = 1; AG_Q = ""; agRender(); } });
   }
@@ -263,12 +270,27 @@ function vrRender() {
   const sug = q ? invRows().filter((p) => (p[2] || "").toLowerCase().includes(q) && !enCarro((TODO.inventario || []).indexOf(p))).slice(0, 6) : [];
   const sb = $("vr-sug");
   if (sb) {
-    sb.classList.toggle("oculto", !sug.length);
+    sb.classList.toggle("oculto", !(sug.length && document.activeElement === $("vr-buscar")));
     sb.innerHTML = sug.map((p) => `<button data-i="${(TODO.inventario || []).indexOf(p)}">${esc(p[2])}</button>`).join("");
     sb.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
       CARRITO[b.dataset.i] = { qty: 1, min: false };
       VR_Q = ""; if ($("vr-buscar")) $("vr-buscar").value = "";
       vrRender();
+    }));
+  }
+  const cliInp = $("vr-cliente"), cb = $("vr-cli-sug");
+  if (cb && cliInp) {
+    const cq = (cliInp.value || "").trim().toLowerCase();
+    const todos = clientesConocidos();
+    const exact = cq && todos.some((n) => n.toLowerCase() === cq);
+    const m = todos.filter((n) => !cq || (n.toLowerCase().includes(cq) && n.toLowerCase() !== cq)).slice(0, 6);
+    cb.classList.toggle("oculto", !(document.activeElement === cliInp && (m.length || (cq && !exact))));
+    cb.innerHTML = m.map((n) => `<button data-n="${esc(n)}">${esc(n)}</button>`).join("")
+      + ((cq && !exact) ? `<button class="usar" data-n="${esc(cliInp.value.trim())}">＋ Usar "${esc(cliInp.value.trim())}"</button>` : "");
+    cb.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+      cliInp.value = b.dataset.n;
+      $("vr-cliente-x").classList.remove("oculto");
+      cliInp.blur(); vrRender();
     }));
   }
   const ids = Object.keys(CARRITO).filter((i) => enCarro(i) && TODO.inventario[Number(i)]);
@@ -345,6 +367,8 @@ async function vrCobrar(fiabl) {
   } catch { toast("Error de conexión"); }
 }
 if ($("vr-buscar")) $("vr-buscar").addEventListener("input", () => { VR_Q = $("vr-buscar").value; vrRender(); });
+if ($("vr-buscar")) $("vr-buscar").addEventListener("focus", () => vrRender());
+if ($("vr-buscar")) $("vr-buscar").addEventListener("blur", () => setTimeout(() => { const b = $("vr-sug"); if (b) b.classList.add("oculto"); }, 150));
 if ($("vr-buscar")) $("vr-buscar").addEventListener("keydown", (e) => {
   if (e.key !== "Enter" || !TODO) return;
   const q = ($("vr-buscar").value || "").toLowerCase().trim();
@@ -357,7 +381,10 @@ if ($("vr-buscar")) $("vr-buscar").addEventListener("keydown", (e) => {
 });
 if ($("vr-cliente")) $("vr-cliente").addEventListener("input", () => {
   $("vr-cliente-x").classList.toggle("oculto", !$("vr-cliente").value.trim());
+  vrRender();
 });
+if ($("vr-cliente")) $("vr-cliente").addEventListener("focus", () => vrRender());
+if ($("vr-cliente")) $("vr-cliente").addEventListener("blur", () => setTimeout(() => { const b = $("vr-cli-sug"); if (b) b.classList.add("oculto"); }, 150));
 if ($("vr-cliente-x")) $("vr-cliente-x").addEventListener("click", () => {
   $("vr-cliente").value = ""; $("vr-cliente-x").classList.add("oculto"); $("vr-cliente").focus();
 });
@@ -1171,6 +1198,18 @@ function agruparDeudores() {
   return Object.values(map).filter((d) => d.pendiente > 0.5);
 }
 const esBolirrana = (d) => /^bolirrana/i.test(d.nombre) || d.items.some((it) => /^bolirrana/i.test(it[8] || ""));
+function clientesConocidos() {
+  const mapa = new Map();
+  const add = (n) => {
+    n = (n || "").trim();
+    if (!n || /^cliente mostrador$/i.test(n)) return;
+    const k = n.toLowerCase();
+    if (!mapa.has(k)) mapa.set(k, n);
+  };
+  try { deuRows().forEach((d) => add(d[1])); } catch {}
+  try { venRows().forEach((v) => add(v[3])); } catch {}
+  return [...mapa.values()].sort((a, b) => a.localeCompare(b, "es"));
+}
 
 function pintarDeudores() {
   const list = agruparDeudores();
