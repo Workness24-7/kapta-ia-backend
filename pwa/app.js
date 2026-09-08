@@ -1,5 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-08";
+const VERSION_PWA = "PWA-2026-09-09";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -306,7 +306,8 @@ function vrRender() {
       + `<span class="vrfoto">${p[12] ? `<img src="${esc(p[12])}" alt="" loading="lazy">` : ""}</span>`
       + `<b>${esc(p[2])}</b>`
       + `<span class="vrprecio-row"><span class="vrprecio${usaMin ? " min" : ""}">$ ${miles(pu)} c/u</span>`
-      + (tieneMin ? `<button class="vrswitch${usaMin ? " on" : ""}" title="Precio mínimo"></button>` : "") + `</span>`;
+      + (tieneMin ? `<button class="vrswitch${usaMin ? " on" : ""}" title="Precio mínimo"></button>` : "") + `</span>`
+      + `<span class="vrgrip" title="Arrastra para cambiar el tamaño de las tarjetas"></span>`;
     const bump = (d) => {
       CARRITO[idx] = CARRITO[idx] || { qty: 0, min: false };
       CARRITO[idx].qty = Math.max(0, CARRITO[idx].qty + d);
@@ -323,6 +324,7 @@ function vrRender() {
     });
     g.appendChild(card);
   });
+  g.querySelectorAll(".vrgrip").forEach(conectarVrGrip);
   const tot = Object.keys(CARRITO).reduce((a, i) => {
     const p = TODO.inventario[Number(i)], it = CARRITO[i];
     if (!p || !it || !it.qty) return a;
@@ -463,14 +465,15 @@ function activarSplits() {
     b.style.flex = "0 0 " + Math.round(h) + "px"; b.style.overflow = "hidden";
     laySet("acc", Math.round(h));
   }, () => { laySet("acc", null); const b = $("bloque-acciones"); b.style.flex = ""; b.style.overflow = ""; });
-  dragSplit($("vr-resize"), (e) => {
-    const g = $("vr-resize");
-    g._x = e.clientX;
+}
+function conectarVrGrip(gr) {
+  if (!gr || !$("vr-grid")) return;
+  dragSplit(gr, (e) => {
+    gr._x = e.clientX;
     const cur = getComputedStyle($("vr-grid")).getPropertyValue("--vrw");
-    g._w = parseInt(cur, 10) || 170;
+    gr._w = parseInt(cur, 10) || 170;
   }, (e) => {
-    const g = $("vr-resize");
-    const w = Math.min(Math.max(g._w + (e.clientX - g._x), 120), 300);
+    const w = Math.min(Math.max(gr._w + (e.clientX - gr._x), 120), 300);
     $("vr-grid").style.setProperty("--vrw", Math.round(w) + "px");
     laySet("vrw", Math.round(w));
   }, () => { laySet("vrw", null); $("vr-grid").style.removeProperty("--vrw"); });

@@ -81,12 +81,12 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
   #col-der { grid-column: 3; grid-row: 1; min-height: 0; display: flex; flex-direction: column; }
   #split-v { grid-column: 2; grid-row: 1; min-height: 0; }
   .split { border-radius: 999px; background: transparent; position: relative; touch-action: none; user-select: none; -webkit-user-select: none; }
-  .split::after { content: ""; position: absolute; inset: 0; margin: auto; border-radius: 999px; background: #c9c9d2; transition: background .15s ease; }
+  .split::after { content: ""; position: absolute; inset: 0; margin: auto; border-radius: 999px; background: linear-gradient(135deg, #5ce1e6, #8c52ff); opacity: 0; transition: opacity .15s ease; }
   .split.v { cursor: col-resize; min-width: 10px; }
   .split.v::after { width: 4px; height: 56px; }
   .split.h { cursor: row-resize; flex: 0 0 10px; min-height: 10px; }
   .split.h::after { width: 56px; height: 4px; }
-  .split:hover::after, .split.on::after { background: linear-gradient(135deg, #5ce1e6, #8c52ff); }
+  .split:hover::after, .split.on::after { opacity: 1; }
   #bloque-acciones .sec-t { margin-top: 0; }
   #t-inicio #bloque-acciones .sec-t { margin: 0 0 10px; }
   #bloque-alertas { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -194,8 +194,10 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 /* Venta rápida: dock grande que contiene buscadores, tarjetas y total */
 #venta-rapida { position: relative; display: flex; flex-direction: column; gap: 12px; min-height: 0; border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#f4f4f4,#f4f4f4) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 14px; box-shadow: 0 10px 26px rgba(0,0,0,.05); }
 #venta-rapida > h2 { margin: 0; }
-#vr-resize { position: absolute; right: 5px; bottom: 5px; width: 24px; height: 24px; cursor: nwse-resize; touch-action: none; border-radius: 0 0 20px 0; background: linear-gradient(135deg, transparent 50%, #a6a6a6 50%); opacity: .75; z-index: 5; }
-#vr-resize:hover { opacity: 1; background: linear-gradient(135deg, transparent 50%, #8c52ff 50%); }
+.vrgrip { position: absolute; right: 4px; bottom: 4px; width: 22px; height: 22px; cursor: nwse-resize; touch-action: none; border-radius: 0 0 18px 0; background: linear-gradient(135deg, transparent 55%, #b9b9c4 55%); opacity: 0; transition: opacity .15s ease; z-index: 3; }
+.vrcard:hover .vrgrip { opacity: .85; }
+.vrgrip:hover { opacity: 1 !important; background: linear-gradient(135deg, transparent 55%, #8c52ff 55%); }
+@media (hover: none) { .vrgrip { opacity: .7; } }
 .vr-modos { display: flex; gap: 4px; border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 5px; }
 .vr-modos button { flex: 1; border: 0; background: none; border-radius: 18px; padding: 10px 4px; font-size: 15.9px; font-weight: 500; color: #a6a6a6; cursor: pointer; font-family: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vr-modos button.on { background: #a6a6a6; color: #f4f4f4; }
@@ -230,11 +232,64 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 @media (max-width: 1300px) {
   #t-inicio .sec-t { font-size: clamp(16px, min(1.7vw, 3.2vh), 24px); }
 }
+/* Pantallas reducidas: todo compacto, nada se solapa ni se recorta */
+@media (max-width: 1150px) {
+  #p-pos .tab { padding: 16px clamp(10px, 2vw, 20px) 0 clamp(96px, 10vw, 116px); }
+  #t-inicio.tab { gap: 2px 8px; }
+  #col-izq > h2, #venta-rapida > h2 { font-size: clamp(16px, 2.2vw, 22px); }
+  #t-inicio .sec-t { font-size: clamp(15px, 2vw, 20px); margin: 12px 0 8px; }
+  .alerta-head { flex-wrap: wrap; gap: 4px 8px; }
+  .alerta-head .sec-t, .vista-dock { margin: 12px 0 8px; }
+  .kcard { padding: 12px 14px; }
+  .kcard .knum { font-size: clamp(22px, min(3.4vw, 7vh), 54px); }
+  .kcard .ksub { font-size: 10px; }
+  #resumen.kpi-resumen { gap: 12px; }
+  #acciones.acc-grid { grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 10px; }
+  .accb { padding: 14px 4px 12px; font-size: 10px; }
+  .vr-busca { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 8px; }
+  #vr-busca-box, #vr-cliente-box { min-width: 0; }
+  .vr-busca input { min-width: 0; padding: 12px 14px; font-size: 12.5px; }
+  .vr-modos button { font-size: 13px; padding: 8px 2px; }
+  .vr-grid { gap: 12px; padding: 12px 2px 6px; }
+  .vrcard > b { font-size: 12px; }
+  .vrprecio { font-size: 11px; }
+  .vr-total { flex-wrap: wrap; }
+  .vr-total-n { flex: 1 1 auto; min-width: 110px; font-size: 15px; }
+  .acard { padding: 8px 10px; gap: 8px; }
+  .acard .athumb { width: 44px; height: 44px; border-radius: 13px; }
+  .acard .ainfo b { font-size: 10px; }
+  .acard .ainfo small { font-size: 10px; }
+  .abadge { padding: 4px 10px; font-size: 9px; }
+  .aplus { width: 34px; height: 34px; }
+  .aplus img { width: 34px; height: 34px; }
+  .ag-lrow { gap: 8px; padding: 8px 10px; }
+  .ag-nom.lg { font-size: 11px; }
+  .ag-menmas img { width: 22px; height: 22px; }
+  .ag-lrow .ag-qty { flex-basis: 48px; }
+  .perfil-card { padding: 14px 16px; gap: 12px; }
+  .perfil-datos { padding-right: clamp(104px, 13vw, 150px); }
+  .perfil-clave { padding: 5px 14px; font-size: 13px; }
+  #pos-header { padding: 8px 12px; gap: 10px; }
+  #pos-negocio { font-size: 16px; max-width: 30vw; }
+  #pos-planbar { width: min(220px, 24vw); }
+  #btn-yo { padding: 6px 16px; font-size: 13px; }
+  #btn-notif, #pos-avatar { width: 42px; height: 42px; }
+  #pos-logo-sq { width: 42px; height: 42px; }
+}
+/* Pantallas bajas: compacta alturas para que quepa sin recortes */
+@media (min-width: 901px) and (max-height: 720px) {
+  #p-pos .tab { padding-top: 12px; }
+  #t-inicio .sec-t { margin: 10px 0 8px; }
+  .alerta-head .sec-t, .vista-dock { margin: 10px 0 8px; }
+  .kcard { padding: 12px 16px; --kico: 44px; }
+  .accb { padding: 12px 4px 10px; gap: 8px; }
+  #alertas { gap: 8px; }
+  .perfil-card { padding: 12px 16px; }
+}
 @media (max-width: 900px) {
   #col-der { display: contents; }
   #col-izq { display: contents; }
   .split { display: none; }
-  #vr-resize { display: none; }
   #vr-lista { max-height: 52vh; }
   #pos-header { margin: 8px 10px 0; padding: 8px 12px; gap: 10px; top: 8px; }
   #pos-negocio { font-size: 16px; max-width: 28vw; }
@@ -252,6 +307,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 }
 @media (max-width: 560px) {
   #resumen.kpi-resumen { grid-template-columns: 1fr; }
+  .vr-busca { grid-template-columns: 1fr; }
   #acciones.acc-grid { grid-template-columns: repeat(2, 1fr); }
   .perfil-clave { top: 14px; right: 14px; padding: 5px 14px; font-size: 13px; }
   .perfil-datos { padding-right: 110px; }
@@ -501,7 +557,6 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
         </div>
         <div id="vr-lista"><div class="vr-grid" id="vr-grid"></div></div>
         <div class="vr-total"><span class="vr-total-t">Total</span><span class="vr-total-n" id="vr-total">$ 0</span><span class="vr-total-btns"><button id="vr-paga">Paga</button><button id="vr-debe">Debe</button></span></div>
-        <div id="vr-resize" title="Mantén clic y arrastra para cambiar el tamaño de las tarjetas"></div>
       </div>
     </div>
 
@@ -588,7 +643,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>
 
