@@ -1,5 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-10";
+const VERSION_PWA = "PWA-2026-09-11";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -390,21 +390,6 @@ if ($("vr-cliente-x")) $("vr-cliente-x").addEventListener("click", () => {
 if ($("vr-paga")) $("vr-paga").addEventListener("click", () => vrCobrar(false));
 if ($("vr-debe")) $("vr-debe").addEventListener("click", () => vrCobrar(true));
 
-// ---------- escala proporcional (901-1600px se ve tal cual el diseño 1600) ----------
-const DIS_W = 1600;
-function zFactor() {
-  try { const z = parseFloat(($("p-pos").style || {}).zoom); return z > 0 && z < 5 ? z : 1; } catch { return 1; }
-}
-function ajusteEscala() {
-  try {
-    const p = $("p-pos");
-    if (!p) return;
-    const w = window.innerWidth || 0;
-    p.style.zoom = (w > 900 && w < DIS_W) ? String(w / DIS_W) : "";
-  } catch {}
-}
-window.addEventListener("resize", ajusteEscala);
-window.addEventListener("orientationchange", ajusteEscala);
 // ---------- divisores arrastrables del inicio + tamaño tarjetas VR ----------
 function layKey(k) {
   let code = "pub";
@@ -452,31 +437,31 @@ function activarSplits() {
   const ti = $("t-inicio");
   if (!ti) return;
   dragSplit($("split-v"), (e) => {
-    const s = $("split-v"), k = zFactor();
-    s._x = e.clientX; s._w = $("col-izq").getBoundingClientRect().width / k; s._tw = ti.getBoundingClientRect().width / k;
+    const s = $("split-v");
+    s._x = e.clientX; s._w = $("col-izq").getBoundingClientRect().width; s._tw = ti.getBoundingClientRect().width;
   }, (e) => {
-    const s = $("split-v"), k = zFactor();
-    const w = Math.min(Math.max(s._w + (e.clientX - s._x) / k, 300), s._tw - 300);
+    const s = $("split-v");
+    const w = Math.min(Math.max(s._w + e.clientX - s._x, 300), s._tw - 300);
     ti.style.gridTemplateColumns = `minmax(0,${Math.round(w)}px) 10px minmax(0,1fr)`;
     laySet("col", Math.round(w));
   }, () => { laySet("col", null); ti.style.gridTemplateColumns = ""; });
   dragSplit($("split-hl"), (e) => {
-    const s = $("split-hl"), k = zFactor();
-    s._y = e.clientY; s._h = $("resumen").getBoundingClientRect().height / k;
-    s._min = 180; s._max = Math.max(200, $("col-izq").getBoundingClientRect().height / k - 170);
+    const s = $("split-hl");
+    s._y = e.clientY; s._h = $("resumen").getBoundingClientRect().height;
+    s._min = 180; s._max = Math.max(200, $("col-izq").getBoundingClientRect().height - 170);
   }, (e) => {
-    const s = $("split-hl"), r = $("resumen"), k = zFactor();
-    const h = Math.min(Math.max(s._h + (e.clientY - s._y) / k, s._min), s._max);
+    const s = $("split-hl"), r = $("resumen");
+    const h = Math.min(Math.max(s._h + e.clientY - s._y, s._min), s._max);
     r.style.flex = "0 0 " + Math.round(h) + "px"; r.style.overflow = "hidden";
     laySet("res", Math.round(h));
   }, () => { laySet("res", null); const r = $("resumen"); r.style.flex = ""; r.style.overflow = ""; });
   dragSplit($("split-ha"), (e) => {
-    const s = $("split-ha"), k = zFactor();
-    s._y = e.clientY; s._h = $("bloque-acciones").getBoundingClientRect().height / k;
-    s._min = 120; s._max = Math.max(140, $("col-der").getBoundingClientRect().height / k - 220);
+    const s = $("split-ha");
+    s._y = e.clientY; s._h = $("bloque-acciones").getBoundingClientRect().height;
+    s._min = 120; s._max = Math.max(140, $("col-der").getBoundingClientRect().height - 220);
   }, (e) => {
-    const s = $("split-ha"), b = $("bloque-acciones"), k = zFactor();
-    const h = Math.min(Math.max(s._h + (e.clientY - s._y) / k, s._min), s._max);
+    const s = $("split-ha"), b = $("bloque-acciones");
+    const h = Math.min(Math.max(s._h + e.clientY - s._y, s._min), s._max);
     b.style.flex = "0 0 " + Math.round(h) + "px"; b.style.overflow = "hidden";
     laySet("acc", Math.round(h));
   }, () => { laySet("acc", null); const b = $("bloque-acciones"); b.style.flex = ""; b.style.overflow = ""; });
@@ -488,7 +473,7 @@ function conectarVrGrip(gr) {
     const cur = getComputedStyle($("vr-grid")).getPropertyValue("--vrw");
     gr._w = parseInt(cur, 10) || 170;
   }, (e) => {
-    const w = Math.min(Math.max(gr._w + (e.clientX - gr._x) / zFactor(), 120), 300);
+    const w = Math.min(Math.max(gr._w + (e.clientX - gr._x), 120), 300);
     $("vr-grid").style.setProperty("--vrw", Math.round(w) + "px");
     laySet("vrw", Math.round(w));
   }, () => { laySet("vrw", null); $("vr-grid").style.removeProperty("--vrw"); });
@@ -816,7 +801,7 @@ async function entrar() {
   }
   $("btn-regalo").style.display = ME.admin ? "" : "none";
   tab("inicio");
-  activarSplits(); aplicarLayout(); ajusteEscala();
+  activarSplits(); aplicarLayout();
   try {
     const cv = document.getElementById("cuenta-version");
     if (cv) cv.textContent = VERSION_PWA;
@@ -1752,7 +1737,7 @@ function imprimir(titulo, html) {
     navigator.serviceWorker.ready.then((r) => { try { r.update(); } catch { /* noop */ } }).catch(() => {});
   }
   pintarPaises();
-  activarSplits(); aplicarLayout(); ajusteEscala();
+  activarSplits(); aplicarLayout();
   try {
     const vv = document.getElementById("app-version");
     if (vv) vv.textContent = VERSION_PWA;

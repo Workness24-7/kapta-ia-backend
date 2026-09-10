@@ -229,6 +229,51 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .vr-total-btns button { border: 1.5px solid transparent; border-radius: 20px; padding: 5px 24px; font-size: 8.6px; font-weight: 700; cursor: pointer; font-family: inherit; }
 #vr-paga { background: linear-gradient(#e2fff1,#e2fff1) padding-box, linear-gradient(135deg, #ffffff, #00aa5d) border-box; color: #00aa5d; }
 #vr-debe { background: linear-gradient(#ffeee2,#ffeee2) padding-box, linear-gradient(135deg, #ffffff, #ff8a00) border-box; color: #ff8a00; }
+/* Pantallas medianas: mismo orden del prototipo, medidas ajustadas sin recortes */
+@media (max-width: 1150px) {
+  #p-pos .tab { padding: 16px clamp(10px, 2vw, 20px) 0 clamp(96px, 10vw, 116px); }
+  #t-inicio.tab { gap: 2px 8px; }
+  #col-izq > h2, #venta-rapida > h2 { font-size: clamp(16px, 2.2vw, 22px); }
+  #t-inicio .sec-t { font-size: clamp(15px, 2vw, 20px); margin: 12px 0 8px; }
+  .alerta-head { flex-wrap: wrap; gap: 4px 8px; }
+  .alerta-head .sec-t, .vista-dock { margin: 12px 0 8px; }
+  .kcard { padding: 12px 14px; }
+  .kcard .knum { font-size: clamp(22px, 18cqi, 54px); }
+  .kcard .ksub { font-size: 10px; }
+  #resumen.kpi-resumen { gap: 12px; }
+  #acciones.acc-grid { grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 10px; }
+  .accb { padding: 14px 4px 12px; font-size: 10px; }
+  .accb img { width: 72px; height: 72px; }
+  .vr-busca { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 8px; }
+  #vr-busca-box, #vr-cliente-box { min-width: 0; }
+  .vr-busca input { min-width: 0; padding: 12px 14px; font-size: 12.5px; }
+  .vr-modos button { font-size: 13px; padding: 8px 2px; }
+  .vr-grid { gap: 12px; padding: 12px 2px 6px; }
+  .vrcard > b { font-size: 12px; }
+  .vrprecio { font-size: 11px; }
+  .vr-total { flex-wrap: wrap; }
+  .vr-total-n { flex: 1 1 auto; min-width: 110px; font-size: 15px; }
+  .acard { padding: 8px 10px; gap: 8px; }
+  .acard .athumb { width: 44px; height: 44px; border-radius: 13px; }
+  .acard .ainfo b { font-size: 10px; }
+  .acard .ainfo small { font-size: 10px; }
+  .abadge { padding: 4px 10px; font-size: 9px; }
+  .aplus { width: 34px; height: 34px; }
+  .aplus img { width: 34px; height: 34px; }
+  .ag-lrow { gap: 8px; padding: 8px 10px; }
+  .ag-nom.lg { font-size: 11px; }
+  .ag-menmas img { width: 22px; height: 22px; }
+  .ag-lrow .ag-qty { flex-basis: 48px; }
+  .perfil-card { padding: 14px 16px; gap: 12px; }
+  .perfil-datos { padding-right: clamp(104px, 13vw, 150px); }
+  .perfil-clave { padding: 5px 14px; font-size: 13px; }
+  #pos-header { padding: 8px 12px; gap: 10px; }
+  #pos-negocio { font-size: 16px; max-width: 30vw; }
+  #pos-planbar { width: min(220px, 24vw); }
+  #btn-yo { padding: 6px 16px; font-size: 13px; }
+  #btn-notif, #pos-avatar { width: 42px; height: 42px; }
+  #pos-logo-sq { width: 42px; height: 42px; }
+}
 /* Pantallas bajas: compacta alturas para que quepa sin recortes */
 @media (min-width: 901px) and (max-height: 720px) {
   #p-pos .tab { padding-top: 12px; }
@@ -596,7 +641,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=22"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>
 
