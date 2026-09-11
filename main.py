@@ -415,7 +415,7 @@ def action_login(params):
     if not usuario:
         db.registrar_fallo_login(codigo, correo)
         return respuesta_error(MSG_CREDENCIALES)
-    if str(usuario[5] or "") in ("Suspendido", "Bloqueado"):
+    if str(usuario[5] or "") in ("Suspendido", "Bloqueado", "Inactivo"):
         return respuesta_error("Usuario " + str(usuario[5]).lower() + ".")
     if not _verificar_password(password, usuario[3]):
         segundos = db.registrar_fallo_login(codigo, correo)

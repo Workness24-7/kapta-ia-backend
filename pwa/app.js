@@ -1,5 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-12";
+const VERSION_PWA = "PWA-2026-09-13";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -1022,7 +1022,8 @@ function pintarVenta() {
     $("venta-chico-info").classList.remove("oculto");
     $("venta-chico-info").textContent = `Bolirrana ${mesa} • próximo chico: ${chicoActivo(mesa)}`;
   } else $("venta-chico-info").classList.add("oculto");
-  const q = ($("venta-buscar").value || "").toLowerCase();
+  const q = ($("venta-buscar").value || "").toLowerCase().trim();
+  const sinFiltro = !q && (VENTA_CAT || "Todos") === "Todos";
   const cats = ["Todos", ...new Set(invRows().map((p) => (p[3] || "General").trim()).filter(Boolean))];
   $("venta-cats").innerHTML = "";
   cats.forEach((c) => {
@@ -1032,10 +1033,10 @@ function pintarVenta() {
     b.addEventListener("click", () => { VENTA_CAT = c; pintarVenta(); });
     $("venta-cats").appendChild(b);
   });
-  const list = invRows().filter((p) =>
+  const list = sinFiltro ? [] : invRows().filter((p) =>
     (!q || p[2].toLowerCase().includes(q)) &&
     ((VENTA_CAT || "Todos") === "Todos" || (p[3] || "General").trim() === VENTA_CAT));
-  $("venta-productos").innerHTML = list.length ? "" : '<div class="card">Sin productos.</div>';
+  $("venta-productos").innerHTML = list.length ? "" : `<div class="card">${sinFiltro ? "Busca o filtra por categoría para agregar productos." : "Sin productos."}</div>`;
   list.forEach((p) => {
     const idx = (TODO.inventario || []).indexOf(p);
     const img = p[12] ? `<img class="thumb" src="${p[12]}" alt="" loading="lazy">` : "";
@@ -1183,8 +1184,9 @@ function gruposVentas() {
     const id = String(v[0] || "");
     const folio = /^F-/i.test(id);
     const key = folio ? id.toUpperCase() : [v[1], v[2], v[3]].join("|");
-    if (!mapa[key]) mapa[key] = { cod: folio ? id.toUpperCase() : "S/F " + (v[1] || ""), fecha: v[1] || "", hora: v[2] || "", cliente: v[3] || "", modo: v[21] || "Normal", usuario: v[13] || "", estado: "Activo", items: [], total: 0, folio };
+    if (!mapa[key]) mapa[key] = { cod: folio ? id.toUpperCase() : "S/F " + (v[1] || ""), fecha: v[1] || "", hora: v[2] || "", cliente: v[3] || "", modo: v[21] || "Normal", usuario: v[13] || "", estado: "Activo", items: [], total: 0, folio, ids: [] };
     const g = mapa[key];
+    if (id) g.ids.push(id);
     g.items.push({ prod: v[5] || "", cant: num(v[6]), pu: num(v[7]), sub: num(v[8]) || num(v[12]) });
     g.total += num(v[12]);
     if (String(v[14] || "").toLowerCase() === "anulado") g.estado = "Anulado";
@@ -1207,7 +1209,7 @@ function pintarHistorial() {
     const div = document.createElement("div");
     div.className = "card fila-deu";
     div.innerHTML = `<div><b>${esc(g.cod)}</b> ${g.estado === "Anulado" ? '<span class="badge susp">Anulada</span>' : ""}<br><small>${esc(g.fecha)} ${esc(g.hora)} • ${esc(g.cliente)} • ${g.items.length} item(s)</small></div>`
-      + `<div class="cant"><span class="monto">${fmt(g.total)}</span>${g.folio && g.estado !== "Anulado" ? '<button class="btn-mini" data-a="anular">Anular</button>' : ""}</div>`;
+      + `<div class="cant"><span class="monto">${fmt(g.total)}</span>${g.ids.length && g.estado !== "Anulado" ? '<button class="btn-mini" data-a="anular">Anular</button>' : ""}</div>`;
     div.addEventListener("click", (e) => {
       const b = e.target.closest("button[data-a]");
       if (b && b.dataset.a === "anular") { e.stopPropagation(); anularVenta(g); return; }
@@ -1217,7 +1219,8 @@ function pintarHistorial() {
   });
 }
 async function anularVenta(g) {
-  if (!g.folio) { toast("Solo folios F- se pueden anular"); return; }
+  const ids = (g.ids || []).filter(Boolean);
+  if (!ids.length) { toast("Esta venta no tiene folio anulable"); return; }
   if (!confirm(`¿Anular la venta ${g.cod} por ${fmt(g.total)}? Se devolverá el stock.`)) return;
   if (!ME.admin) {
     const clave = (prompt("Clave dinámica del administrador (6 dígitos):", "") || "").trim();
@@ -1228,8 +1231,10 @@ async function anularVenta(g) {
     } catch { toast("Error de conexión"); return; }
   }
   try {
-    const r = await api({ action: "anular_venta", sheetName: SES.code, idVenta: g.cod, usuario: SES.nombre });
-    if (r.status !== "success") { toast(r.message || "No se pudo anular"); return; }
+    for (const id of ids) {
+      const r = await api({ action: "anular_venta", sheetName: SES.code, idVenta: id, usuario: SES.nombre });
+      if (r.status !== "success") { toast(r.message || "No se pudo anular"); return; }
+    }
     for (const it of g.items) {
       const p = (TODO.inventario || []).find((x) => (x[2] || "") === it.prod);
       if (!p || !it.cant) continue;
@@ -1449,10 +1454,22 @@ function verDeudor(d) {
   else verDeudorNormal(det, d);
 }
 
+function historialDeudorHTML(items) {
+  const rows = items.map((it) => {
+    const total = num(it[7]), abon = num(it[5]) + num(it[6]), pend = Math.max(0, total - abon);
+    const est = pend <= 0.5 ? ["Pagado", "activo"] : abon > 0.5 ? ["Abono parcial", "plan"] : ["Sin abono", "susp"];
+    return { fecha: it[0] || "", prod: it[2] || "", total, abon, pend, est };
+  });
+  const tT = rows.reduce((a, r) => a + r.total, 0), tA = rows.reduce((a, r) => a + r.abon, 0);
+  return `<h3>Historial de abonos y pagos</h3><div class="card"><small>Total: ${fmt(tT)} • Abonado: ${fmt(tA)} • Pendiente: ${fmt(Math.max(0, tT - tA))}</small></div>`
+    + (rows.length ? rows.map((r) => `<div class="card"><b>${esc(r.prod)}</b> <span class="badge ${r.est[1]}">${r.est[0]}</span><br><small>${esc(r.fecha)} • Total ${fmt(r.total)} • Abonado ${fmt(r.abon)} • Pendiente ${fmt(r.pend)}</small></div>`).join("") : '<div class="card">Sin registros.</div>');
+}
+
 function verDeudorNormal(det, d) {
   det.innerHTML = `<button class="volver" id="deu-volver">← Deudores</button>
     <h2>${esc(d.nombre)} • ${fmt(d.pendiente)}</h2>` +
     d.items.map((it) => `<div class="card"><b>${esc(it[2])}</b><br><small>${esc(it[0] || "")} • Pendiente: ${fmt(Math.max(0, num(it[7]) - num(it[5]) - num(it[6])))}</small></div>`).join("") +
+    historialDeudorHTML(d.items) +
     `<input id="deu-monto" type="number" inputmode="numeric" placeholder="Monto a pagar" value="${Math.round(d.pendiente)}">
      <div class="fila"><select id="deu-metodo"><option value="Efectivo">Efectivo</option><option value="Transferencia">Transferencia</option></select></div>
      <button class="btn exito" id="deu-pagar">Registrar pago</button>`;
@@ -1507,6 +1524,7 @@ function verChico(d, ch, perdMarcado) {
   const existentes = [...new Set(agruparDeudores().map((x) => x.nombre))];
   det.innerHTML = `<h3>${ch === 0 ? "Pendiente sin número" : "Chico " + ch} • ${fmt(sub)}</h3>` +
     items.map((it) => `<div class="card"><b>${esc(it[2])}</b><br><small>${esc(it[0] || "")}</small></div>`).join("") +
+    historialDeudorHTML(items) +
     `<input id="bol-persona" list="bol-sug" placeholder="Escribe quién pierde (ej. ruben 5)" value="${esc(perdMarcado.length === 1 ? perdMarcado[0] : "")}">
      <datalist id="bol-sug">${existentes.map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
      <button class="btn primario" id="bol-dividir">${"Asignar perdedor"}</button>
@@ -1633,11 +1651,13 @@ function pintarUsuarios() {
   list.forEach((u) => {
     const div = document.createElement("div");
     div.className = "card fila-deu";
-    div.innerHTML = `<div><b>${esc(u[1])}</b><small>${esc(u[4] || "")} • ${esc(u[2] || "")}</small></div>
-      <div class="cant"><button data-a="edit">✏️</button><button data-a="del">🗑️</button></div>`;
+    const act = String(u[5] || "Activo").toLowerCase() === "activo";
+    div.innerHTML = `<div><b>${esc(u[1])}</b> <span class="badge ${act ? "activo" : "susp"}">${act ? "Activo" : "Inactivo"}</span><small>${esc(u[4] || "")} • ${esc(u[2] || "")}</small></div>
+      <div class="cant"><button data-a="estado" title="${act ? "Desactivar" : "Activar"}">${act ? "⏸️" : "▶️"}</button><button data-a="edit">✏️</button><button data-a="del">🗑️</button></div>`;
     div.querySelectorAll("button").forEach((b) => b.addEventListener("click", (ev) => {
       ev.stopPropagation();
       if (b.dataset.a === "edit") formUsuario(u);
+      else if (b.dataset.a === "estado") cambiarEstadoUsuario(u);
       else if (confirm(`¿Eliminar a ${u[1]}?`)) borrarUsuario(u[2]);
     }));
     $("usu-lista").appendChild(div);
@@ -1648,6 +1668,17 @@ $("btn-nuevo-usuario").addEventListener("click", () => formUsuario(null));
 async function borrarUsuario(correo) {
   const r = await api({ action: "eliminar_usuario", sheetName: SES.code, userEmail: correo });
   toast(r.status === "success" ? "Usuario eliminado" : (r.message || "No se pudo eliminar"));
+  await recargar();
+}
+
+async function cambiarEstadoUsuario(u) {
+  const act = String(u[5] || "Activo").toLowerCase() === "activo";
+  if (act && (u[2] || "").toLowerCase() === (SES.correo || "").toLowerCase()) { toast("No puedes desactivar tu propia cuenta"); return; }
+  const nuevo = act ? "Inactivo" : "Activo";
+  if (!confirm(`¿${act ? "Desactivar" : "Activar"} a ${u[1]}?${act ? " No podrá ingresar." : ""}`)) return;
+  const r = await api({ action: "crear_usuario", tableName: "Usuarios",
+    data: [u[0] || "", u[1] || "", u[2] || "", u[3] || "", u[4] || "Cajero", nuevo, u[6] || hoyLat(), fechaHora(), u[8] || "", u[9] || "", u[10] || "", u[11] || ""] });
+  toast(r.status === "success" ? `Usuario ${nuevo.toLowerCase()}` : (r.message || "No se pudo actualizar"));
   await recargar();
 }
 
