@@ -188,6 +188,17 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .ag-menmas { border: 0; background: none; cursor: pointer; padding: 2px; flex-shrink: 0; display: flex; }
 .ag-menmas img { width: 26px; height: 26px; object-fit: contain; display: block; }
 .ag-commit { position: sticky; bottom: 0; width: 100%; border: 0; border-radius: 18px; background: linear-gradient(135deg, #5ce1e6, #8c52ff); color: #fff; font-size: 12.3px; font-weight: 800; cursor: pointer; padding: 13px; font-family: inherit; margin-top: 4px; }
+.dbtn-pago { flex: 1; border: 1.5px solid transparent; border-radius: 20px; background: linear-gradient(#e2fff1,#e2fff1) padding-box, linear-gradient(135deg, #ffffff, #00aa5d) border-box; color: #00aa5d; font-weight: 800; padding: 10px; cursor: pointer; font-family: inherit; font-size: 13px; }
+.dbtn-abono { flex: 1; border: 1.5px solid transparent; border-radius: 20px; background: linear-gradient(#ffeee2,#ffeee2) padding-box, linear-gradient(135deg, #ffffff, #ff8a00) border-box; color: #ff8a00; font-weight: 800; padding: 10px; cursor: pointer; font-family: inherit; font-size: 13px; }
+.rx { color: #e10000; }
+.deu-it { cursor: pointer; }
+.abadge.anulo { background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #8c52ff) border-box; color: #7c3aed; }
+.ag-area { width: 100%; min-height: 130px; border: 1.5px solid transparent; border-radius: 13px; background: linear-gradient(#ffffff,#ffffff) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 14px 16px; font-family: inherit; font-size: 13.9px; color: #010101; outline: none; resize: vertical; margin: 0 0 10px; }
+.ag-area::placeholder { color: #a6a6a6; }
+.gto-fila { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+.gto-fila .ag-buscar { margin-bottom: 10px; }
+.gto-foto { width: 64px; height: 64px; border: 1.5px solid transparent; border-radius: 13px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; display: flex; align-items: center; justify-content: center; font-size: 28px; color: #a6a6a6; cursor: pointer; overflow: hidden; margin-bottom: 10px; }
+.gto-foto img { width: 100%; height: 100%; object-fit: cover; }
 @media (max-width: 1100px) {
   .ag-grid { grid-template-columns: repeat(2, 1fr); }
 }
@@ -650,7 +661,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=25"></script>
+<script src="app.js?v=26"></script>
 </body>
 </html>
 

@@ -1,5 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-13";
+const VERSION_PWA = "PWA-2026-09-14";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -12,7 +12,7 @@ let NOTIF_N = 0;
 let ME = null;               // {row, sec, admin}
 let SUPER = null;            // {correo} sesión maestra
 let NEGOCIOS = [];
-let VENTA_CAT = "Todos";
+let VENTA_CAT = "Todos", INV_CAT = "Todos";
 let CARRITO = {};            // idx -> {qty, min}
 let DEU_SEL = null, CHICO_SEL = null;
 let FIN_FILTRO = "Mes", FIN_DESDE = "", FIN_HASTA = "";
@@ -133,23 +133,29 @@ if ($("dock-search")) $("dock-search").addEventListener("click", () => {
 if ($("vista-dock")) $("vista-dock").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
   AG_VISTA = b.dataset.v === "recuadro" ? "recuadro" : "lista";
   $("vista-dock").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
-  if (AG_ABIERTO) agRender(); else pintarAlertas();
+  if (AG_ABIERTO) agRender(); else if (!DEU_ABIERTO && !GTO_ABIERTO) pintarAlertas();
 }));
 // ---------- agregar stock (dock sobre alerta de stock, vistas lista/recuadro) ----------
 let AG_VISTA = "lista", AG_ABIERTO = false, AG_SEL = {}, AG_Q = "";
+let DEU_ABIERTO = false, DEU_VISTA = "lista", DEU_MET = "Efectivo";
+let GTO_ABIERTO = false, GTO_TIPO = "Administrativo", GTO_FOTO = "";
 const agAbierta = () => AG_ABIERTO;
-function agTitulo() {
+function dockDerRender() {
   const h = document.querySelector(".alerta-head .sec-t");
-  if (h) h.textContent = AG_ABIERTO ? "Agregar Stock y Mercancia" : "Alerta de Stock";
+  if (AG_ABIERTO) { if (h) h.textContent = "Agregar Stock y Mercancia"; agRender(); }
+  else if (DEU_ABIERTO) { if (h) h.textContent = "Deudores"; deuRender(); }
+  else if (GTO_ABIERTO) { if (h) h.textContent = "Gasto"; gtoRender(); }
+  else { if (h) h.textContent = "Alerta de Stock"; pintarAlertas(); }
 }
 function agAbrir() {
   AG_ABIERTO = true; AG_Q = "";
-  agTitulo(); agRender();
+  DEU_ABIERTO = false; GTO_ABIERTO = false; GTO_FOTO = "";
+  dockDerRender();
 }
 function agCerrar() {
   if (!AG_ABIERTO) return;
   AG_ABIERTO = false; AG_SEL = {}; AG_Q = "";
-  agTitulo(); pintarAlertas();
+  dockDerRender();
 }
 function agToggle() { AG_ABIERTO ? agCerrar() : agAbrir(); }
 function agIdx(p) { return (TODO.inventario || []).indexOf(p); }
@@ -214,6 +220,137 @@ async function agCommit() {
     await recargar();
     if (AG_ABIERTO) agRender();
   } catch { toast("Error de conexión"); }
+}
+// ---------- dock deudores (lista → resumen → historial + pago/abono) ----------
+function deuToggle() { DEU_ABIERTO ? deuCerrar() : deuAbrir(); }
+function deuAbrir() {
+  DEU_ABIERTO = true; DEU_SEL = ""; DEU_VISTA = "lista";
+  AG_ABIERTO = false; AG_SEL = {}; GTO_ABIERTO = false; GTO_FOTO = "";
+  dockDerRender();
+}
+function deuCerrar() {
+  if (!DEU_ABIERTO) return;
+  DEU_ABIERTO = false; DEU_SEL = ""; DEU_VISTA = "lista";
+  dockDerRender();
+}
+function deuPieHTML(d) {
+  return `<div class="fila" style="justify-content:space-between;margin-top:8px"><b>Total</b><b>${fmt(d.pendiente)}</b></div>`
+    + `<div class="seg" id="deu-met">${["Efectivo", "Transferencia"].map((m) => `<button data-m="${m}" class="${DEU_MET === m ? "on" : ""}">${m}</button>`).join("")}</div>`
+    + `<div class="fila"><button class="dbtn-pago" id="deu-pago">Pago</button><button class="dbtn-abono" id="deu-abono">Abono</button></div>`;
+}
+function deuWirePie(d) {
+  const met = $("deu-met");
+  if (met) met.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { DEU_MET = b.dataset.m; deuRender(); }));
+  if ($("deu-pago")) $("deu-pago").addEventListener("click", () => pagarDeudorDock(d, false));
+  if ($("deu-abono")) $("deu-abono").addEventListener("click", () => pagarDeudorDock(d, true));
+}
+async function pagarDeudorDock(d, esAbono) {
+  let monto = d.pendiente;
+  if (esAbono) {
+    monto = num(prompt(`Abono para ${d.nombre} (pendiente ${fmt(d.pendiente)}):`, ""));
+    if (monto <= 0) return;
+    if (monto > d.pendiente + 0.5) { toast("El abono no puede superar la deuda"); return; }
+  } else if (!confirm(`Registrar pago total de ${fmt(d.pendiente)} de ${d.nombre}?`)) return;
+  const esT = DEU_MET === "Transferencia";
+  try {
+    const r = await api({ action: "pagar_deudor", sheetName: SES.code, clienteNombre: d.nombre,
+      transferAmount: esT ? monto : 0, cashAmount: esT ? 0 : monto, usuario: SES.nombre });
+    toast(r.status === "success" ? "Pago registrado" : (r.message || "No se pudo registrar"));
+    await recargar();
+    if (DEU_ABIERTO) deuRender();
+  } catch { toast("Error de conexión"); }
+}
+function deuRender() {
+  const box = $("alertas");
+  if (!box || !TODO) return;
+  const deud = agruparDeudores();
+  const d = deud.find((x) => x.nombre === DEU_SEL);
+  if (DEU_VISTA !== "lista" && !d) DEU_VISTA = "lista";
+  if (DEU_VISTA === "lista" || !d) {
+    DEU_VISTA = "lista";
+    box.innerHTML = deud.length ? deud.map((x) => {
+      const f = String((x.items[0] && x.items[0][0]) || "").slice(0, 10);
+      return `<div class="acard deu-it" data-n="${esc(x.nombre)}"><span class="ainfo"><b>${esc(x.nombre)}</b><small>Fecha: ${esc(f)}</small></span><span class="monto">${fmtM(x.pendiente)}</span></div>`;
+    }).join("") : '<div class="card">Sin deudores pendientes.</div>';
+    box.querySelectorAll(".deu-it").forEach((el) => el.addEventListener("click", () => { DEU_SEL = el.dataset.n; DEU_VISTA = "resumen"; deuRender(); }));
+    return;
+  }
+  if (DEU_VISTA === "resumen") {
+    box.innerHTML = `<div class="card"><div class="fila" style="justify-content:space-between"><b>${esc(d.nombre)}</b><button class="hbtn" id="deu-hist" title="Historial">🕐</button></div>`
+      + `<small class="muted">Resumen de productos</small>`
+      + d.items.map((it) => `<div class="fila" style="justify-content:space-between"><small>x${num(it[3])} ${esc(it[2])}</small><b>${fmt(num(it[7]))}</b></div>`).join("")
+      + deuPieHTML(d)
+      + `<button class="btn link" id="deu-volver">← Deudores</button></div>`;
+    $("deu-hist").addEventListener("click", () => { DEU_VISTA = "historial"; deuRender(); });
+    $("deu-volver").addEventListener("click", () => { DEU_VISTA = "lista"; deuRender(); });
+    deuWirePie(d);
+    return;
+  }
+  box.innerHTML = `<div class="card"><div class="fila" style="justify-content:space-between"><b>${esc(d.nombre)}</b><button class="hbtn rx" id="deu-x" title="Volver">✕</button></div>`
+    + `<small class="muted">Historial</small>`
+    + d.items.map((it) => {
+      const cant = num(it[3]), sub = num(it[7]), pu = cant ? Math.round(sub / cant) : 0;
+      const ch = parseInt(it[10] || "0", 10) || 0;
+      const t1 = [(it[8] && it[8] !== "Normal" ? it[8] : ""), ch ? "Chico " + ch : ""].filter(Boolean).join(" - ") || it[2];
+      return `<div class="acard" style="margin:8px 0"><span class="ainfo"><b>${esc(t1)}</b><small>x${cant} ${esc(it[2])}</small><br><small>${esc(horaDe(it[0] || ""))} - $ ${miles(pu)} C/U${it[4] === "SI" ? " - Minimo" : ""}</small></span><b>${fmt(sub)}</b></div>`;
+    }).join("")
+    + deuPieHTML(d) + `</div>`;
+  $("deu-x").addEventListener("click", () => { DEU_VISTA = "resumen"; deuRender(); });
+  deuWirePie(d);
+}
+// ---------- dock gasto (form con tipo, concepto, foto y registro) ----------
+function gtoToggle() { GTO_ABIERTO ? gtoCerrar() : gtoAbrir(); }
+function gtoAbrir() {
+  GTO_ABIERTO = true; GTO_FOTO = "";
+  AG_ABIERTO = false; AG_SEL = {}; DEU_ABIERTO = false;
+  dockDerRender();
+}
+function gtoCerrar() {
+  if (!GTO_ABIERTO) return;
+  GTO_ABIERTO = false; GTO_FOTO = "";
+  dockDerRender();
+}
+function gtoRender() {
+  const box = $("alertas");
+  if (!box) return;
+  box.innerHTML = `<div style="font-weight:700;margin:2px 2px 8px">Tipo de Gasto</div>`
+    + `<div class="vr-modos" id="gto-tipos">${["Administrativo", "Recurrente"].map((t) => `<button data-t="${t}" class="${GTO_TIPO === t ? "on" : ""}">${t}</button>`).join("")}</div>`
+    + `<div class="gto-fila"><input id="gto-concepto" class="ag-buscar" placeholder="Concepto" autocomplete="off"><input id="gto-valor" class="ag-buscar" placeholder="Valor" inputmode="numeric"></div>`
+    + `<textarea id="gto-desc" class="ag-area" placeholder="Descripcion"></textarea>`
+    + `<label class="gto-foto" title="Foto del comprobante"><input id="gto-file" type="file" accept="image/*" class="oculto"><span id="gto-mas">+</span><img id="gto-prev" class="oculto" alt=""></label>`
+    + `<button id="gto-commit" class="ag-commit">Registrar Gasto</button>`;
+  box.querySelectorAll("#gto-tipos button").forEach((b) => b.addEventListener("click", () => { GTO_TIPO = b.dataset.t; gtoRender(); }));
+  const fv = $("gto-valor");
+  if (fv) fv.addEventListener("input", () => { fv.value = fv.value.replace(/\D/g, "").slice(0, 9); });
+  $("gto-file").addEventListener("change", () => {
+    const f = $("gto-file").files[0];
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) { toast("Imagen muy pesada (máx 2MB)"); return; }
+    const rd = new FileReader();
+    rd.onload = () => { GTO_FOTO = String(rd.result || ""); $("gto-prev").src = GTO_FOTO; $("gto-prev").classList.remove("oculto"); $("gto-mas").classList.add("oculto"); };
+    rd.readAsDataURL(f);
+  });
+  $("gto-commit").addEventListener("click", async () => {
+    const concepto = ($("gto-concepto").value || "").trim(), monto = num($("gto-valor").value);
+    const desc = ($("gto-desc").value || "").trim();
+    if (!concepto || monto <= 0) { toast("Concepto y valor son obligatorios"); return; }
+    try {
+      let foto = "";
+      if (GTO_FOTO) {
+        const up = await api({ action: "subir_foto", datos: GTO_FOTO, idEmpresa: SES.code });
+        if (up.status === "success" && up.data && up.data.url) {
+          try { foto = new URL(up.data.url, BASE).href; } catch { foto = up.data.url; }
+        }
+      }
+      const r = await api({ action: "registrar_gasto", tableName: "Gastos",
+        data: ["", hoyLat(), horaHM(), GTO_TIPO, concepto, desc, "", monto, "Efectivo", foto, SES.nombre, "Activo", "", ""] });
+      if (r.status !== "success") { toast(r.message || "No se pudo guardar"); return; }
+      GTO_FOTO = "";
+      toast("Gasto registrado");
+      await recargar();
+      if (GTO_ABIERTO) gtoRender();
+    } catch { toast("Error de conexión"); }
+  });
 }
 // ---------- venta rápida (dock sobre la sección 1, comparte CARRITO) ----------
 let VR_MODO = "Normal", VR_Q = "";
@@ -935,17 +1072,16 @@ function pintarResumen() {
     b.addEventListener("click", () => {
       if (k === "venta") { vrAbierta() ? vrCerrar() : vrAbrir(); return; }
       if (k === "agregar") { agToggle(); return; }
-      if (k === "gasto") { agCerrar(); tab("finanzas"); setTimeout(() => abrirGasto(), 100); return; }
-      agCerrar();
+      if (k === "deudores") { deuToggle(); return; }
+      if (k === "gasto") { gtoToggle(); return; }
+      agCerrar(); deuCerrar(); gtoCerrar();
       tab(go);
     });
     $("acciones").appendChild(b);
   });
   $("bloque-alertas").classList.toggle("oculto", !s.alertas);
-  if (s.alertas) {
-    if (AG_ABIERTO) { agTitulo(); agRender(); }
-    else { agTitulo(); pintarAlertas(); }
-  } else {
+  if (s.alertas) dockDerRender();
+  else {
     NOTIF_N = 0;
     const dot = $("notif-dot");
     if (dot) dot.style.display = "none";
@@ -962,10 +1098,11 @@ function pintarAlertas() {
     abox.innerHTML = '<div class="card">¡Todo en orden! Stock suficiente.</div>';
   } else {
     abox.innerHTML = items.map(([p]) => {
-      const idx = (TODO.inventario || []).indexOf(p);
-      const n = alertaDe(p);
-      const img = p[12] ? `<img src="${esc(p[12])}" alt="" loading="lazy">` : "";
-      return `<div class="acard"><span class="athumb">${img}</span><span class="ainfo"><b>${esc(p[2])}</b><small>Quedan ${p[4]} und</small></span><span class="abadge ${n === 2 ? "abajo" : "amedio"}">${n === 2 ? "Stock Bajo" : "Stock Medio"}</span><button class="aplus" data-i="${idx}" title="Agregar stock"><img src="img/pos/alerta/agregar2.png?v=1" alt="+"></button></div>`;
+        const idx = (TODO.inventario || []).indexOf(p);
+        const n = alertaDe(p);
+        const img = p[12] ? `<img src="${esc(p[12])}" alt="" loading="lazy">` : "";
+        const nulo = num(p[4]) === 0;
+        return `<div class="acard"><span class="athumb">${img}</span><span class="ainfo"><b>${esc(p[2])}</b><small>Quedan ${p[4]} und</small></span><span class="abadge ${nulo ? "anulo" : n === 2 ? "abajo" : "amedio"}">${nulo ? "Stock Nulo" : n === 2 ? "Stock Bajo" : "Stock Medio"}</span><button class="aplus" data-i="${idx}" title="Agregar stock"><img src="img/pos/alerta/agregar2.png?v=1" alt="+"></button></div>`;
     }).join("");
     abox.querySelectorAll(".aplus").forEach((b) => b.addEventListener("click", async () => {
       const p = TODO.inventario[Number(b.dataset.i)];
@@ -1289,27 +1426,45 @@ function pintarInventario() {
     const lab = document.createElement("label");
     lab.className = "btn-mini"; lab.textContent = "Carga Masiva";
     const inp = document.createElement("input");
-    inp.type = "file"; inp.accept = ".csv,.txt"; inp.style.display = "none";
+    inp.type = "file"; inp.accept = ".csv,.txt,.xlsx,.xls"; inp.style.display = "none";
     inp.addEventListener("change", async () => {
       if (!inp.files.length) return;
-      const texto = await inp.files[0].text();
-      const r = await api({ action: "importar_inventario", sheetName: SES.code, csv: texto });
-      toast(r.status === "success" ? `Importados ${((r.data || {}).insertados || 0)}` : (r.message || "Error al importar"));
-      await recargar();
+      try {
+        const f = inp.files[0];
+        const texto = /\.xlsx?$/i.test(f.name) ? await xlsxACsv(f) : await f.text();
+        const r = await api({ action: "importar_inventario", sheetName: SES.code, csv: texto });
+        toast(r.status === "success" ? `Importados ${((r.data || {}).insertados || 0)}` : (r.message || "Error al importar"));
+        await recargar();
+      } catch { toast("No se pudo leer el Excel (revisa tu internet)"); }
     });
     lab.appendChild(inp); $("inv-botones").appendChild(lab);
   }
   if (s.invMovimientos) addBtn("Movimientos", () => { MOV_VER = !MOV_VER; pintarMovimientos(); });
   if (s.invCrear) addBtn("+ Producto", () => formProducto(null), true);
-  const q = ($("inv-buscar").value || "").toLowerCase();
-  const list = invRows().filter((p) => !q || p[2].toLowerCase().includes(q) || (p[3] || "").toLowerCase().includes(q));
+  let cbox = $("inv-cats");
+  if (!cbox) { cbox = document.createElement("div"); cbox.id = "inv-cats"; cbox.className = "chips"; $("inv-botones").after(cbox); }
+  const cats = ["Todos", ...new Set(invRows().map((p) => (p[3] || "General").trim()).filter(Boolean))];
+  if (!cats.includes(INV_CAT)) INV_CAT = "Todos";
+  cbox.innerHTML = "";
+  cats.forEach((c) => {
+    const b = document.createElement("button");
+    b.textContent = c;
+    b.classList.toggle("on", INV_CAT === c);
+    b.addEventListener("click", () => { INV_CAT = c; pintarInventario(); });
+    cbox.appendChild(b);
+  });
+  const q = ($("inv-buscar").value || "").toLowerCase().trim().replace(/í/g, "i");
+  const soloMin = q === "minimo";
+  const list = invRows().filter((p) =>
+    (INV_CAT === "Todos" || (p[3] || "General").trim() === INV_CAT) &&
+    (soloMin ? num(p[4]) <= num(p[8] || 0) : (!q || p[2].toLowerCase().includes(q) || (p[3] || "").toLowerCase().includes(q))));
   $("inv-lista").innerHTML = list.length ? "" : '<div class="card">Sin productos en inventario.</div>';
   list.forEach((p) => {
     const idx = (TODO.inventario || []).indexOf(p);
     const img = p[12] ? `<img class="thumb" src="${p[12]}" alt="" loading="lazy">` : "";
     const div = document.createElement("div");
     div.className = "card fila-prod";
-    div.innerHTML = `${img}<div><b>${esc(p[2])}</b><small>${esc(p[3] || "")} • Stock: ${p[4]} • ${fmt(p[6])} c/u</small></div>
+    div.innerHTML = `${img}<div><b>${esc(p[2])}</b><small>${esc(p[3] || "")} • Stock: ${p[4]} (mín ${p[8] || 0}) • ${fmt(p[6])} c/u</small></div>
       <div class="cant"><button data-a="stock">+ Stock</button>${s.invEditar ? '<button data-a="edit">✏️</button>' : ""}${s.invEliminar ? '<button data-a="del">🗑️</button>' : ""}</div>`;
     div.querySelectorAll("button").forEach((b) => b.addEventListener("click", async () => {
       if (b.dataset.a === "stock") {
@@ -1369,6 +1524,17 @@ function formProducto(idx) {
 }
 
 // ---------- movimientos ----------
+async function xlsxACsv(file) {
+  if (!window.XLSX) await new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+  const buf = await file.arrayBuffer();
+  const wb = window.XLSX.read(buf, { type: "array" });
+  return window.XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]);
+}
 function pintarMovimientos() {
   const box = $("inv-movimientos");
   box.classList.remove("oculto");
@@ -1583,7 +1749,7 @@ function abrirGasto() {
   openModal(`<h2>Registrar Gasto</h2>
     <input id="g-concepto" placeholder="Concepto *">
     <div class="fila"><input id="g-monto" type="number" placeholder="Monto *">
-    <select id="g-cat"><option>Operativo</option><option>Administrativo</option><option>Regalo</option><option>Otro</option></select></div>
+    <select id="g-cat"><option>Operativo</option><option>Administrativo</option><option>Recurrente</option><option>Regalo</option><option>Otro</option></select></div>
     <select id="g-metodo"><option value="Efectivo">Efectivo</option><option value="Transferencia">Transferencia</option></select>
     <p id="g-err" class="error"></p>
     <button class="btn exito" id="g-guardar">Guardar Gasto</button>
