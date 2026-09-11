@@ -561,7 +561,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
     <div id="t-venta" class="tab oculto">
       <h2>Nueva Venta</h2>
       <div class="fila">
-        <select id="venta-modo"><option value="Normal">Normal</option><option value="Bolirrana">Bolirrana</option></select>
+        <select id="venta-modo"><option value="Normal">Normal</option><option value="Dados">Dados</option><option value="Bolirrana">Bolirrana</option></select>
         <input id="venta-mesa" type="number" min="1" max="20" value="1" class="oculto" title="Mesa">
       </div>
       <p id="venta-chico-info" class="muted oculto"></p>
@@ -581,6 +581,15 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
         </div>
         <button id="btn-cobrar" class="btn exito">Cobrar</button>
         <button id="btn-regalo" class="btn link">🎁 Regalo de la casa</button>
+      </div>
+      <div id="venh">
+        <h3>Historial de ventas</h3>
+        <div id="venh-filtros" class="seg"></div>
+        <div id="venh-rango" class="oculto fila">
+          <input id="venh-desde" placeholder="dd/mm/aaaa" inputmode="numeric">
+          <input id="venh-hasta" placeholder="dd/mm/aaaa" inputmode="numeric">
+        </div>
+        <div id="venh-lista"></div>
       </div>
     </div>
 
@@ -641,7 +650,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=23"></script>
+<script src="app.js?v=24"></script>
 </body>
 </html>
 

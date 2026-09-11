@@ -1,5 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-11";
+const VERSION_PWA = "PWA-2026-09-12";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -342,26 +342,31 @@ async function vrCobrar(fiabl) {
   const chico = esBol ? chicoActivo(mesa) : 0;
   let cliente = ($("vr-cliente").value || "").trim();
   if (!cliente) cliente = esBol ? `Bolirrana ${mesa}` : "Cliente Mostrador";
+  const tipoTxt = esBol ? `Bolirrana(${mesa})` : modo;
+  const folio = (!fiabl && !esBol) ? nuevoFolio() : "";
   try {
+    const det = [];
     for (const i of ids) {
       const p = TODO.inventario[Number(i)], it = CARRITO[i], q = it.qty;
       const pu = precioEfectivo(p, it.min), sub = q * pu;
       const ant = num(p[4]), nvo = Math.max(0, ant - q);
       if (fiabl || esBol) {
         await api({ action: "registrar_deudor", tableName: "Deudores",
-          data: [fechaHora(), cliente, p[2], q, it.min ? "SI" : "", 0, 0, sub, esBol ? `Bolirrana(${mesa})` : modo, "", chico] });
+          data: [fechaHora(), cliente, p[2], q, it.min ? "SI" : "", 0, 0, sub, tipoTxt, "", chico] });
         await logMov(p, "Salida", q, ant, nvo, "Descuento por deudor");
       } else {
         await api({ action: "registrar_venta", tableName: "Ventas",
-          data: ["", hoyISO(), horaHM(), cliente, p[0], p[2], q, pu, sub, "", 0, sub, sub, SES.nombre, "Activo", "", "", "", "", "", "", modo] });
+          data: [folio, hoyISO(), horaHM(), cliente, p[0], p[2], q, pu, sub, "", 0, sub, sub, SES.nombre, "Activo", "", "", "", "", "", "", tipoTxt] });
         await logMov(p, "Salida", q, ant, nvo, "Descuento por venta");
       }
       await actualizarStock(p, nvo);
+      det.push({ prod: p[2], cant: q, pu, sub });
     }
     if (esBol) chicoSiguiente(mesa, chico);
     CARRITO = {}; $("vr-cliente").value = ""; $("vr-cliente-x").classList.add("oculto");
-    toast("Registrado");
     await recargar();
+    if (folio) verComprobante({ cod: folio, fecha: hoyLat(), hora: horaHM(), cliente, modo: tipoTxt, usuario: SES.nombre, estado: "Activo", items: det, total: det.reduce((a, d) => a + d.sub, 0) });
+    else toast("Registrado");
     if (vrAbierta()) vrRender();
   } catch { toast("Error de conexión"); }
 }
@@ -687,7 +692,7 @@ async function verStatsNegocio(e, box) {
     box.innerHTML = `<small>📦 ${inv.length} productos • 💰 ${ventasMes(ven)} en ventas del mes • 👤 ${fmt(pend)} por cobrar • 👥 ${usu.length} usuarios • 📞 ${esc(e.celular1 || "—")} • Vence: ${esc(e.fechaVencimiento || "—")}</small>`;
   } catch { box.innerHTML = "<small>Sin conexión.</small>"; }
 }
-const ventasMes = (ven) => fmt(ven.filter((v) => esMesActual(v[1])).reduce((a, v) => a + num(v[12]), 0));
+const ventasMes = (ven) => fmt(ven.filter((v) => esMesActual(v[1]) && String(v[14] || "").toLowerCase() !== "anulado").reduce((a, v) => a + num(v[12]), 0));
 
 $("btn-nuevo-negocio").addEventListener("click", () => {
   openModal(`<h2>Nuevo Negocio</h2>
@@ -886,6 +891,7 @@ if ($("btn-recargar")) $("btn-recargar").addEventListener("click", recargar);
 
 const invRows = () => (TODO.inventario || []).filter((x) => x[2] && x[2] !== "Nom_Producto");
 const venRows = () => (TODO.ventas || []).filter((x) => x[5] && x[5] !== "Producto");
+const venVivas = () => venRows().filter((v) => String(v[14] || "").toLowerCase() !== "anulado");
 const deuRows = () => (TODO.deudores || []).filter((x) => x[1] && x[1] !== "Nom_Cliente");
 const gasRows = () => (TODO.gastos || []).filter((x) => x[0] && String(x[0]).startsWith("G-"));
 const movRows = () => (TODO.movimientos || []).filter((x) => x[0] && String(x[0]).startsWith("M-"));
@@ -895,13 +901,13 @@ const kpi = (t, v) => `<div class="kpi"><small>${t}</small><b>${v}</b></div>`;
 // ---------- inicio ----------
 function pintarResumen() {
   const s = ME.sec;
-  const totVentasHoy = venRows().filter((v) => esHoy(v[1])).reduce((a, v) => a + num(v[12]), 0);
+  const totVentasHoy = venVivas().filter((v) => esHoy(v[1])).reduce((a, v) => a + num(v[12]), 0);
   const totGastosMes = gasRows().filter((g) => esMesActual(g[1])).reduce((a, g) => a + num(g[7]), 0);
   const deud = agruparDeudores();
   const totDeuda = deud.reduce((a, x) => a + x.pendiente, 0);
   const cliAct = (() => {
     const set = new Set(deud.map((d) => d.nombre));
-    venRows().filter((v) => esHoy(v[1])).forEach((v) => {
+    venVivas().filter((v) => esHoy(v[1])).forEach((v) => {
       const c = (v[3] || "").trim();
       if (c && !/^cliente mostrador$/i.test(c)) set.add(c);
     });
@@ -1044,7 +1050,7 @@ function pintarVenta() {
     });
     $("venta-productos").appendChild(div);
   });
-  pintarCarrito();
+  pintarCarrito(); pintarHistorial();
 }
 $("venta-buscar").addEventListener("input", pintarVenta);
 $("venta-modo").addEventListener("change", pintarVenta);
@@ -1092,37 +1098,149 @@ async function logMov(p, tipo, cant, ant, nvo, obs) {
 $("btn-cobrar").addEventListener("click", async () => {
   const ids = Object.keys(CARRITO).filter((i) => CARRITO[i].qty > 0);
   if (!ids.length) return;
-  const esBol = $("venta-modo").value === "Bolirrana";
+  const modo = $("venta-modo").value || "Normal";
+  const esBol = modo === "Bolirrana";
   const mesa = Number($("venta-mesa").value || 1);
   const chico = esBol ? chicoActivo(mesa) : 0;
   const cliente = esBol ? `Bolirrana ${mesa}` : ($("venta-cliente").value.trim() || "Cliente Mostrador");
   const metodo = $("venta-metodo").value;
   const fiado = $("venta-fiado").checked;
   const esTransf = metodo === "Transferencia";
+  const tipoTxt = esBol ? `Bolirrana(${mesa})` : modo;
+  const folio = (!fiado && !esBol) ? nuevoFolio() : "";
   $("btn-cobrar").disabled = true;
   try {
+    const det = [];
     for (const i of ids) {
       const p = TODO.inventario[Number(i)], it = CARRITO[i], q = it.qty;
       const pu = precioEfectivo(p, it.min), sub = q * pu;
       const ant = num(p[4]), nvo = Math.max(0, ant - q);
       if (fiado || esBol) {
         await api({ action: "registrar_deudor", tableName: "Deudores",
-          data: [fechaHora(), cliente, p[2], q, it.min ? "SI" : "", 0, 0, sub, esBol ? `Bolirrana(${mesa})` : "Normal", "", chico] });
+          data: [fechaHora(), cliente, p[2], q, it.min ? "SI" : "", 0, 0, sub, tipoTxt, "", chico] });
         await logMov(p, "Salida", q, ant, nvo, "Descuento por deudor");
       } else {
         await api({ action: "registrar_venta", tableName: "Ventas",
-          data: ["", hoyISO(), horaHM(), cliente, p[0], p[2], q, pu, sub, "", esTransf ? sub : 0, esTransf ? 0 : sub, sub, SES.nombre, "Activo", "", "", "", "", "", "", "Normal"] });
+          data: [folio, hoyISO(), horaHM(), cliente, p[0], p[2], q, pu, sub, "", esTransf ? sub : 0, esTransf ? 0 : sub, sub, SES.nombre, "Activo", "", "", "", "", "", "", tipoTxt] });
         await logMov(p, "Salida", q, ant, nvo, "Descuento por venta");
       }
       await actualizarStock(p, nvo);
+      det.push({ prod: p[2], cant: q, pu, sub });
     }
     if (esBol) chicoSiguiente(mesa, chico);
     CARRITO = {}; $("venta-cliente").value = ""; $("venta-fiado").checked = false;
-    toast(esBol ? `Chico ${chico} de Bolirrana ${mesa} registrado` : fiado ? "Fiado registrado" : "Venta registrada");
-    await recargar(); tab("inicio");
+    await recargar();
+    if (folio) verComprobante({ cod: folio, fecha: hoyLat(), hora: horaHM(), cliente, modo: tipoTxt, usuario: SES.nombre, estado: "Activo", items: det, total: det.reduce((a, d) => a + d.sub, 0) });
+    else { toast(esBol ? `Chico ${chico} de Bolirrana ${mesa} registrado` : fiado ? "Fiado registrado" : "Venta registrada"); tab("inicio"); }
   } catch { toast("Error de conexión"); }
   $("btn-cobrar").disabled = false;
 });
+
+// ---------- ventas: folio, historial, comprobante y anulación ----------
+let VENH_F = "Día", VENH_D = "", VENH_H = "";
+function nuevoFolio() {
+  const d = new Date(), p = (x) => String(x).padStart(2, "0");
+  const az = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s = "";
+  for (let i = 0; i < 3; i++) s += az[Math.floor(Math.random() * az.length)];
+  return `F-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}-${s}`;
+}
+function lunesISO() { const d = new Date(), p = (x) => String(x).padStart(2, "0"); const l = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)); return `${l.getFullYear()}-${p(l.getMonth() + 1)}-${p(l.getDate())}`; }
+const esSemanaActual = (f) => { const n = normFecha(f); return n ? n >= lunesISO().replace(/-/g, "") : false; };
+const qrURL = (txt) => "https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=6&data=" + encodeURIComponent(txt);
+function qrPayload(g) {
+  return JSON.stringify({ f: g.cod, n: SES.negocio, c: g.cliente, h: g.fecha + " " + g.hora, t: Math.round(g.total), d: g.items.map((it) => [it.prod, it.cant, Math.round(it.sub)]) });
+}
+function comprobanteHTML(g) {
+  return `<h2>Comprobante de venta</h2>`
+    + `<div class="card" style="text-align:center"><b>${esc(SES.negocio)}</b><br><small>${esc(g.fecha)} • ${esc(g.hora)} • ${esc(g.modo)}</small><br>`
+    + `<div class="monto">${esc(g.cod)}</div>`
+    + (g.estado === "Anulado" ? `<br><span class="badge susp">ANULADA</span>` : "") + `</div>`
+    + `<div class="card"><b>Cliente / Mesa:</b> ${esc(g.cliente)}<br><small>Atendido por ${esc(g.usuario)}</small>`
+    + `<table class="tabla"><tr><th>Pedido</th><th>Cant.</th><th>Subtotal</th></tr>`
+    + g.items.map((it) => `<tr><td>${esc(it.prod)}</td><td>${it.cant}</td><td>${fmt(it.sub)}</td></tr>`).join("")
+    + `</table><div class="monto">Total: ${fmt(g.total)}</div></div>`
+    + `<div class="card" style="text-align:center"><img src="${qrURL(qrPayload(g))}" alt="QR ${esc(g.cod)}" width="140" height="140" loading="lazy" onerror="this.outerHTML='<b>${esc(g.cod)}</b>'"><br><small>Referencia: ${esc(g.cod)}</small></div>`
+    + `<button class="btn exito" id="comp-print">🖨️ Imprimir</button>`
+    + `<button class="btn link" id="comp-cerrar">Cerrar</button>`;
+}
+function comprobantePrint(g) {
+  return `<p><b>${esc(SES.negocio)}</b><br>${esc(g.fecha)} ${esc(g.hora)} • ${esc(g.modo)}<br>Cliente / Mesa: <b>${esc(g.cliente)}</b> • Atiende: ${esc(g.usuario)}</p>`
+    + `<p><b>Factura: ${esc(g.cod)}</b>${g.estado === "Anulado" ? " (ANULADA)" : ""}</p>`
+    + `<table class="tabla"><tr><th>Pedido</th><th>Cant.</th><th>Subtotal</th></tr>`
+    + g.items.map((it) => `<tr><td>${esc(it.prod)}</td><td>${it.cant}</td><td>${fmt(it.sub)}</td></tr>`).join("")
+    + `</table><p><b>Total: ${fmt(g.total)}</b></p>`
+    + `<p><img src="${qrURL(qrPayload(g))}" width="140" height="140"><br><small>Referencia: ${esc(g.cod)}</small></p>`;
+}
+function verComprobante(g) {
+  openModal(comprobanteHTML(g));
+  $("comp-cerrar").addEventListener("click", closeModal);
+  $("comp-print").addEventListener("click", () => imprimir("Comprobante " + g.cod, comprobantePrint(g)));
+}
+function gruposVentas() {
+  const mapa = {};
+  venRows().forEach((v) => {
+    const id = String(v[0] || "");
+    const folio = /^F-/i.test(id);
+    const key = folio ? id.toUpperCase() : [v[1], v[2], v[3]].join("|");
+    if (!mapa[key]) mapa[key] = { cod: folio ? id.toUpperCase() : "S/F " + (v[1] || ""), fecha: v[1] || "", hora: v[2] || "", cliente: v[3] || "", modo: v[21] || "Normal", usuario: v[13] || "", estado: "Activo", items: [], total: 0, folio };
+    const g = mapa[key];
+    g.items.push({ prod: v[5] || "", cant: num(v[6]), pu: num(v[7]), sub: num(v[8]) || num(v[12]) });
+    g.total += num(v[12]);
+    if (String(v[14] || "").toLowerCase() === "anulado") g.estado = "Anulado";
+    if (!g.hora && v[2]) g.hora = v[2];
+  });
+  const k = (g) => (normFecha(g.fecha) || "") + (g.hora || "");
+  return Object.values(mapa).sort((a, b) => k(b).localeCompare(k(a)));
+}
+function pintarHistorial() {
+  const box = $("venh-lista");
+  if (!box) return;
+  const F = $("venh-filtros");
+  F.innerHTML = ["Día", "Semana", "Mes", "Rango"].map((t) => `<button data-f="${t}" class="${VENH_F === t ? "on" : ""}">${t}</button>`).join("");
+  F.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { VENH_F = b.dataset.f; pintarHistorial(); }));
+  $("venh-rango").classList.toggle("oculto", VENH_F !== "Rango");
+  const match = (f) => VENH_F === "Día" ? esHoy(f) : VENH_F === "Semana" ? esSemanaActual(f) : VENH_F === "Mes" ? esMesActual(f) : enRango(f, VENH_D, VENH_H);
+  const list = gruposVentas().filter((g) => match(g.fecha));
+  box.innerHTML = list.length ? "" : '<div class="card">Sin ventas en el periodo.</div>';
+  list.forEach((g) => {
+    const div = document.createElement("div");
+    div.className = "card fila-deu";
+    div.innerHTML = `<div><b>${esc(g.cod)}</b> ${g.estado === "Anulado" ? '<span class="badge susp">Anulada</span>' : ""}<br><small>${esc(g.fecha)} ${esc(g.hora)} • ${esc(g.cliente)} • ${g.items.length} item(s)</small></div>`
+      + `<div class="cant"><span class="monto">${fmt(g.total)}</span>${g.folio && g.estado !== "Anulado" ? '<button class="btn-mini" data-a="anular">Anular</button>' : ""}</div>`;
+    div.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-a]");
+      if (b && b.dataset.a === "anular") { e.stopPropagation(); anularVenta(g); return; }
+      verComprobante(g);
+    });
+    box.appendChild(div);
+  });
+}
+async function anularVenta(g) {
+  if (!g.folio) { toast("Solo folios F- se pueden anular"); return; }
+  if (!confirm(`¿Anular la venta ${g.cod} por ${fmt(g.total)}? Se devolverá el stock.`)) return;
+  if (!ME.admin) {
+    const clave = (prompt("Clave dinámica del administrador (6 dígitos):", "") || "").trim();
+    if (!clave) return;
+    try {
+      const v = await api({ action: "validar_clave_dinamica", empresa: SES.code, codigo: clave, clave });
+      if (!(v.status === "success" && ((v.data || {}).valida === true))) { toast(v.message || "Clave inválida"); return; }
+    } catch { toast("Error de conexión"); return; }
+  }
+  try {
+    const r = await api({ action: "anular_venta", sheetName: SES.code, idVenta: g.cod, usuario: SES.nombre });
+    if (r.status !== "success") { toast(r.message || "No se pudo anular"); return; }
+    for (const it of g.items) {
+      const p = (TODO.inventario || []).find((x) => (x[2] || "") === it.prod);
+      if (!p || !it.cant) continue;
+      const ant = num(p[4]), nvo = ant + it.cant;
+      await logMov(p, "Entrada", it.cant, ant, nvo, "Anulación " + g.cod);
+      await actualizarStock(p, nvo);
+    }
+    toast("Venta anulada");
+    await recargar();
+  } catch { toast("Error de conexión"); }
+}
 
 // Regalo de la casa (requiere clave dinámica del admin).
 async function regaloCasa() {
@@ -1420,7 +1538,7 @@ function pintarFinanzas() {
   if (!filtros.some(([, t]) => t === FIN_FILTRO) && filtros.length) FIN_FILTRO = filtros[0][1];
   $("fin-rango").classList.toggle("oculto", FIN_FILTRO !== "Rango de fechas");
   const matchV = (f) => FIN_FILTRO === "Día" ? esHoy(f) : FIN_FILTRO === "Mes" ? esMesActual(f) : enRango(f, FIN_DESDE, FIN_HASTA);
-  const ventas = s.finVentas ? venRows().filter((v) => matchV(v[1])) : [];
+  const ventas = s.finVentas ? venVivas().filter((v) => matchV(v[1])) : [];
   const gastos = s.finGastos ? gasRows().filter((g) => matchV(g[1])) : [];
   const totV = ventas.reduce((a, v) => a + num(v[12]), 0);
   const totG = gastos.reduce((a, g) => a + num(g[7]), 0);
@@ -1439,6 +1557,8 @@ $("fin-desde")?.addEventListener("change", () => {});
 document.addEventListener("change", (e) => {
   if (e.target.id === "fin-desde") { FIN_DESDE = e.target.value.trim(); pintarFinanzas(); }
   if (e.target.id === "fin-hasta") { FIN_HASTA = e.target.value.trim(); pintarFinanzas(); }
+  if (e.target.id === "venh-desde") { VENH_D = e.target.value.trim(); pintarHistorial(); }
+  if (e.target.id === "venh-hasta") { VENH_H = e.target.value.trim(); pintarHistorial(); }
 });
 
 function abrirGasto() {
@@ -1463,7 +1583,7 @@ function abrirGasto() {
 }
 
 function imprimirFinanzas() {
-  const ventas = venRows().filter((v) => FIN_FILTRO === "Día" ? esHoy(v[1]) : FIN_FILTRO === "Mes" ? esMesActual(v[1]) : enRango(v[1], FIN_DESDE, FIN_HASTA));
+  const ventas = venVivas().filter((v) => FIN_FILTRO === "Día" ? esHoy(v[1]) : FIN_FILTRO === "Mes" ? esMesActual(v[1]) : enRango(v[1], FIN_DESDE, FIN_HASTA));
   const gastos = gasRows().filter((g) => FIN_FILTRO === "Día" ? esHoy(g[1]) : FIN_FILTRO === "Mes" ? esMesActual(g[1]) : enRango(g[1], FIN_DESDE, FIN_HASTA));
   imprimir(`Estado Financiero — ${SES.negocio} (${FIN_FILTRO})`,
     `<h3>Ventas (${ventas.length})</h3><table class="tabla"><tr><th>Fecha</th><th>Producto</th><th>Cant.</th><th>Total</th></tr>` +

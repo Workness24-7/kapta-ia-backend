@@ -1597,6 +1597,45 @@ def _es_numero(v):
         return False
 
 
+def action_anular_venta(params):
+    """Anula una venta por su folio (Id_Venta): marca Estado=Anulado y sella
+    fecha/hora/usuario de anulación en cada fila del folio."""
+    params = params or {}
+    clave = str(params.get("sheetName") or params.get("codigo") or "").strip()
+    idv = str(params.get("idVenta") or params.get("id_venta") or "").strip()
+    usuario = str(params.get("usuario") or "").strip()
+    if not clave:
+        return respuesta_error("No se recibió sheetName.")
+    if not idv:
+        return respuesta_error("No se recibió idVenta.")
+    empresa = resolver_hoja(clave)
+    if not empresa:
+        return respuesta_error("No existe la hoja: " + clave)
+    try:
+        filas = db.leer_tabla(empresa, "ventas")
+    except Exception:
+        return respuesta_error("No se pudo leer ventas.")
+    ahora = datetime.datetime.now()
+    hoy = ahora.strftime("%d/%m/%Y")
+    hora = ahora.strftime("%H:%M")
+    n = 0
+    for (num, d) in filas:
+        d = list(d) + [""] * max(0, 22 - len(d))
+        if str(d[0] or "").strip() != idv:
+            continue
+        if str(d[14] or "").strip().lower() == "anulado":
+            continue
+        d[14] = "Anulado"
+        d[18] = hoy
+        d[19] = hora
+        d[20] = usuario
+        db.guardar_fila(empresa, "ventas", num, d[:22])
+        n += 1
+    if not n:
+        return respuesta_error("Venta no encontrada o ya anulada.")
+    return respuesta_success({"anuladas": n, "idVenta": idv})
+
+
 # ===================================================
 # ROUTING
 # ===================================================
@@ -1764,6 +1803,7 @@ POST_ACTIONS = {
     "apple_auth_url": action_apple_auth_url,
     "login_apple_canjear": action_login_apple_canjear,
     "registrar_venta": action_escribir_fila,
+    "anular_venta": action_anular_venta,
     "registrar_deudor": action_escribir_fila,
     "registrar_gasto": action_escribir_fila,
     "crear_usuario": action_escribir_fila,
