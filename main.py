@@ -927,7 +927,10 @@ def action_obtener_todo(params):
         return respuesta_error("No existe la hoja: " + clave)
     resultado = {}
     for nombre in TABLAS:
-        resultado[nombre.lower()] = leer_hoja_rows(empresa, nombre)
+        try:
+            resultado[nombre.lower()] = leer_hoja_rows(empresa, nombre)
+        except Exception:
+            resultado[nombre.lower()] = []
     return respuesta_success(resultado)
 
 

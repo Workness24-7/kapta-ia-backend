@@ -25,8 +25,9 @@ CABECERAS = {
     "deudores": ["Fecha_Registro", "Nom_Cliente", "Producto", "Cantidad",
                  "Minimo", "Transferencia", "Efectivo", "Total_Pendiente", "Tipo", "Perdedor", "Chico"],
     "movimientos": ["Id_Movimiento", "Fecha", "Id_Producto", "Nom_Producto",
-                    "Tipo", "Cantidad", "Stock_Anterior", "Stock_Nuevo",
-                    "Usuario", "Observacion"],
+                     "Tipo", "Cantidad", "Stock_Anterior", "Stock_Nuevo",
+                     "Usuario", "Observacion"],
+    "turnos": ["Id_Turno", "Fecha", "Usuario", "Tipo", "Hora", "Nota"],
 }
 
 # Tablas GLOBALES: una sola tabla física; la primera columna es el código de empresa.
