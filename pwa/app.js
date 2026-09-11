@@ -1,5 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-14";
+const VERSION_PWA = "PWA-2026-09-15";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -260,6 +260,20 @@ async function pagarDeudorDock(d, esAbono) {
     if (DEU_ABIERTO) deuRender();
   } catch { toast("Error de conexión"); }
 }
+function resumenDeudor(d) {
+  const grupos = {};
+  d.items.forEach((it) => {
+    const bol = /^bolirrana/i.test(it[8] || "");
+    const k = bol ? "§BOL" : ("P:" + (it[2] || "").toLowerCase());
+    if (!grupos[k]) grupos[k] = { bol, prod: it[2] || "", cant: 0, sub: 0, partes: [] };
+    const g = grupos[k];
+    g.cant += num(it[3]); g.sub += num(it[7]);
+    if (bol) g.partes.push(`x${num(it[3])} ${it[2]}`);
+  });
+  return Object.values(grupos).map((g) => g.bol
+    ? { txt: "Bolirrana", desc: g.partes.join(" + "), sub: g.sub }
+    : { txt: `x${g.cant} ${g.prod}`, desc: "", sub: g.sub });
+}
 function deuRender() {
   const box = $("alertas");
   if (!box || !TODO) return;
@@ -278,7 +292,7 @@ function deuRender() {
   if (DEU_VISTA === "resumen") {
     box.innerHTML = `<div class="card"><div class="fila" style="justify-content:space-between"><b>${esc(d.nombre)}</b><button class="hbtn" id="deu-hist" title="Historial">🕐</button></div>`
       + `<small class="muted">Resumen de productos</small>`
-      + d.items.map((it) => `<div class="fila" style="justify-content:space-between"><small>x${num(it[3])} ${esc(it[2])}</small><b>${fmt(num(it[7]))}</b></div>`).join("")
+      + resumenDeudor(d).map((l) => `<div class="fila" style="justify-content:space-between;align-items:flex-start"><span><small>${esc(l.txt)}</small>${l.desc ? `<br><small class="muted">${esc(l.desc)}</small>` : ""}</span><b>${fmt(l.sub)}</b></div>`).join("")
       + deuPieHTML(d)
       + `<button class="btn link" id="deu-volver">← Deudores</button></div>`;
     $("deu-hist").addEventListener("click", () => { DEU_VISTA = "historial"; deuRender(); });
