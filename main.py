@@ -52,6 +52,7 @@ TABLAS = {
     "USUARIOS": {"INICIO": 69, "FILA_INICIO": 3, "COLUMNAS": 11},
     "CONFIG_NEGOCIO": {"INICIO": 81, "FILA_INICIO": 3, "COLUMNAS": 6},
     "MOVIMIENTOS": {"INICIO": 110, "FILA_INICIO": 3, "COLUMNAS": 10},
+    "TURNOS": {"INICIO": 130, "FILA_INICIO": 3, "COLUMNAS": 6},
 }
 
 CABECERAS = {
@@ -66,8 +67,9 @@ CABECERAS = {
     "DEUDORES": ["Fecha_Registro", "Nom_Cliente", "Producto", "Cantidad",
                  "Minimo", "Transferencia", "Efectivo", "Total_Pendiente", "Tipo", "Perdedor", "Chico"],
     "MOVIMIENTOS": ["Id_Movimiento", "Fecha", "Id_Producto", "Nom_Producto",
-                    "Tipo", "Cantidad", "Stock_Anterior", "Stock_Nuevo",
-                    "Usuario", "Observacion"],
+                   "Tipo", "Cantidad", "Stock_Anterior", "Stock_Nuevo",
+                   "Usuario", "Observacion"],
+    "TURNOS": ["Id_Turno", "Fecha", "Usuario", "Tipo", "Hora", "Nota"],
 }
 
 # Vista tenant de las tablas globales (sin la columna Código_Empresa,
@@ -1597,6 +1599,63 @@ def _es_numero(v):
         return False
 
 
+def action_guardar_config(params):
+    """Upsert genérico en config_negocio: {sheetName, parametro, valor, descripcion}."""
+    params = params or {}
+    clave = str(params.get("sheetName") or params.get("codigo") or "").strip()
+    param = str(params.get("parametro") or params.get("clave") or "").strip().upper()
+    valor = str(params.get("valor") if params.get("valor") is not None else "")
+    desc = str(params.get("descripcion") or "")[:80]
+    if not clave:
+        return respuesta_error("No se recibió sheetName.")
+    if not param:
+        return respuesta_error("No se recibió parametro.")
+    empresa = resolver_hoja(clave)
+    if not empresa:
+        return respuesta_error("No existe la hoja: " + clave)
+    hoy = datetime.datetime.now().strftime("%d/%m/%Y")
+    try:
+        filas = db.leer_tabla(empresa, "config_negocio")
+    except Exception:
+        return respuesta_error("No se pudo leer configuración.")
+    for (n, d) in filas:
+        if str(d[0] if len(d) > 0 else "" or "").strip().upper() == param:
+            dd = list(d) + [""] * max(0, 6 - len(d))
+            dd[1] = valor
+            if desc:
+                dd[2] = desc
+            dd[3] = hoy
+            db.guardar_fila(empresa, "config_negocio", n, dd[:6])
+            return respuesta_success({"parametro": param, "actualizado": True})
+    n = db.siguiente_fila_libre(empresa, "config_negocio", TABLAS["CONFIG_NEGOCIO"]["FILA_INICIO"])
+    db.guardar_fila(empresa, "config_negocio", n, [param, valor, desc, hoy, "", ""])
+    return respuesta_success({"parametro": param, "actualizado": False})
+
+
+def action_registrar_jornada(params):
+    """Marca Entrada/Salida de jornada: {sheetName, tipo, usuario, nota}."""
+    params = params or {}
+    clave = str(params.get("sheetName") or params.get("codigo") or "").strip()
+    tipo = str(params.get("tipo") or "").strip().capitalize()
+    usuario = str(params.get("usuario") or "").strip()
+    nota = str(params.get("nota") or "")[:80]
+    if not clave:
+        return respuesta_error("No se recibió sheetName.")
+    if tipo not in ("Entrada", "Salida"):
+        return respuesta_error("Tipo debe ser Entrada o Salida.")
+    if not usuario:
+        return respuesta_error("No se recibió usuario.")
+    empresa = resolver_hoja(clave)
+    if not empresa:
+        return respuesta_error("No existe la hoja: " + clave)
+    ahora = datetime.datetime.now()
+    fila = db.siguiente_fila_libre(empresa, "turnos", TABLAS["TURNOS"]["FILA_INICIO"])
+    nid = db.siguiente_id(empresa, "turnos", "T-", 4)
+    db.guardar_fila(empresa, "turnos", fila,
+                     [nid, ahora.strftime("%d/%m/%Y"), usuario, tipo, ahora.strftime("%H:%M"), nota])
+    return respuesta_success({"id": nid, "tipo": tipo})
+
+
 def action_anular_venta(params):
     """Anula una venta por su folio (Id_Venta): marca Estado=Anulado y sella
     fecha/hora/usuario de anulación en cada fila del folio."""
@@ -1804,6 +1863,8 @@ POST_ACTIONS = {
     "login_apple_canjear": action_login_apple_canjear,
     "registrar_venta": action_escribir_fila,
     "anular_venta": action_anular_venta,
+    "registrar_jornada": action_registrar_jornada,
+    "guardar_config": action_guardar_config,
     "registrar_deudor": action_escribir_fila,
     "registrar_gasto": action_escribir_fila,
     "crear_usuario": action_escribir_fila,

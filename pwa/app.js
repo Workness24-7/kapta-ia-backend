@@ -1,5 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-15";
+const VERSION_PWA = "PWA-2026-09-16";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -106,18 +106,19 @@ function armarDock(sec) {
   if (sec._dockInventario) tabs.push(["inventario", "Inventario"]);
   if (ME.admin) tabs.push(["usuarios", "Usuarios"]);
   if (sec._dockFinanzas) tabs.push(["finanzas", "Finanzas"]);
+  if (ME.admin || sec._dockFinanzas) tabs.push(["dashboard", "Panel"]);
   if (sec._tabDeudores) tabs.push(["deudores", "Deudores"]);
   $("dock").innerHTML = "";
   tabs.forEach(([k, txt], i) => {
     const b = document.createElement("button");
     b.dataset.tab = k; if (!i) b.classList.add("on");
     b.title = txt;
-    b.innerHTML = `<img src="img/pos/dock/${DOCK_ICONS[k]}?v=1" alt="${txt}">`;
+    b.innerHTML = DOCK_ICONS[k] ? `<img src="img/pos/dock/${DOCK_ICONS[k]}?v=1" alt="${txt}">` : `<span class="dock-emoji">📊</span>`;
     b.addEventListener("click", () => { if (k === "inicio") vrCerrar(); tab(k); });
     $("dock").appendChild(b);
   });
 }
-const DOCK_ICONS = { inicio: "Inicio.png", venta: "Venta.png", inventario: "Inventario.png", usuarios: "Admin.png", finanzas: "Finanzas.png", deudores: "Deudores.png" };
+const DOCK_ICONS = { inicio: "Inicio.png", venta: "Venta.png", inventario: "Inventario.png", usuarios: "Admin.png", finanzas: "Finanzas.png", deudores: "Deudores.png", dashboard: "" };
 if ($("btn-yo")) $("btn-yo").addEventListener("click", () => tab("cuenta"));
 if ($("pos-avatar")) $("pos-avatar").addEventListener("click", () => tab("cuenta"));
 if ($("btn-soporte")) $("btn-soporte").addEventListener("click", () => $("btn-ayuda").click());
@@ -366,6 +367,76 @@ function gtoRender() {
     } catch { toast("Error de conexión"); }
   });
 }
+// ---------- premium: periodos, promos, turnos, costos ----------
+let DASH_F = "Mes";
+function rangoPeriodo(f, back) {
+  const now = new Date();
+  let ini, fin;
+  back = back || 0;
+  if (f === "Día") { ini = new Date(now); fin = new Date(now); }
+  else if (f === "Semana") { const dw = (now.getDay() + 6) % 7; ini = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dw - 7 * back); fin = new Date(ini); fin.setDate(fin.getDate() + 6); }
+  else if (f === "Año") { ini = new Date(now.getFullYear() - back, 0, 1); fin = new Date(now.getFullYear() - back, 11, 31); }
+  else { ini = new Date(now.getFullYear(), now.getMonth() - back, 1); fin = new Date(now.getFullYear(), now.getMonth() - back + 1, 0); }
+  const c = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  return { d: c(ini), h: c(fin) };
+}
+const enPeriodo = (f, r) => { const n = normFecha(f); return n ? n >= r.d && n <= r.h : false; };
+function cfgHappy() {
+  try {
+    const rows = (TODO && TODO.config_negocio) || [];
+    const r = rows.find((x) => String(x[0] || "").toUpperCase() === "HAPPY_HOUR");
+    const a = JSON.parse((r && r[1]) || "[]");
+    return Array.isArray(a) ? a : [];
+  } catch { return []; }
+}
+function cfgValor(k, fb) {
+  try {
+    const rows = (TODO && TODO.config_negocio) || [];
+    const r = rows.find((x) => String(x[0] || "").toUpperCase() === String(k).toUpperCase());
+    return r ? String(r[1] || "") : fb;
+  } catch { return fb; }
+}
+function happyPara(prod, cuando) {
+  const list = cfgHappy();
+  if (!list.length) return null;
+  const d = cuando || new Date();
+  const dia = (d.getDay() + 6) % 7;
+  const hm = d.getHours() * 60 + d.getMinutes();
+  const aMin = (t) => { const p = String(t || "").split(":"); return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0); };
+  let best = null;
+  list.forEach((h, i) => {
+    if (!h || h.producto !== prod) return;
+    if (Array.isArray(h.dias) && h.dias.length && !h.dias.includes(dia)) return;
+    if (hm < aMin(h.desde) || hm > aMin(h.hasta)) return;
+    if (h.tipo === "2x1") best = Object.assign({ idx: i }, h);
+    else if (!best && num(h.valor) > 0) best = Object.assign({ idx: i }, h);
+  });
+  return best;
+}
+// línea con promo y/o mínimo: {pu, sub, desc, promo}
+function lineaConPromo(p, q, usarMin) {
+  const pn = num(p[6]), mn = num(p[7]);
+  if (usarMin && mn > 0) return { pu: mn, sub: mn * q, desc: (pn - mn) * q, promo: "" };
+  const promo = happyPara(p[2], new Date());
+  if (promo && promo.tipo === "2x1") {
+    const paga = Math.ceil(q / 2);
+    return { pu: pn, sub: paga * pn, desc: (q - paga) * pn, promo: "HH" + promo.idx };
+  }
+  if (promo && num(promo.valor) > 0) {
+    const pu = Math.max(0, Math.round(pn * (1 - num(promo.valor) / 100)));
+    return { pu, sub: pu * q, desc: (pn - pu) * q, promo: "HH" + promo.idx };
+  }
+  return { pu: pn, sub: pn * q, desc: 0, promo: "" };
+}
+const turnosRows = () => (TODO.turnos || []).filter((x) => x[2] && x[2] !== "Usuario");
+function costoDe(prod) {
+  const p = (TODO.inventario || []).find((x) => (x[2] || "") === prod);
+  return p ? num(p[5]) : 0;
+}
+function catDe(prod) {
+  const p = (TODO.inventario || []).find((x) => (x[2] || "") === prod);
+  return p ? (((p[3] || "General").trim()) || "General") : "General";
+}
 // ---------- venta rápida (dock sobre la sección 1, comparte CARRITO) ----------
 let VR_MODO = "Normal", VR_Q = "";
 const VR_MODOS_DEF = ["Normal", "Bolirrana", "Dados"];
@@ -450,13 +521,13 @@ function vrRender() {
     const it = CARRITO[idx] || { qty: 0, min: false };
     const tieneMin = num(p[7]) > 0;
     const usaMin = it.min && tieneMin;
-    const pu = usaMin ? num(p[7]) : num(p[6]);
+    const L = lineaConPromo(p, it.qty || 0, it.min), pu = L.pu;
     const card = document.createElement("div");
     card.className = "vrcard";
     card.innerHTML = `${it.qty > 0 ? `<span class="vrbadge">${it.qty}</span>` : ""}`
       + `<span class="vrfoto">${p[12] ? `<img src="${esc(p[12])}" alt="" loading="lazy">` : ""}</span>`
       + `<b>${esc(p[2])}</b>`
-      + `<span class="vrprecio-row"><span class="vrprecio${usaMin ? " min" : ""}">$ ${miles(pu)} c/u</span>`
+      + `<span class="vrprecio-row"><span class="vrprecio${(usaMin || L.promo) ? " min" : ""}">$ ${miles(pu)} c/u${L.promo ? " • HH" : ""}</span>`
       + (tieneMin ? `<button class="vrswitch${usaMin ? " on" : ""}" title="Precio mínimo"></button>` : "") + `</span>`
       + `<span class="vrgrip" title="Arrastra para cambiar el tamaño de las tarjetas"></span>`;
     const bump = (d) => {
@@ -499,15 +570,15 @@ async function vrCobrar(fiabl) {
     const det = [];
     for (const i of ids) {
       const p = TODO.inventario[Number(i)], it = CARRITO[i], q = it.qty;
-      const pu = precioEfectivo(p, it.min), sub = q * pu;
+      const L = lineaConPromo(p, q, it.min), pu = L.pu, sub = L.sub;
       const ant = num(p[4]), nvo = Math.max(0, ant - q);
       if (fiabl || esBol) {
         await api({ action: "registrar_deudor", tableName: "Deudores",
-          data: [fechaHora(), cliente, p[2], q, it.min ? "SI" : "", 0, 0, sub, tipoTxt, "", chico] });
+          data: [fechaHora(), cliente, p[2], q, it.min ? "SI" : (L.promo ? "HH" : ""), 0, 0, sub, tipoTxt, "", chico] });
         await logMov(p, "Salida", q, ant, nvo, "Descuento por deudor");
       } else {
         await api({ action: "registrar_venta", tableName: "Ventas",
-          data: [folio, hoyISO(), horaHM(), cliente, p[0], p[2], q, pu, sub, "", 0, sub, sub, SES.nombre, "Activo", "", "", "", "", "", "", tipoTxt] });
+          data: [folio, hoyISO(), horaHM(), cliente, p[0], p[2], q, pu, sub, Math.round(L.desc), 0, sub, sub, SES.nombre, "Activo", "", "", L.promo, "", "", "", tipoTxt] });
         await logMov(p, "Salida", q, ant, nvo, "Descuento por venta");
       }
       await actualizarStock(p, nvo);
@@ -1033,7 +1104,7 @@ async function recargar() {
     if (urow && urow[4]) SES.rol = urow[4];
     $("pos-usuario").textContent = SES.nombre + " • " + SES.rol;
     pintarCuentaInfo();
-    pintarResumen(); pintarVenta(); pintarInventario(); pintarDeudores(); pintarFinanzas(); pintarUsuarios();
+    pintarResumen(); pintarVenta(); pintarInventario(); pintarDeudores(); pintarFinanzas(); pintarUsuarios(); pintarDashboard();
     refrescarChrome();
     if (vrAbierta()) vrRender();
   } catch { toast("Sin conexión"); }
@@ -1218,10 +1289,10 @@ function pintarCarrito() {
   let total = 0, html = "";
   ids.forEach((i) => {
     const p = TODO.inventario[Number(i)], it = CARRITO[i];
-    const pu = precioEfectivo(p, it.min), sub = it.qty * pu;
+    const L = lineaConPromo(p, it.qty, it.min), pu = L.pu, sub = L.sub;
     total += sub;
     const tieneMin = num(p[7]) > 0;
-    html += `<div class="card"><div class="fila-prod"><div><b>${esc(p[2])}</b><small>${it.qty} x ${fmt(pu)}${it.min ? " (mínimo)" : ""}</small></div>
+    html += `<div class="card"><div class="fila-prod"><div><b>${esc(p[2])}</b><small>${it.qty} x ${fmt(pu)}${L.promo ? " (HH)" : it.min ? " (mínimo)" : ""}</small></div>
       <div class="cant"><button data-i="${i}" data-d="-1">−</button><b>${it.qty}</b><button data-i="${i}" data-d="1">+</button></div></div>
       ${tieneMin ? `<button class="btn-mini" data-m="${i}">${it.min ? "Quitar mínimo" : "Precio mínimo"}</button>` : ""}</div>`;
   });
@@ -1265,15 +1336,15 @@ $("btn-cobrar").addEventListener("click", async () => {
     const det = [];
     for (const i of ids) {
       const p = TODO.inventario[Number(i)], it = CARRITO[i], q = it.qty;
-      const pu = precioEfectivo(p, it.min), sub = q * pu;
+      const L = lineaConPromo(p, q, it.min), pu = L.pu, sub = L.sub;
       const ant = num(p[4]), nvo = Math.max(0, ant - q);
       if (fiado || esBol) {
         await api({ action: "registrar_deudor", tableName: "Deudores",
-          data: [fechaHora(), cliente, p[2], q, it.min ? "SI" : "", 0, 0, sub, tipoTxt, "", chico] });
+          data: [fechaHora(), cliente, p[2], q, it.min ? "SI" : (L.promo ? "HH" : ""), 0, 0, sub, tipoTxt, "", chico] });
         await logMov(p, "Salida", q, ant, nvo, "Descuento por deudor");
       } else {
         await api({ action: "registrar_venta", tableName: "Ventas",
-          data: [folio, hoyISO(), horaHM(), cliente, p[0], p[2], q, pu, sub, "", esTransf ? sub : 0, esTransf ? 0 : sub, sub, SES.nombre, "Activo", "", "", "", "", "", "", tipoTxt] });
+          data: [folio, hoyISO(), horaHM(), cliente, p[0], p[2], q, pu, sub, Math.round(L.desc), esTransf ? sub : 0, esTransf ? 0 : sub, sub, SES.nombre, "Activo", "", "", L.promo, "", "", "", tipoTxt] });
         await logMov(p, "Salida", q, ant, nvo, "Descuento por venta");
       }
       await actualizarStock(p, nvo);
@@ -1360,31 +1431,32 @@ function pintarHistorial() {
     const div = document.createElement("div");
     div.className = "card fila-deu";
     div.innerHTML = `<div><b>${esc(g.cod)}</b> ${g.estado === "Anulado" ? '<span class="badge susp">Anulada</span>' : ""}<br><small>${esc(g.fecha)} ${esc(g.hora)} • ${esc(g.cliente)} • ${g.items.length} item(s)</small></div>`
-      + `<div class="cant"><span class="monto">${fmt(g.total)}</span>${g.ids.length && g.estado !== "Anulado" ? '<button class="btn-mini" data-a="anular">Anular</button>' : ""}</div>`;
+      + `<div class="cant"><span class="monto">${fmt(g.total)}</span>${g.ids.length && g.estado !== "Anulado" ? '<button class="btn-mini" data-a="fac">FAC</button><button class="btn-mini" data-a="anular">Anular</button>' : ""}</div>`;
     div.addEventListener("click", (e) => {
       const b = e.target.closest("button[data-a]");
       if (b && b.dataset.a === "anular") { e.stopPropagation(); anularVenta(g); return; }
+      if (b && b.dataset.a === "fac") { e.stopPropagation(); crearFactura(g); return; }
       verComprobante(g);
     });
     box.appendChild(div);
   });
 }
-async function anularVenta(g) {
+async function anularVenta(g, pre) {
   const ids = (g.ids || []).filter(Boolean);
-  if (!ids.length) { toast("Esta venta no tiene folio anulable"); return; }
-  if (!confirm(`¿Anular la venta ${g.cod} por ${fmt(g.total)}? Se devolverá el stock.`)) return;
+  if (!ids.length) { toast("Esta venta no tiene folio anulable"); return false; }
+  if (!pre && !confirm(`¿Anular la venta ${g.cod} por ${fmt(g.total)}? Se devolverá el stock.`)) return false;
   if (!ME.admin) {
     const clave = (prompt("Clave dinámica del administrador (6 dígitos):", "") || "").trim();
-    if (!clave) return;
+    if (!clave) return false;
     try {
       const v = await api({ action: "validar_clave_dinamica", empresa: SES.code, codigo: clave, clave });
-      if (!(v.status === "success" && ((v.data || {}).valida === true))) { toast(v.message || "Clave inválida"); return; }
-    } catch { toast("Error de conexión"); return; }
+      if (!(v.status === "success" && ((v.data || {}).valida === true))) { toast(v.message || "Clave inválida"); return false; }
+    } catch { toast("Error de conexión"); return false; }
   }
   try {
     for (const id of ids) {
       const r = await api({ action: "anular_venta", sheetName: SES.code, idVenta: id, usuario: SES.nombre });
-      if (r.status !== "success") { toast(r.message || "No se pudo anular"); return; }
+      if (r.status !== "success") { toast(r.message || "No se pudo anular"); return false; }
     }
     for (const it of g.items) {
       const p = (TODO.inventario || []).find((x) => (x[2] || "") === it.prod);
@@ -1395,7 +1467,8 @@ async function anularVenta(g) {
     }
     toast("Venta anulada");
     await recargar();
-  } catch { toast("Error de conexión"); }
+    return true;
+  } catch { toast("Error de conexión"); return false; }
 }
 
 // Regalo de la casa (requiere clave dinámica del admin).
@@ -1455,6 +1528,8 @@ function pintarInventario() {
   }
   if (s.invMovimientos) addBtn("Movimientos", () => { MOV_VER = !MOV_VER; pintarMovimientos(); });
   if (s.invCrear) addBtn("+ Producto", () => formProducto(null), true);
+  if (s.invEditar) addBtn("Merma", () => formMerma());
+  if (s.invEditar) addBtn("Conteo", () => formConteo());
   let cbox = $("inv-cats");
   if (!cbox) { cbox = document.createElement("div"); cbox.id = "inv-cats"; cbox.className = "chips"; $("inv-botones").after(cbox); }
   const cats = ["Todos", ...new Set(invRows().map((p) => (p[3] || "General").trim()).filter(Boolean))];
@@ -1548,6 +1623,52 @@ async function xlsxACsv(file) {
   const buf = await file.arrayBuffer();
   const wb = window.XLSX.read(buf, { type: "array" });
   return window.XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]);
+}
+function formMerma() {
+  openModal(`<h2>Registrar pérdida</h2>
+    <input id="m-prod" list="m-sug" placeholder="Producto *" autocomplete="off">
+    <datalist id="m-sug">${invRows().map((p) => `<option value="${esc(p[2])}">`).join("")}</datalist>
+    <div class="fila"><select id="m-tipo"><option>Dañado</option><option>Vencido</option><option>Ajuste</option><option>Merma</option><option>Consumo interno</option><option>Salida sin venta</option></select>
+    <input id="m-cant" type="number" placeholder="Cant. *" inputmode="numeric"></div>
+    <p id="m-err" class="error"></p>
+    <button class="btn exito" id="m-guardar">Registrar</button>
+    <button class="btn link" id="m-cancelar">Cancelar</button>`);
+  $("m-cancelar").addEventListener("click", closeModal);
+  $("m-guardar").addEventListener("click", async () => {
+    const p = invRows().find((x) => (x[2] || "") === $("m-prod").value.trim());
+    const c = Math.max(1, parseInt($("m-cant").value || "0", 10));
+    if (!p) { $("m-err").textContent = "Elige un producto válido"; return; }
+    const tipo = $("m-tipo").value;
+    const ant = num(p[4]), nvo = Math.max(0, ant - c);
+    await logMov(p, "Salida", c, ant, nvo, tipo + " (premium)");
+    await actualizarStock(p, nvo);
+    closeModal(); toast(tipo + " registrado");
+    await recargar();
+  });
+}
+function formConteo() {
+  const rows = invRows();
+  openModal(`<h2>Conteo físico</h2><small class="muted">Escribe lo contado. Vacío = sin cambio.</small>`
+    + `<div style="max-height:40vh;overflow-y:auto;margin:8px 0">` + rows.map((p) => `<div class="fila"><small style="flex:2">${esc(p[2])} <b>(sist: ${p[4]})</b></small><input data-c="${esc(p[2])}" type="number" inputmode="numeric" placeholder="Físico" style="flex:1"></div>`).join("") + `</div>`
+    + `<button class="btn exito" id="c-guardar">Aplicar conteo</button><button class="btn link" id="c-cancelar">Cancelar</button>`);
+  $("c-cancelar").addEventListener("click", closeModal);
+  $("c-guardar").addEventListener("click", async () => {
+    let difs = 0, perdida = 0;
+    for (const inp of document.querySelectorAll("[data-c]")) {
+      if (String(inp.value).trim() === "") continue;
+      const p = invRows().find((x) => (x[2] || "") === inp.dataset.c);
+      if (!p) continue;
+      const fis = Math.max(0, parseInt(inp.value || "0", 10)), ant = num(p[4]), dif = fis - ant;
+      if (!dif) continue;
+      difs++;
+      if (dif < 0) perdida += -dif * costoDe(p[2]);
+      await logMov(p, dif > 0 ? "Entrada" : "Salida", Math.abs(dif), ant, fis, "Conteo: diferencia " + (dif > 0 ? "+" : "") + dif);
+      await actualizarStock(p, fis);
+    }
+    closeModal();
+    toast(difs ? `Conteo aplicado. Faltantes: ${fmt(perdida)}` : "Sin diferencias");
+    await recargar();
+  });
 }
 function pintarMovimientos() {
   const box = $("inv-movimientos");
@@ -1750,6 +1871,7 @@ function pintarFinanzas() {
     (gastos.length ? gastos.map((g) => `<div class="card"><b>${esc(g[4])}</b><br><small>${esc(g[1])} • ${fmt(g[7])}</small></div>`).join("")
     : '<div class="card">Sin gastos en el periodo.</div>') : "";
   if (s.finGastos && s.finRegistrar) $("fin-nuevo-gasto").addEventListener("click", abrirGasto);
+  pintarFacturas();
 }
 $("fin-desde")?.addEventListener("change", () => {});
 document.addEventListener("change", (e) => {
@@ -1779,6 +1901,209 @@ function abrirGasto() {
     await recargar(); tab("finanzas");
   });
 }
+
+// ---------- dashboard premium ----------
+function pintarDashboard() {
+  const F = $("dash-filtros");
+  if (!F) return;
+  F.innerHTML = ["Día", "Semana", "Mes", "Año"].map((t) => `<button data-f="${t}" class="${DASH_F === t ? "on" : ""}">${t}</button>`).join("");
+  F.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { DASH_F = b.dataset.f; pintarDashboard(); }));
+  const r = rangoPeriodo(DASH_F, 0), rp = rangoPeriodo(DASH_F, 1);
+  const V = venVivas().filter((v) => enPeriodo(v[1], r));
+  const Vp = venVivas().filter((v) => enPeriodo(v[1], rp));
+  const G = gasRows().filter((g) => enPeriodo(g[1], r));
+  const Gp = gasRows().filter((g) => enPeriodo(g[1], rp));
+  const totV = (a) => a.reduce((x, v) => x + num(v[12]), 0);
+  const totG = (a) => a.reduce((x, g) => x + num(g[7]), 0);
+  const tV = totV(V), tVp = totV(Vp), tG = totG(G), tGp = totG(Gp);
+  const gs = gruposVentas().filter((g) => enPeriodo(g.fecha, r));
+  const nV = gs.length, nVp = gruposVentas().filter((g) => enPeriodo(g.fecha, rp)).length;
+  const ticket = nV ? tV / nV : 0, ticketp = nVp ? tVp / nVp : 0;
+  const costo = V.reduce((a, v) => a + num(v[6]) * costoDe(v[5]), 0);
+  const rent = tV - costo - tG;
+  const pc = (a, b) => b > 0.5 ? Math.round((a - b) / b * 100) : (a > 0.5 ? 100 : 0);
+  const fl = (p) => `<small>${p > 0 ? "▲ +" : p < 0 ? "▼ " : "• "}${p}% vs ant.</small>`;
+  const porProd = {}, porCat = {};
+  V.forEach((v) => {
+    const p = v[5] || "";
+    porProd[p] = porProd[p] || { cant: 0, total: 0 };
+    porProd[p].cant += num(v[6]); porProd[p].total += num(v[12]);
+    const c = catDe(p);
+    porCat[c] = porCat[c] || { cant: 0, total: 0 };
+    porCat[c].cant += num(v[6]); porCat[c].total += num(v[12]);
+  });
+  const top = (o) => Object.entries(o).sort((a, b) => b[1].total - a[1].total)[0];
+  const tP = top(porProd), tC = top(porCat);
+  const gAdm = G.filter((g) => String(g[3] || "").toLowerCase() !== "recurrente").reduce((a, g) => a + num(g[7]), 0);
+  $("dash-kpis").innerHTML =
+    kpi(`Ventas ${DASH_F} ${fl(pc(tV, tVp))}`, fmt(tV)) +
+    kpi(`Gastos ${DASH_F} ${fl(pc(tG, tGp))}`, fmt(tG)) +
+    kpi(`Ticket promedio ${fl(pc(ticket, ticketp))}`, fmt(ticket)) +
+    kpi(`N° ventas ${fl(pc(nV, nVp))}`, nV);
+  $("dash-rent").innerHTML = `<div class="card utilidad"><small>Rentabilidad estimada (ventas − costo − gastos)</small><b>${fmt(rent)}</b><br><small>Costo productos: ${fmt(costo)}</small></div>`;
+  $("dash-tops").innerHTML = `<h3>Lo más vendido</h3>`
+    + (tP ? `<div class="card"><b>${esc(tP[0])}</b><br><small>${tP[1].cant} und • ${fmt(tP[1].total)}</small></div>` : '<div class="card">Sin ventas en el periodo.</div>')
+    + (tC ? `<div class="card"><b>Categoría: ${esc(tC[0])}</b><br><small>${tC[1].cant} und • ${fmt(tC[1].total)}</small></div>` : "")
+    + `<h3>Gastos</h3><div class="card"><small>Administrativos: ${fmt(gAdm)} • Recurrentes: ${fmt(tG - gAdm)}</small><br><small>Ingresos vs gastos: ${fmt(tV)} vs ${fmt(tG)}</small></div>`;
+  pintarDashHappy(V);
+  pintarDashAlertas();
+}
+function pintarDashHappy(V) {
+  const box = $("dash-happy");
+  if (!box) return;
+  const VHH = V.filter((v) => String(v[17] || "").toUpperCase().startsWith("HH"));
+  const tHH = VHH.reduce((a, v) => a + num(v[12]), 0);
+  const cantHH = VHH.reduce((a, v) => a + num(v[6]), 0);
+  const cliHH = new Set(VHH.map((v) => (v[3] || "").trim()).filter((c) => c && !/^cliente mostrador$/i.test(c))).size;
+  const cfg = cfgHappy();
+  const diasN = ["L", "M", "X", "J", "V", "S", "D"];
+  let h = `<h3>Happy Hours</h3>`;
+  h += cfg.length ? cfg.map((x, i) => `<div class="card"><b>${esc(x.producto)}</b> <span class="badge plan">${x.tipo === "2x1" ? "2x1" : "-" + num(x.valor) + "%"}</span><br><small>${(x.dias || []).map((d) => diasN[d]).join(" ") || "Todos los días"} • ${esc(x.desde || "")}–${esc(x.hasta || "")}</small>${ME.admin ? `<br><button class="btn-mini" data-hh="${i}">Eliminar</button>` : ""}</div>`).join("") : '<div class="card">Sin promos activas.</div>';
+  h += `<div class="card"><small>Happy Hour generó: ${fmt(tHH)} • ${cantHH} productos • ${cliHH} clientes</small></div>`;
+  if (ME.admin) h += `<div class="card"><b>Nueva promo</b><select id="hh-prod">${invRows().map((p) => `<option>${esc(p[2])}</option>`).join("")}</select>`
+    + `<div class="fila"><select id="hh-tipo"><option value="desc">% descuento</option><option value="2x1">2x1</option></select><input id="hh-valor" type="number" placeholder="%"></div>`
+    + `<div class="fila"><input id="hh-desde" placeholder="17:00"><input id="hh-hasta" placeholder="19:00"></div>`
+    + `<div id="hh-dias">${diasN.map((d, i) => `<label class="check"><input type="checkbox" data-d="${i}"${i < 5 ? " checked" : ""}> ${d}</label>`).join("")}</div>`
+    + `<button class="btn-mini verde" id="hh-guardar">Guardar promo</button></div>`;
+  box.innerHTML = h;
+  box.querySelectorAll("[data-hh]").forEach((b) => b.addEventListener("click", async () => {
+    const arr = cfgHappy();
+    arr.splice(Number(b.dataset.hh), 1);
+    const r = await api({ action: "guardar_config", sheetName: SES.code, parametro: "HAPPY_HOUR", valor: JSON.stringify(arr), descripcion: "Promos happy hour" });
+    toast(r.status === "success" ? "Promo eliminada" : (r.message || "No se pudo eliminar"));
+    await recargar();
+  }));
+  const hg = $("hh-guardar");
+  if (hg) hg.addEventListener("click", async () => {
+    const dias = [...box.querySelectorAll("#hh-dias input")].filter((c) => c.checked).map((c) => Number(c.dataset.d));
+    const arr = cfgHappy();
+    arr.push({ producto: $("hh-prod").value, tipo: $("hh-tipo").value, valor: num($("hh-valor").value), dias, desde: ($("hh-desde").value || "").trim() || "00:00", hasta: ($("hh-hasta").value || "").trim() || "23:59" });
+    const r = await api({ action: "guardar_config", sheetName: SES.code, parametro: "HAPPY_HOUR", valor: JSON.stringify(arr), descripcion: "Promos happy hour" });
+    if (r.status !== "success") { toast(r.message || "No se pudo guardar"); return; }
+    toast("Promo guardada"); await recargar();
+  });
+}
+function pintarDashAlertas() {
+  const box = $("dash-alertas");
+  if (!box) return;
+  const out = [];
+  invRows().filter((p) => num(p[8] || 0) > 0 && num(p[4]) <= num(p[8]) * 0.5).forEach((p) => out.push(["Stock crítico", `${p[2]}: quedan ${p[4]} und`]));
+  const lim = new Date(); lim.setDate(lim.getDate() - 14);
+  const p2 = (x) => String(x).padStart(2, "0");
+  const limS = `${lim.getFullYear()}${p2(lim.getMonth() + 1)}${p2(lim.getDate())}`;
+  const conVenta = new Set(venVivas().filter((v) => (normFecha(v[1]) || "") >= limS).map((v) => v[5]));
+  invRows().filter((p) => num(p[4]) > 0 && !conVenta.has(p[2])).slice(0, 8).forEach((p) => out.push(["Sin movimiento", `${p[2]}: 14+ días sin venderse`]));
+  const rM = rangoPeriodo("Mes", 0), rA = rangoPeriodo("Mes", 1);
+  const tM = venVivas().filter((v) => enPeriodo(v[1], rM)).reduce((a, v) => a + num(v[12]), 0);
+  const tA = venVivas().filter((v) => enPeriodo(v[1], rA)).reduce((a, v) => a + num(v[12]), 0);
+  if (tA > 0.5 && tM < tA * 0.5) out.push(["Caída de ventas", `Este mes ${fmt(tM)} vs ${fmt(tA)} anterior`]);
+  const plazo = parseInt(cfgValor("PLAZO_DIAS", "7"), 10) || 7;
+  const limD = new Date(); limD.setDate(limD.getDate() - plazo);
+  const limDS = `${limD.getFullYear()}${p2(limD.getMonth() + 1)}${p2(limD.getDate())}`;
+  agruparDeudores().forEach((d) => {
+    const vieja = d.items.some((it) => { const n = normFecha(String(it[0] || "").slice(0, 10)); return n && n < limDS; });
+    if (vieja) out.push(["Deudor atrasado", `${d.nombre}: ${fmt(d.pendiente)} a +${plazo} días`]);
+  });
+  const tGM = gasRows().filter((g) => enPeriodo(g[1], rM)).reduce((a, g) => a + num(g[7]), 0);
+  const avgG = [1, 2, 3].map((b) => gasRows().filter((g) => enPeriodo(g[1], rangoPeriodo("Mes", b))).reduce((a, g) => a + num(g[7]), 0)).reduce((a, x) => a + x, 0) / 3;
+  if (avgG > 0.5 && tGM > avgG * 1.3) out.push(["Gasto sobre promedio", `Este mes ${fmt(tGM)} vs promedio ${fmt(avgG)}`]);
+  movRows().filter((m) => String(m[9] || "").startsWith("Conteo: diferencia -")).slice(-5).forEach((m) => out.push(["Diferencia de inventario", `${m[3]}: ${m[9].replace("Conteo: diferencia ", "")}`]));
+  const hoyT = venVivas().filter((v) => esHoy(v[1])).reduce((a, v) => a + num(v[12]), 0);
+  const diaMes = new Date().getDate();
+  if (tM > 0.5 && hoyT < (tM / diaMes) * 0.5) out.push(["Ventas bajo promedio", `Hoy ${fmt(hoyT)} vs promedio diario ${fmt(tM / diaMes)}`]);
+  let h = `<h3>Alertas inteligentes</h3>`;
+  if (ME.admin) h += `<div class="card"><small>Días de plazo deudor: </small><div class="fila"><input id="plazo-dias" type="number" value="${plazo}"><button class="btn-mini" id="plazo-guardar">Guardar</button></div></div>`;
+  h += out.length ? out.map(([t, d]) => `<div class="card"><b>${esc(t)}</b><br><small>${esc(d)}</small></div>`).join("") : '<div class="card">Todo bajo control.</div>';
+  box.innerHTML = h;
+  const pg = $("plazo-guardar");
+  if (pg) pg.addEventListener("click", async () => {
+    const r = await api({ action: "guardar_config", sheetName: SES.code, parametro: "PLAZO_DIAS", valor: String(Math.max(1, parseInt($("plazo-dias").value || "7", 10))), descripcion: "Plazo deudor en días" });
+    toast(r.status === "success" ? "Plazo guardado" : (r.message || "No se pudo guardar"));
+    await recargar();
+  });
+}
+
+// ---------- facturación local premium ----------
+function facKey() { return "kapta_fact_" + ((SES && SES.code) || "pub"); }
+function facLeer() { try { const a = JSON.parse(localStorage.getItem(facKey()) || "[]"); return Array.isArray(a) ? a : []; } catch { return []; } }
+function facGuardar(a) { try { localStorage.setItem(facKey(), JSON.stringify(a)); } catch {} }
+function facturaHTML(f) {
+  return `<h2>Factura ${esc(f.cod)}</h2>`
+    + `<div class="card" style="text-align:center"><b>${esc(SES.negocio)}</b><br><small>${esc(f.fecha)} ${esc(f.hora)} • ${esc(f.modo)}${f.nc ? ' • <span class="badge susp">NOTA CRÉDITO</span>' : ""}</small><br><div class="monto">${esc(f.cod)}</div></div>`
+    + `<div class="card"><b>Cliente:</b> ${esc(f.cliente)}<br><small>NIT/ID: ${esc(f.nit || "—")} • ${esc(f.correo || "")}</small><br><small>Folio venta: ${esc(f.folio)} • ${esc(f.usuario)}</small>`
+    + `<table class="tabla"><tr><th>Pedido</th><th>Cant.</th><th>Subtotal</th></tr>`
+    + f.items.map((it) => `<tr><td>${esc(it.prod)}</td><td>${it.cant}</td><td>${fmt(it.sub)}</td></tr>`).join("")
+    + `</table><div class="monto">Total: ${fmt(f.total)}</div></div>`
+    + `<div class="card" style="text-align:center"><img src="${qrURL(qrPayload({ cod: f.cod, cliente: f.cliente, fecha: f.fecha, hora: f.hora, total: f.total, items: f.items }))}" alt="QR ${esc(f.cod)}" width="140" height="140" loading="lazy" onerror="this.outerHTML='<b>${esc(f.cod)}</b>'"><br><small>Referencia: ${esc(f.cod)}</small></div>`
+    + `<button class="btn exito" id="fc-print">🖨️ Imprimir / PDF</button>`
+    + `<button class="btn link" id="fc-cerrar">Cerrar</button>`;
+}
+function verFactura(f) {
+  openModal(facturaHTML(f));
+  $("fc-cerrar").addEventListener("click", closeModal);
+  $("fc-print").addEventListener("click", () => imprimir("Factura " + f.cod, facturaHTML(f).replace(/<button[^]*$/, "")));
+}
+function crearFactura(g) {
+  openModal(`<h2>Crear factura</h2><small class="muted">Venta ${esc(g.cod)} • ${fmt(g.total)}</small>
+    <input id="fc-cliente" value="${esc(g.cliente)}" autocomplete="off">
+    <div class="fila"><input id="fc-nit" placeholder="NIT / Identificación *" inputmode="numeric"><input id="fc-correo" placeholder="Correo cliente" autocomplete="off"></div>
+    <p id="fc-err" class="error"></p>
+    <button class="btn exito" id="fc-guardar">Generar</button>
+    <button class="btn link" id="fc-cancelar">Cancelar</button>`);
+  $("fc-cancelar").addEventListener("click", closeModal);
+  $("fc-guardar").addEventListener("click", () => {
+    const nit = ($("fc-nit").value || "").trim();
+    if (!nit) { $("fc-err").textContent = "La identificación es obligatoria"; return; }
+    const arr = facLeer();
+    const mx = arr.reduce((a, x) => { const m = /^FV-(\d+)$/.exec(x.cod || ""); return m ? Math.max(a, parseInt(m[1], 10)) : a; }, 0);
+    const cod = "FV-" + String(mx + 1).padStart(4, "0");
+    arr.push({ cod, folio: g.cod, fecha: hoyLat(), hora: horaHM(), cliente: ($("fc-cliente").value || "").trim() || g.cliente, nit, correo: ($("fc-correo").value || "").trim(), items: g.items, total: g.total, modo: g.modo, usuario: SES.nombre, nc: null });
+    facGuardar(arr);
+    closeModal(); toast("Factura " + cod);
+    pintarFacturas();
+  });
+}
+async function crearNC(f) {
+  const arr = facLeer();
+  const i = arr.findIndex((x) => x.cod === f.cod);
+  if (i < 0) return;
+  const g = gruposVentas().find((x) => x.cod === f.folio);
+  if (g && g.estado !== "Anulado") {
+    if (!confirm(`Crear nota crédito de ${f.cod} y anular la venta ${f.folio}? Se devolverá el stock.`)) return;
+    if (!(await anularVenta(g, true))) return;
+  } else if (!confirm(`Crear nota crédito de ${f.cod}?`)) return;
+  arr[i].nc = { fecha: hoyLat(), hora: horaHM(), usuario: SES.nombre };
+  facGuardar(arr); toast("Nota crédito creada"); pintarFacturas();
+}
+function pintarFacturas() {
+  const box = $("fac-lista");
+  if (!box) return;
+  const q = (($("fac-buscar") || {}).value || "").toLowerCase();
+  const arr = facLeer().filter((f) => !q || (f.cod || "").toLowerCase().includes(q) || (f.cliente || "").toLowerCase().includes(q) || (f.folio || "").toLowerCase().includes(q));
+  box.innerHTML = arr.length ? "" : '<div class="card">Sin facturas. Créala con FAC desde el historial de ventas.</div>';
+  arr.slice().reverse().forEach((f) => {
+    const div = document.createElement("div");
+    div.className = "card fila-deu";
+    div.innerHTML = `<div><b>${esc(f.cod)}</b> ${f.nc ? '<span class="badge susp">NC</span>' : ""}<br><small>${esc(f.fecha)} • ${esc(f.cliente)} • Folio ${esc(f.folio)}</small></div><div class="cant"><span class="monto">${fmt(f.total)}</span><button data-a="ver">Ver</button>${f.nc ? "" : '<button data-a="nc">NC</button>'}</div>`;
+    div.querySelectorAll("button").forEach((b) => b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (b.dataset.a === "ver") verFactura(f);
+      else crearNC(f);
+    }));
+    box.appendChild(div);
+  });
+}
+if ($("fac-buscar")) $("fac-buscar").addEventListener("input", pintarFacturas);
+if ($("fac-exp")) $("fac-exp").addEventListener("click", () => {
+  const arr = facLeer();
+  if (!arr.length) { toast("Sin facturas para exportar"); return; }
+  const csv = "Factura,Folio,Fecha,Hora,Cliente,NIT,Correo,Total,Modo,NC\n" + arr.map((f) => [f.cod, f.folio, f.fecha, f.hora, `"${(f.cliente || "").replace(/"/g, "")}"`, f.nit, f.correo, Math.round(f.total), f.modo, f.nc ? "SI" : ""].join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = "facturas_" + SES.code + ".csv";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
 
 function imprimirFinanzas() {
   const ventas = venVivas().filter((v) => FIN_FILTRO === "Día" ? esHoy(v[1]) : FIN_FILTRO === "Mes" ? esMesActual(v[1]) : enRango(v[1], FIN_DESDE, FIN_HASTA));
@@ -1842,6 +2167,7 @@ function pintarUsuarios() {
     }));
     $("usu-lista").appendChild(div);
   });
+  pintarEquipo();
 }
 $("btn-nuevo-usuario").addEventListener("click", () => formUsuario(null));
 
@@ -2017,6 +2343,78 @@ function aplicarDefaultsRol(rol, sec, dock, mods) {
   });
 }
 
+// ---------- jornada y rendimiento del equipo ----------
+function misTurnos() {
+  const yo = (SES.nombre || "").toLowerCase();
+  return turnosRows().filter((t) => (t[2] || "").toLowerCase() === yo);
+}
+function horasRango(turnos, fechaD, fechaH, abierto) {
+  const porDia = {};
+  turnos.forEach((t) => {
+    const f = normFecha(t[1]); if (!f || f < fechaD || f > fechaH) return;
+    (porDia[f] = porDia[f] || []).push(t);
+  });
+  const aMin = (h) => { const p = String(h || "").split(":"); return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0); };
+  const hoy = normFecha(hoyLat());
+  let min = 0;
+  Object.entries(porDia).forEach(([f, arr]) => {
+    arr.sort((a, b) => aMin(a[4]) - aMin(b[4]));
+    let ini = null;
+    arr.forEach((t) => {
+      if (String(t[3] || "").toLowerCase().startsWith("entrada")) { if (ini == null) ini = aMin(t[4]); }
+      else if (ini != null) { min += Math.max(0, aMin(t[4]) - ini); ini = null; }
+    });
+    if (ini != null && abierto && f === hoy) { const now = new Date(); min += Math.max(0, now.getHours() * 60 + now.getMinutes() - ini); }
+  });
+  return min / 60;
+}
+function pintarJornadaMia() {
+  const box = $("jornada-mia");
+  if (!box || !SES) return;
+  const mios = misTurnos();
+  const hoy = normFecha(hoyLat());
+  const aMin = (h) => { const p = String(h || "").split(":"); return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0); };
+  const deHoy = mios.filter((t) => normFecha(t[1]) === hoy).sort((a, b) => aMin(a[4]) - aMin(b[4]));
+  const ultimo = deHoy[deHoy.length - 1];
+  const dentro = ultimo && String(ultimo[3] || "").toLowerCase().startsWith("entrada");
+  const rM = rangoPeriodo("Mes", 0);
+  box.innerHTML = `<b>🕐 Mi jornada</b> <span class="badge ${dentro ? "activo" : "plan"}">${dentro ? "En turno" : "Fuera"}</span><br>`
+    + `<small>Hoy: ${horasRango(mios, hoy, hoy, true).toFixed(1)} h • Mes: ${horasRango(mios, rM.d, rM.h, true).toFixed(1)} h</small><br>`
+    + `<div class="fila"><button class="btn-mini${dentro ? "" : " verde"}" id="jor-in">Entrada</button><button class="btn-mini${dentro ? " verde" : ""}" id="jor-out">Salida</button></div>`
+    + (deHoy.length ? `<small>${deHoy.map((t) => `${t[4]} ${t[3]}`).join(" • ")}</small>` : `<small>Sin marcas hoy.</small>`);
+  const marcar = async (tipo) => {
+    const r = await api({ action: "registrar_jornada", sheetName: SES.code, tipo, usuario: SES.nombre });
+    toast(r.status === "success" ? tipo + " registrada" : (r.message || "No se pudo registrar"));
+    await recargar();
+    if (!$("t-cuenta").classList.contains("oculto")) pintarCuenta();
+  };
+  $("jor-in").addEventListener("click", () => marcar("Entrada"));
+  $("jor-out").addEventListener("click", () => marcar("Salida"));
+}
+function pintarEquipo() {
+  const box = $("usu-equipo");
+  if (!box || !ME.admin) { if (box) box.innerHTML = ""; return; }
+  const rM = rangoPeriodo("Mes", 0);
+  const hoy = normFecha(hoyLat());
+  let h = `<h3>📈 Rendimiento del equipo (mes)</h3>`;
+  usuRows().forEach((u) => {
+    const nom = u[1] || "";
+    const turnos = turnosRows().filter((t) => (t[2] || "").toLowerCase() === nom.toLowerCase());
+    const hs = horasRango(turnos, rM.d, rM.h, true);
+    const deHoy = turnos.filter((t) => normFecha(t[1]) === hoy);
+    const ult = deHoy[deHoy.length - 1];
+    const enTurno = ult && String(ult[3] || "").toLowerCase().startsWith("entrada");
+    const V = venVivas().filter((v) => (v[13] || "") === nom && enPeriodo(v[1], rM));
+    const nv = gruposVentas().filter((g) => g.usuario === nom && enPeriodo(g.fecha, rM)).length;
+    const tv = V.reduce((a, v) => a + num(v[12]), 0);
+    h += `<div class="card"><b>${esc(nom)}</b> ${enTurno ? '<span class="badge activo">En turno</span>' : ""}<br>`
+      + `<small>Ventas: ${nv} • Valor: ${fmt(tv)} • Promedio: ${fmt(nv ? tv / nv : 0)}</small><br>`
+      + `<small>Horas: ${hs.toFixed(1)} h • $/h: ${fmt(hs > 0.05 ? tv / hs : 0)} • Productos: ${V.reduce((a, v) => a + num(v[6]), 0)}</small><br>`
+      + `<small>Anulaciones: ${venRows().filter((v) => v[20] === nom && String(v[14] || "").toLowerCase() === "anulado" && enPeriodo(v[1], rM)).length} • Descuentos: ${fmt(V.reduce((a, v) => a + num(v[9]), 0))}</small></div>`;
+  });
+  box.innerHTML = h || '<div class="card">Sin equipo.</div>';
+}
+
 // ---------- cuenta ----------
 function pintarCuentaInfo() {
   $("cuenta-info").innerHTML = `<b>${esc(SES.nombre)}</b><br><small>${esc(SES.correo)} • ${esc(SES.rol)} • ${esc(SES.negocio)}</small>`;
@@ -2025,6 +2423,7 @@ function stopClave() { if (CLAVE_TIMER) { clearInterval(CLAVE_TIMER); CLAVE_TIME
 function pintarCuenta() {
   pintarCuentaInfo();
   stopClave();
+  pintarJornadaMia();
   const box = $("cuenta-clave");
   if (!ME.admin) { box.innerHTML = ""; return; }
   box.innerHTML = `<div class="card"><b>🔑 Clave dinámica del admin</b><div class="monto" id="clave-valor">···</div>

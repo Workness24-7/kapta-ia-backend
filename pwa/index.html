@@ -439,6 +439,10 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .seg { display: flex; gap: 6px; margin: 8px 0; }
 .seg button { flex: 1; border: 0; border-radius: 12px; padding: 9px 0; background: #E8EAF6; color: var(--mut); font-weight: 700; font-size: 13px; }
 .seg button.on { background: var(--prim); color: #fff; }
+.dock-emoji { font-size: 28px; line-height: 1; position: relative; z-index: 1; }
+#dock button.on .dock-emoji { filter: brightness(0) invert(1); }
+#hh-dias { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
+#hh-dias .check input { width: auto; margin: 0; }
 .tabla { width: 100%; border-collapse: collapse; font-size: 12px; }
 .tabla th, .tabla td { text-align: left; padding: 7px 6px; border-bottom: 1px solid #E2E8F0; }
 .tabla th { color: var(--mut); font-size: 11px; }
@@ -632,6 +636,20 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
       <div id="fin-utilidad"></div>
       <div id="fin-ventas"></div>
       <div id="fin-gastos"></div>
+      <h3>Facturación</h3>
+      <input id="fac-buscar" placeholder="Consultar folio, factura o cliente..." autocomplete="off">
+      <div class="fila"><button class="btn-mini" id="fac-exp">📥 Exportar CSV</button></div>
+      <div id="fac-lista"></div>
+    </div>
+
+    <div id="t-dashboard" class="tab oculto">
+      <h2>Panel del negocio</h2>
+      <div id="dash-filtros" class="seg"></div>
+      <div class="grid2" id="dash-kpis"></div>
+      <div id="dash-rent"></div>
+      <div id="dash-tops"></div>
+      <div id="dash-happy"></div>
+      <div id="dash-alertas"></div>
     </div>
 
     <div id="t-usuarios" class="tab oculto">
@@ -639,6 +657,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
       <button id="btn-nuevo-usuario" class="btn primario">+ Crear Usuario</button>
       <div id="usu-lista"></div>
       <div id="usu-form" class="oculto"></div>
+      <div id="usu-equipo"></div>
     </div>
 
     <div id="t-cuenta" class="tab oculto">
@@ -649,6 +668,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
         <b>Teléfono del negocio</b>
         <div class="fila"><input id="cuenta-tel" inputmode="tel" placeholder="+57 ..."><button class="btn-mini" id="btn-tel">Guardar</button></div>
       </div>
+      <div class="card" id="jornada-mia"></div>
       <p class="muted" style="text-align:center" id="cuenta-version"></p>
       <button id="btn-soporte" class="btn link">Ayuda y soporte</button>
       <button id="btn-salir" class="btn peligro">Cerrar sesión</button>
@@ -662,7 +682,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=27"></script>
+<script src="app.js?v=28"></script>
 </body>
 </html>
 
