@@ -343,6 +343,8 @@ canvas.bc39 { max-width: 100%; height: 56px; }
 .precio { color: var(--ok); font-weight: 800; white-space: nowrap; }
 .cant { display: flex; align-items: center; gap: 8px; }
 .cant button { width: 30px; height: 30px; border-radius: 50%; border: 1px solid #CBD5E1; background: #fff; font-size: 16px; }
+.cant .btn-mini { width: auto; height: auto; border: 0; border-radius: 10px; padding: 8px 12px; background: var(--prim); color: #fff; font-weight: 700; font-size: 13px; margin-top: 6px; }
+.cant .btn-mini.verde { background: var(--ok); }
 .fila { display: flex; gap: 8px; align-items: center; }
 .fila select { flex: 1; }
 .monto { font-weight: 800; font-size: 16px; }
@@ -607,7 +609,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
       </div>
       <div id="venh">
         <h3>Historial de ventas</h3>
-        <div class="fila" id="venh-facrow"><button class="btn-mini" id="venh-exp">Exportar Facturas</button><button class="btn-mini" id="venh-plant">Plantilla</button><input id="venh-plantup" type="file" accept=".xlsx" class="oculto"></div>
+        <div class="fila" id="venh-facrow"><button class="btn-mini" id="venh-exp">Exportar Facturas</button><button class="btn-mini" id="venh-plant">Plantilla</button><button class="btn-mini" id="venh-plantup-btn">Actualizar</button><input id="venh-plantup" type="file" accept=".xlsx" class="oculto"></div>
         <div id="venh-filtros" class="seg"></div>
         <div id="venh-rango" class="oculto fila">
           <input id="venh-desde" placeholder="dd/mm/aaaa" inputmode="numeric">
@@ -699,7 +701,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=29"></script>
+<script src="app.js?v=30"></script>
 </body>
 </html>
 

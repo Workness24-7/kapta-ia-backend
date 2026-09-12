@@ -34,10 +34,10 @@ CABECERAS = {
 # A los tenants se les sirven las filas SIN la columna codigo (índices intactos).
 CABECERAS_GLOBALES = {
     "usuarios": ["Codigo_Empresa", "Id_Usuario", "Nombre", "Correo", "Contrasena",
-               "Rol", "Estado", "Fecha_Creacion", "Ultimo_Acceso",
-               "Fecha_Cambio_Estado", "Motivo_Cambio", "Cambiado_Por", "Funciones",
-               "Entrada", "Salida", "Horas_Mensuales", "Horas", "Ventas", "Valor",
-               "Promedio", "Venta_Hora", "Productos", "Anulaciones", "Descuentos"],
+               "Rol", "Estado", "Entrada", "Salida", "Horas_Mensuales", "Horas",
+               "Ventas", "Valor", "Promedio", "Venta_Hora", "Productos",
+               "Anulaciones", "Descuentos", "Fecha_Creacion", "Ultimo_Acceso",
+               "Fecha_Cambio_Estado", "Motivo_Cambio", "Cambiado_Por", "Funciones"],
     "gastos": ["Codigo_Empresa", "Id_Gasto", "Fecha", "Hora", "Categoria",
                "Concepto", "Descripcion", "Proveedor", "Monto", "Metodo_Pago",
                "Referencia", "Usuario", "Estado", "Fecha_Modificacion",
@@ -291,7 +291,10 @@ def _migrar_legacy(cur, codigo):
             continue
         cols_viejas = [_col(h) for h in LEGACY_CABECERAS[legacy]]
         cols_nuevas = COLUMNS_GLOBALES[glo]
-        sel = ", ".join(f't."{c}"' for c in cols_viejas)
+        if legacy == "usuarios":
+            sel = ", ".join(f'COALESCE(t."{c}", \'\')' if c in cols_viejas else "''" for c in cols_nuevas)
+        else:
+            sel = ", ".join(f't."{c}"' for c in cols_viejas)
         ins_cols = ", ".join(f'"{c}"' for c in cols_nuevas)
         cur.execute(
             f'INSERT INTO "{glo}" (fila, {ins_cols}) '
@@ -304,6 +307,45 @@ def _migrar_legacy(cur, codigo):
         cur.execute(f'ALTER TABLE "{vieja}" RENAME TO "{vieja}_backup_2026_08"')
     for obsoleta in ("estadisticas", "ia"):
         cur.execute(f'DROP TABLE IF EXISTS "{slug}_{obsoleta}"')
+
+
+def _col_idx(cols, nombre):
+    """Índice por nombre (a prueba de reordenamientos)."""
+    try:
+        return list(cols).index(_col(nombre))
+    except ValueError:
+        return -1
+
+
+def _reordenar_usuarios(cur):
+    """Pone las columnas de usuarios en el orden canónico (auditoría al final).
+    Solo si difiere; con respaldo y verificación de conteo."""
+    cols = COLUMNS_GLOBALES["usuarios"]
+    cur.execute(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_name='usuarios' AND column_name NOT IN ('fila') "
+        "ORDER BY ordinal_position"
+    )
+    actuales = [str(r[0]) for r in cur.fetchall()]
+    if actuales == list(cols):
+        return
+    if not actuales:
+        return
+    cur.execute('ALTER TABLE "usuarios" RENAME TO "usuarios_backup_orden"')
+    _crear_tabla_global(cur, "usuarios")
+    comunes = [c for c in cols if c in actuales]
+    if comunes:
+        lc = ", ".join(f'"{c}"' for c in comunes)
+        cur.execute(
+            f'INSERT INTO "usuarios" (fila, {lc}) '
+            f'SELECT fila, {lc} FROM "usuarios_backup_orden"'
+        )
+    cur.execute('SELECT COUNT(*) FROM "usuarios"')
+    n_new = cur.fetchone()[0]
+    cur.execute('SELECT COUNT(*) FROM "usuarios_backup_orden"')
+    n_old = cur.fetchone()[0]
+    if n_new == n_old:
+        cur.execute('DROP TABLE "usuarios_backup_orden"')
 
 
 def _limpiar_tablas_backup(cur):
@@ -328,8 +370,8 @@ def _limpiar_tablas_backup(cur):
 def _backfill_ultimo_acceso(cur):
     """Garantiza Ultimo_Acceso poblado para todos los usuarios globales."""
     cols = COLUMNS_GLOBALES["usuarios"]
-    col_acc = cols[8]    # Ultimo_Acceso
-    col_cre = cols[7]    # Fecha_Creacion
+    col_acc = cols[_col_idx(cols, "Ultimo_Acceso")]
+    col_cre = cols[_col_idx(cols, "Fecha_Creacion")]
     hoy = datetime.date.today().isoformat()
     cur.execute(
         f'UPDATE "usuarios" SET "{col_acc}" = COALESCE(NULLIF("{col_cre}", \'\'), %s) '
@@ -381,6 +423,7 @@ def init_db():
                 for tabla in CABECERAS:
                     _crear_tabla(cur, codigo, tabla)
             _limpiar_tablas_backup(cur)
+            _reordenar_usuarios(cur)
             _backfill_ultimo_acceso(cur)
             if (os.getenv("LIMPIAR_EMPRESAS") or "").strip() == "1":
                 _limpiar_todas_empresas(cur)
@@ -881,7 +924,7 @@ def actualizar_contrasena(empresa_codigo, correo, hash_nuevo):
     """Migra contraseñas legadas en texto plano a hash."""
     cols = COLUMNS_GLOBALES["usuarios"]
     col_correo = cols[2]   # Correo
-    col_clave = cols[3]    # Contrasena
+    col_clave = cols[3]   # Contrasena
     with _connect() as conn:
         with conn.cursor() as cur:
             _crear_tabla_global(cur, "usuarios")
@@ -897,7 +940,7 @@ def actualizar_ultimo_acceso(empresa_codigo, correo, fecha):
     """Tabla global de usuarios: un UPDATE indexado por codigo+correo."""
     cols = COLUMNS_GLOBALES["usuarios"]
     col_correo = cols[2]   # Correo
-    col_ultimo = cols[7]   # Ultimo_Acceso
+    col_ultimo = cols[_col_idx(cols, "Ultimo_Acceso")]   # Ultimo_Acceso
     with _connect() as conn:
         with conn.cursor() as cur:
             _crear_tabla_global(cur, "usuarios")

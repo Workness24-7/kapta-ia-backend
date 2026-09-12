@@ -1,5 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-17";
+const VERSION_PWA = "PWA-2026-09-18";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -1044,10 +1044,32 @@ async function entrar() {
   $("btn-regalo").style.display = ME.admin ? "" : "none";
   tab("inicio");
   activarSplits(); aplicarLayout();
+  rellenarFunciones().catch(() => {});
   try {
     const cv = document.getElementById("cuenta-version");
     if (cv) cv.textContent = VERSION_PWA;
   } catch { /* noop */ }
+}
+// Escribe una vez las funciones numeradas si la columna viene vacía o legada.
+async function rellenarFunciones() {
+  if (!ME || !ME.row) return;
+  const raw = String(ME.row[22] || "");
+  if (/\d|BAR/i.test(raw)) return;
+  const codes = ME.admin ? FUNC_CATALOG.map((f) => f.c) : [...(ME.codes || [])];
+  if (!codes.length) return;
+  const sec = ME.admin ? FULL() : secFromCodes(new Set(codes));
+  const dc = dockCapsFromCodes(new Set(codes));
+  const row = ME.row;
+  const data = [row[0] || "", row[1] || "", row[2] || "", row[3] || "", row[4] || "Cajero", row[5] || "Activo",
+    row[6] || "", row[7] || "", row[8] || "", row[9] || "0", row[10] || "", row[11] || "",
+    row[12] || "0", row[13] || "0", row[14] || "", row[15] || "", row[16] || "",
+    row[17] || hoyLat(), row[18] || "", fmtFechaHora(new Date()), "Numeración de funciones", SES.uid || SES.correo,
+    JSON.stringify({ compact: codes.join(" - "), dock: dc.dock, functions: [], caps: dc.caps, secciones: sec })];
+  const r = await api({ action: "crear_usuario", tableName: "Usuarios", data });
+  if (r.status === "success") {
+    ME.row = data;
+    ME.funciones = data[22];
+  }
 }
 $("btn-ayuda").addEventListener("click", () => {
   openModal(`<h2>Solicitar Soporte</h2>
@@ -1460,9 +1482,7 @@ function pintarHistorial() {
       if (b && b.dataset.a === "anular") { e.stopPropagation(); anularVenta(g); return; }
       if (b && b.dataset.a === "pdf") {
         e.stopPropagation();
-        const f = facLeer().find((x) => x.folio === g.cod);
-        if (f) { imprimir("Factura " + f.cod, facturaHTML(f)); dibujarBarras(); }
-        else toast("Sin factura electrónica");
+        facturaDeGrupo(g).then((f) => { imprimir("Factura " + f.cod, facturaHTML(f)); dibujarBarras(); }).catch(() => toast("No se pudo generar"));
         return;
       }
       verDocumento(g);
@@ -2098,13 +2118,11 @@ function cliGuardar(o) { try { localStorage.setItem(cliKey(), JSON.stringify(o))
 async function emitirFactura(det, info) {
   if (!tieneFuncion("BAR4")) return null;
   try {
-    const arr = facLeer();
-    const mx = arr.reduce((a, x) => { const m = /^FV-(\d+)$/.exec(x.cod || ""); return m ? Math.max(a, parseInt(m[1], 10)) : a; }, 0);
-    const fv = "FV-" + String(mx + 1).padStart(4, "0");
     const ts = fechaYMDHora();
     const mem = cliLeer()[info.cliente] || {};
     const mostrador = /^(cliente mostrador|bolirrana)/i.test(info.cliente);
     const total = det.reduce((a, d) => a + d.sub, 0);
+    const fv = fvDe(info.folio);
     const f = {
       cod: fv, folio: info.folio, fecha: ts.fecha, hora: ts.hora,
       cliente: mostrador ? "Consumidor Fiscal" : info.cliente,
@@ -2113,10 +2131,19 @@ async function emitirFactura(det, info) {
       total, modo: info.modo, medio: info.medio || "Efectivo", usuario: SES.nombre,
       emision: ts.fecha + " " + ts.hora, nc: null, cufe: "",
     };
-    f.cufe = await generarCUFE([fv, f.folio, ts.fecha, ts.hora, f.cliente, total, SES.code].join("|"));
-    arr.push(f); facGuardar(arr);
+    f.cufe = await cufeDe(info.folio, f);
     return f;
   } catch { return null; }
+}
+async function crearNC(g) {
+  if (g.estado !== "Anulado") {
+    if (!confirm(`Crear nota crédito y anular la venta ${g.cod}? Se devolverá el stock.`)) return;
+    if (!(await anularVenta(g, true))) return;
+  } else if (!confirm(`Crear nota crédito de ${g.cod}?`)) return;
+  const m = facMapLeer();
+  m[g.cod] = Object.assign(m[g.cod] || { fv: fvDe(g.cod) }, { nc: { fecha: hoyLat(), hora: horaHM(), usuario: SES.nombre } });
+  facMapGuardar(m);
+  toast("Nota crédito creada"); pintarFacturas();
 }
 function facQR(f) {
   return ["FACTURA " + f.cod, "REF " + f.folio, f.fecha + " " + f.hora,
@@ -2154,23 +2181,84 @@ function verFacturaDIAN(f) {
   $("fd-cerrar").addEventListener("click", closeModal);
   $("fd-print").addEventListener("click", () => { imprimir("Factura " + f.cod, facturaHTML(f)); dibujarBarras(); });
   $("fd-guardar").addEventListener("click", () => {
-    const arr = facLeer(), i = arr.findIndex((x) => x.cod === f.cod);
     const nit = ($("fd-nit").value || "").trim(), tel = ($("fd-tel").value || "").trim();
-    if (i >= 0) { arr[i].nit = nit; arr[i].tel = tel; facGuardar(arr); }
+    const m = facMapLeer();
+    m[f.folio] = Object.assign(m[f.folio] || { fv: f.cod }, { nit, tel });
+    facMapGuardar(m);
     const mem = cliLeer(); mem[f.cliente] = { nit, tel }; cliGuardar(mem);
     f.nit = nit; f.tel = tel;
     toast("Cliente guardado"); verFacturaDIAN(f);
   });
 }
-function verDocumento(g) {
-  const f = facLeer().find((x) => x.folio === g.cod);
-  if (f) verFacturaDIAN(f);
-  else verComprobante(g);
+function facMapLeer() { try { const o = JSON.parse(localStorage.getItem(facKey()) || "{}"); return o && typeof o === "object" && !Array.isArray(o) ? o : {}; } catch { return {}; } }
+function facMapGuardar(o) { try { localStorage.setItem(facKey(), JSON.stringify(o)); } catch {} }
+function migrarFacturas() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(facKey()) || "null");
+    if (Array.isArray(raw)) {
+      const m = {};
+      raw.forEach((f) => { if (f && f.folio) m[f.folio] = { fv: f.cod, cufe: f.cufe || "", nc: f.nc || null, nit: f.nit || "", tel: f.tel || "" }; });
+      facMapGuardar(m);
+    }
+  } catch {}
 }
-function exportarFacturas() {
-  const arr = facLeer();
-  if (!arr.length) { toast("Sin facturas"); return; }
-  $("print-area").innerHTML = `<h2>${esc(SES.negocio)} — Facturas electrónicas</h2>` + arr.map((f) => facturaHTML(f) + `<div class="salto-pag"></div>`).join("");
+function fvDe(folio) {
+  const m = facMapLeer();
+  if (!m[folio]) {
+    let mx = 0;
+    Object.values(m).forEach((x) => { const mt = /^FV-(\d+)$/.exec(x.fv || ""); if (mt) mx = Math.max(mx, parseInt(mt[1], 10)); });
+    m[folio] = { fv: "FV-" + String(mx + 1).padStart(4, "0"), cufe: "", nc: null, nit: "", tel: "" };
+    facMapGuardar(m);
+  }
+  return m[folio].fv;
+}
+async function cufeDe(folio, f) {
+  const m = facMapLeer();
+  if (m[folio] && m[folio].cufe) return m[folio].cufe;
+  const cufe = await generarCUFE([f.cod, folio, f.fecha, f.hora, f.cliente, Math.round(f.total), SES.code].join("|"));
+  const m2 = facMapLeer();
+  m2[folio] = Object.assign(m2[folio] || { fv: f.cod }, { cufe });
+  facMapGuardar(m2);
+  return cufe;
+}
+function latAYMD(f, h) {
+  let Y = f, H = h;
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(f || ""));
+  if (m) Y = `${m[3]}-${m[2]}-${m[1]}`;
+  const t = /^(\d{1,2}):(\d{2})/.exec(String(h || ""));
+  if (t) { let hh = +t[1]; const ap = hh >= 12 ? "PM" : "AM"; hh = hh % 12 || 12; H = `${String(hh).padStart(2, "0")}:${t[2]}:00 ${ap}`; }
+  return { fecha: Y, hora: H };
+}
+async function facturaDeGrupo(g) {
+  const m = facMapLeer()[g.cod] || {};
+  const mem = cliLeer()[g.cliente] || {};
+  const mostrador = /^(cliente mostrador|bolirrana)/i.test(g.cliente);
+  const yh = latAYMD(g.fecha, g.hora);
+  const f = {
+    cod: m.fv || fvDe(g.cod), folio: g.cod, fecha: yh.fecha, hora: yh.hora,
+    cliente: mostrador ? "Consumidor Fiscal" : g.cliente,
+    nit: m.nit || mem.nit || (mostrador ? "999999999" : ""), tel: m.tel || mem.tel || "",
+    items: g.items, total: g.total, modo: g.modo, medio: g.medio || "Efectivo", usuario: g.usuario,
+    emision: yh.fecha + " " + yh.hora, nc: m.nc || null, cufe: "",
+  };
+  f.cufe = await cufeDe(g.cod, f);
+  return f;
+}
+async function verDocumento(g) {
+  try {
+    verFacturaDIAN(await facturaDeGrupo(g));
+  } catch { verComprobante(g); }
+}
+async function exportarFacturas() {
+  const list = gruposVentas();
+  if (!list.length) { toast("Sin ventas"); return; }
+  toast("Generando facturas...");
+  const parts = [];
+  for (const g of list) {
+    try { parts.push(facturaHTML(await facturaDeGrupo(g)) + `<div class="salto-pag"></div>`); } catch {}
+  }
+  if (!parts.length) { toast("No se pudo generar"); return; }
+  $("print-area").innerHTML = `<h2>${esc(SES.negocio)} — Facturas electrónicas</h2>` + parts.join("");
   dibujarBarras();
   window.print();
 }
@@ -2200,51 +2288,22 @@ async function descargarPlantilla() {
 function verFactura(f) { verFacturaDIAN(f); }
 
 // ---------- facturación local premium ----------
-function facKey() { return "kapta_fact_" + ((SES && SES.code) || "pub"); }
-function facLeer() { try { const a = JSON.parse(localStorage.getItem(facKey()) || "[]"); return Array.isArray(a) ? a : []; } catch { return []; } }
-function facGuardar(a) { try { localStorage.setItem(facKey(), JSON.stringify(a)); } catch {} }
-function facturaHTML(f) {
-  return `<h2>Factura ${esc(f.cod)}</h2>`
-    + `<div class="card" style="text-align:center"><b>${esc(SES.negocio)}</b><br><small>${esc(f.fecha)} ${esc(f.hora)} • ${esc(f.modo)}${f.nc ? ' • <span class="badge susp">NOTA CRÉDITO</span>' : ""}</small><br><div class="monto">${esc(f.cod)}</div></div>`
-    + `<div class="card"><b>Cliente:</b> ${esc(f.cliente)}<br><small>NIT/ID: ${esc(f.nit || "—")} • ${esc(f.correo || "")}</small><br><small>Folio venta: ${esc(f.folio)} • ${esc(f.usuario)}</small>`
-    + `<table class="tabla"><tr><th>Pedido</th><th>Cant.</th><th>Subtotal</th></tr>`
-    + f.items.map((it) => `<tr><td>${esc(it.prod)}</td><td>${it.cant}</td><td>${fmt(it.sub)}</td></tr>`).join("")
-    + `</table><div class="monto">Total: ${fmt(f.total)}</div></div>`
-    + `<div class="card" style="text-align:center"><img src="${qrURL(qrPayload({ cod: f.cod, cliente: f.cliente, fecha: f.fecha, hora: f.hora, total: f.total, items: f.items }))}" alt="QR ${esc(f.cod)}" width="140" height="140" loading="lazy" onerror="this.outerHTML='<b>${esc(f.cod)}</b>'"><br><small>Referencia: ${esc(f.cod)}</small></div>`
-    + `<button class="btn exito" id="fc-print">🖨️ Imprimir / PDF</button>`
-    + `<button class="btn link" id="fc-cerrar">Cerrar</button>`;
-}
-function verFactura(f) {
-  openModal(facturaHTML(f));
-  $("fc-cerrar").addEventListener("click", closeModal);
-  $("fc-print").addEventListener("click", () => imprimir("Factura " + f.cod, facturaHTML(f).replace(/<button[^]*$/, "")));
-}
-async function crearNC(f) {
-  const arr = facLeer();
-  const i = arr.findIndex((x) => x.cod === f.cod);
-  if (i < 0) return;
-  const g = gruposVentas().find((x) => x.cod === f.folio);
-  if (g && g.estado !== "Anulado") {
-    if (!confirm(`Crear nota crédito de ${f.cod} y anular la venta ${f.folio}? Se devolverá el stock.`)) return;
-    if (!(await anularVenta(g, true))) return;
-  } else if (!confirm(`Crear nota crédito de ${f.cod}?`)) return;
-  arr[i].nc = { fecha: hoyLat(), hora: horaHM(), usuario: SES.nombre };
-  facGuardar(arr); toast("Nota crédito creada"); pintarFacturas();
-}
 function pintarFacturas() {
   const box = $("fac-lista");
   if (!box) return;
   const q = (($("fac-buscar") || {}).value || "").toLowerCase();
-  const arr = facLeer().filter((f) => !q || (f.cod || "").toLowerCase().includes(q) || (f.cliente || "").toLowerCase().includes(q) || (f.folio || "").toLowerCase().includes(q));
-  box.innerHTML = arr.length ? "" : '<div class="card">Sin facturas. Créala con FAC desde el historial de ventas.</div>';
-  arr.slice().reverse().forEach((f) => {
+  const arr = gruposVentas().filter((g) => !q || g.cod.toLowerCase().includes(q) || (g.cliente || "").toLowerCase().includes(q));
+  box.innerHTML = arr.length ? "" : '<div class="card">Sin ventas para facturar.</div>';
+  arr.slice().reverse().forEach((g) => {
+    const m = facMapLeer()[g.cod] || {};
+    const fv = m.fv || fvDe(g.cod);
     const div = document.createElement("div");
     div.className = "card fila-deu";
-    div.innerHTML = `<div><b>${esc(f.cod)}</b> ${f.nc ? '<span class="badge susp">NC</span>' : ""}<br><small>${esc(f.fecha)} • ${esc(f.cliente)} • Folio ${esc(f.folio)}</small></div><div class="cant"><span class="monto">${fmt(f.total)}</span><button data-a="ver">Ver</button>${f.nc ? "" : '<button data-a="nc">NC</button>'}</div>`;
+    div.innerHTML = `<div><b>${esc(fv)}</b> ${m.nc ? '<span class="badge susp">NC</span>' : g.estado === "Anulado" ? '<span class="badge susp">Anulada</span>' : ""}<br><small>${esc(g.fecha)} ${esc(g.hora)} • ${esc(g.cliente)} • ${g.items.length} item(s)</small></div><div class="cant"><span class="monto">${fmt(g.total)}</span><button data-a="ver">Ver</button>${m.nc || g.estado === "Anulado" ? "" : '<button data-a="nc">NC</button>'}</div>`;
     div.querySelectorAll("button").forEach((b) => b.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (b.dataset.a === "ver") verFactura(f);
-      else crearNC(f);
+      if (b.dataset.a === "ver") verDocumento(g);
+      else crearNC(g);
     }));
     box.appendChild(div);
   });
@@ -2252,6 +2311,7 @@ function pintarFacturas() {
 if ($("fac-buscar")) $("fac-buscar").addEventListener("input", pintarFacturas);
 if ($("venh-exp")) $("venh-exp").addEventListener("click", exportarFacturas);
 if ($("venh-plant")) $("venh-plant").addEventListener("click", descargarPlantilla);
+if ($("venh-plantup-btn")) $("venh-plantup-btn").addEventListener("click", () => $("venh-plantup").click());
 if ($("venh-plantup")) $("venh-plantup").addEventListener("change", () => {
   const f = ($("venh-plantup").files || [])[0];
   if (!f) return;
@@ -2260,9 +2320,13 @@ if ($("venh-plantup")) $("venh-plantup").addEventListener("change", () => {
   rd.readAsDataURL(f);
 });
 if ($("fac-exp")) $("fac-exp").addEventListener("click", () => {
-  const arr = facLeer();
-  if (!arr.length) { toast("Sin facturas para exportar"); return; }
-  const csv = "Factura,Folio,Fecha,Hora,Cliente,NIT,Correo,Total,Modo,NC\n" + arr.map((f) => [f.cod, f.folio, f.fecha, f.hora, `"${(f.cliente || "").replace(/"/g, "")}"`, f.nit, f.correo, Math.round(f.total), f.modo, f.nc ? "SI" : ""].join(",")).join("\n");
+  const list = gruposVentas();
+  if (!list.length) { toast("Sin facturas para exportar"); return; }
+  const m = facMapLeer();
+  const csv = "Factura,Folio,Fecha,Hora,Cliente,NIT,Total,Modo,NC\n" + list.map((g) => {
+    const e = m[g.cod] || {};
+    return [e.fv || "", g.cod, g.fecha, g.hora, `"${(g.cliente || "").replace(/"/g, "")}"`, e.nit || "", Math.round(g.total), g.modo, e.nc ? "SI" : ""].join(",");
+  }).join("\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
   a.download = "facturas_" + SES.code + ".csv";
@@ -2756,6 +2820,30 @@ function imprimir(titulo, html) {
 }
 
 // ---------- arranque ----------
+function rutaInicial() {
+  try {
+    const h = String(location.hostname || "").toLowerCase();
+    if (h === "aptadmin.kaptaia.app") return { modo: "super" };
+    const m = h.match(/^([a-z0-9-]+)\.kaptaia\.app$/);
+    if (m && m[1] !== "www" && m[1] !== "kapta") return { modo: "negocio", code: m[1].toUpperCase() };
+  } catch {}
+  return { modo: "redireccion" };
+}
+async function entrarDirecto(code) {
+  try {
+    const r = await fetch(BASE + "?action=resolver_empresa&codigo=" + encodeURIComponent(code)).then((x) => x.json());
+    const emp = (r.status === "success" && r.data && r.data.empresa) || null;
+    if (!emp) { ver("negocio"); return; }
+    SES = SES && SES.code === code ? SES : { code, negocio: emp.nombre || code };
+    EMPRESA = emp;
+    aplicarIdentidad(emp);
+    $("login-nombre").textContent = SES.negocio;
+    $("login-dominio").textContent = code.toLowerCase() + ".kaptaia.com";
+    localStorage.setItem("kapta_code", code);
+    if (SES.correo) { entrar(); return; }
+    ver("login");
+  } catch { ver("negocio"); }
+}
 (function init() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
@@ -2770,6 +2858,13 @@ function imprimir(titulo, html) {
   } catch { /* noop */ }
   const tel = $("cuenta-tel");
   SES = cargarSesion();
+  const RUTA = rutaInicial();
+  if (RUTA.modo === "super") { ver("superlogin"); }
+  else if (RUTA.modo === "negocio") {
+    if (SES && SES.code && SES.code !== RUTA.code) { SES = null; localStorage.removeItem("kapta_pwa"); sessionStorage.removeItem("kapta_pwa"); }
+    entrarDirecto(RUTA.code);
+  }
+  else {
   const sup = sessionStorage.getItem("kapta_super");
   if (sup) {
     const tok = sessionStorage.getItem("kapta_super_tok") || "";
@@ -2787,6 +2882,7 @@ function imprimir(titulo, html) {
     if (c) $("in-codigo").value = c;
     pintarPaises();
     ver("negocio");
+  }
   }
   $("in-codigo").addEventListener("change", () => localStorage.setItem("kapta_code", $("in-codigo").value.trim()));
   // precarga teléfono del negocio al abrir cuenta
