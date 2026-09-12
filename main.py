@@ -1880,6 +1880,113 @@ def _fnum(v):
         return 0
 
 
+LINK_SECRET = (os.getenv("KAPTA_LINK_SECRET") or "").strip()
+if not LINK_SECRET:
+    LINK_SECRET = secrets.token_urlsafe(32)
+    print("[enlaces] KAPTA_LINK_SECRET no definido: enlaces válidos solo hasta reiniciar.")
+
+
+def _firmar_enlace(payload):
+    return hmac.new(LINK_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()[:32]
+
+
+# Vista -> códigos de función que la autorizan (compacto "1 - BAR1").
+VISTA_CODS = {
+    "venta": {"18", "19", "20", "21", "22", "23", "24", "25", "26", "44", "45", "46", "47", "49"},
+    "inventario": {"50", "51", "52", "53", "54"},
+    "finanzas": {"59", "60", "61"},
+    "deudores": {"31", "32", "33", "34", "35", "36", "55", "56", "57", "58"},
+    "dashboard": {"59", "60", "61"},
+}
+
+
+def _vista_permitida(rol, funciones, vista):
+    vista = str(vista or "").strip().lower()
+    if vista in ("inicio", "login"):
+        return True
+    if re.search(r"admin|supervisor", str(rol or ""), re.I):
+        return True
+    raw = str(funciones or "")
+    if raw.strip().startswith("{"):
+        try:
+            o = json.loads(raw)
+            dock = (o.get("dock") or {})
+            mapa = {"venta": "Ventas", "inventario": "Inventario", "finanzas": "Finanzas", "dashboard": "Finanzas"}
+            if vista == "deudores":
+                return bool((o.get("caps") or []) and "deudores" in o.get("caps")) or bool((o.get("secciones") or {}).get("acciones"))
+            if vista == "usuarios":
+                return False
+            return dock.get(mapa.get(vista, ""), False) is True
+        except (ValueError, TypeError, AttributeError):
+            return vista in ("venta", "deudores")
+    codes = {c.strip().upper() for c in raw.split("-") if c.strip()}
+    if vista == "usuarios":
+        return False
+    need = VISTA_CODS.get(vista)
+    if not need:
+        return False
+    return bool(codes & need)
+
+
+def action_crear_enlace(params):
+    """Emite token firmado para accesos por vista: {sheetName, correo}."""
+    params = params or {}
+    clave = str(params.get("sheetName") or params.get("codigo") or "").strip()
+    correo = str(params.get("correo") or params.get("userEmail") or "").strip()
+    if not clave or not correo:
+        return respuesta_error("Faltan datos.")
+    empresa = resolver_hoja(clave)
+    if not empresa:
+        return respuesta_error("No existe la hoja: " + clave)
+    got, d = _leer_usuario(empresa, correo)
+    if not got:
+        return respuesta_error("Usuario no encontrado.")
+    if str(d[5] if len(d) > 5 else "" or "").strip().lower() != "activo":
+        return respuesta_error("Usuario inactivo.")
+    uid = str(d[0] or "")
+    exp = int(datetime.datetime.now().timestamp()) + 30 * 24 * 3600
+    payload = f"{empresa}.{uid}.{exp}"
+    b64 = _b64.b64encode(payload.encode()).decode().replace("+", "-").replace("/", "_").rstrip("=")
+    return respuesta_success({"token": f"{b64}.{_firmar_enlace(payload)}"})
+
+
+def action_validar_acceso(params):
+    """Valida token de enlace y permiso de vista: {token, vista}."""
+    params = params or {}
+    token = str(params.get("token") or "").strip()
+    vista = str(params.get("vista") or "inicio").strip().lower()
+    try:
+        b64, sig = token.rsplit(".", 1)
+        payload = _b64.b64decode(b64.replace("-", "+").replace("_", "/") + "==").decode()
+        code, uid, exp = payload.split(".")
+        if _firmar_enlace(payload) != sig or int(exp) < int(datetime.datetime.now().timestamp()):
+            return respuesta_error("Enlace inválido o vencido.")
+    except (ValueError, TypeError, AttributeError):
+        return respuesta_error("Enlace inválido.")
+    empresa = resolver_hoja(code)
+    if not empresa:
+        return respuesta_error("Negocio no encontrado.")
+    got, d = None, None
+    try:
+        for (n, dd) in db.leer_tabla(empresa, "usuarios"):
+            dd = list(dd) + [""] * max(0, 23 - len(dd))
+            if str(dd[0] or "") == uid:
+                got, d = n, dd
+                break
+    except Exception:
+        pass
+    if not got:
+        return respuesta_error("Usuario no encontrado.")
+    if str(d[5] or "").strip().lower() != "activo":
+        return respuesta_error("Usuario inactivo.")
+    if not _vista_permitida(d[4], d[22], vista):
+        return respuesta_error("Sin acceso a esta vista.")
+    return respuesta_success({"usuario": {
+        "id": d[0], "nombre": d[1], "correo": d[2], "rol": d[4] or "Empleado",
+        "estado": d[5] or "Activo", "funciones": d[22] or "",
+    }})
+
+
 def action_anular_venta(params):
     """Anula una venta por su folio (Id_Venta): marca Estado=Anulado y sella
     fecha/hora/usuario de anulación en cada fila del folio."""
@@ -2091,6 +2198,8 @@ POST_ACTIONS = {
     "guardar_config": action_guardar_config,
     "sincronizar_usuario": action_sincronizar_usuario,
     "ficha_negocio": action_ficha_negocio,
+    "crear_enlace": action_crear_enlace,
+    "validar_acceso": action_validar_acceso,
     "registrar_deudor": action_escribir_fila,
     "registrar_gasto": action_escribir_fila,
     "crear_usuario": action_escribir_fila,

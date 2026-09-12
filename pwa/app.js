@@ -1,5 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-20";
+const VERSION_PWA = "PWA-2026-09-21";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -94,6 +94,10 @@ $("btn-empresa-ayuda").addEventListener("click", () => {
   toast("Pide tu identificador al administrador de tu negocio o al soporte Kapta IA.");
 });
 function tab(nombre) {
+  if (MODO_AISLADO && nombre !== MODO_AISLADO.vista) {
+    location.hash = `#/${MODO_AISLADO.code}/${nombreVista(MODO_AISLADO.vista)}/${MODO_AISLADO.token}`;
+    return;
+  }
   stopClave();
   document.querySelectorAll(".tab").forEach((t) => t.classList.add("oculto"));
   $("t-" + nombre).classList.remove("oculto");
@@ -1108,17 +1112,22 @@ $("btn-nuevo-deudor").addEventListener("click", () => {
     await recargar(); pintarDeudores();
   });
 });
-$("btn-salir").addEventListener("click", () => {
+function salir() {
   if (SES && SES.super && SUPER) {
     SES = null; ME = null;
     cargarNegocios();
     return;
   }
-  SES = null; ME = null;
+  const ais = MODO_AISLADO;
+  SES = null; ME = null; MI_TOKEN = null; MODO_AISLADO = null;
+  try { document.getElementById("p-pos").classList.remove("aislado"); } catch {}
   localStorage.removeItem("kapta_pwa"); sessionStorage.removeItem("kapta_pwa");
   aplicarIdentidad(null);
-  ver("negocio");
-});
+  if (ais) location.hash = `#/${ais.code}/Login`;
+  else ver("negocio");
+}
+$("btn-salir").addEventListener("click", salir);
+if ($("btn-salir-ais")) $("btn-salir-ais").addEventListener("click", salir);
 
 // ---------- datos ----------
 async function recargar() {
@@ -2758,6 +2767,7 @@ function pintarCuenta() {
   pintarCuentaInfo();
   stopClave();
   pintarJornadaMia();
+  pintarEnlaces();
   const box = $("cuenta-clave");
   if (!ME.admin) { box.innerHTML = ""; return; }
   box.innerHTML = `<div class="card"><b>🔑 Clave dinámica del admin</b><div class="monto" id="clave-valor">···</div>
@@ -2807,6 +2817,35 @@ $("btn-tel").addEventListener("click", async () => {
   toast(r.status === "success" ? "Teléfono actualizado" : (r.message || "No se pudo actualizar"));
 });
 
+async function pintarEnlaces() {
+  const box = $("enlaces-lista");
+  if (!box || !SES || !ME || !ME.sec) return;
+  const vistas = [["inicio", "Inicio"]];
+  if (ME.sec._dockVentas) vistas.push(["venta", "Venta"]);
+  if (ME.sec._dockInventario) vistas.push(["inventario", "Inventario"]);
+  if (ME.admin) vistas.push(["usuarios", "Usuarios"]);
+  if (ME.sec._dockFinanzas) vistas.push(["finanzas", "Finanzas"]);
+  if (ME.admin || ME.sec._dockFinanzas) vistas.push(["dashboard", "Panel"]);
+  if (ME.sec._tabDeudores) vistas.push(["deudores", "Deudores"]);
+  if (!MI_TOKEN) {
+    box.innerHTML = `<small class="muted">Generando...</small>`;
+    try {
+      const r = await api({ action: "crear_enlace", sheetName: SES.code, correo: SES.correo });
+      if (r.status === "success" && r.data) MI_TOKEN = r.data.token;
+    } catch {}
+  }
+  if (!MI_TOKEN) { box.innerHTML = `<small>No se pudo generar.</small>`; return; }
+  const base = location.origin + location.pathname;
+  box.innerHTML = vistas.map(([v, t]) => {
+    const link = `${base}#/${SES.code}/${{ dashboard: "Panel" }[v] || t}/${MI_TOKEN}`;
+    return `<div class="fila" style="justify-content:space-between"><small><b>${t}</b><br><span class="muted" style="word-break:break-all">${esc(link)}</span></small><button class="btn-mini" data-l="${encodeURIComponent(link)}">Copiar</button></div>`;
+  }).join("");
+  box.querySelectorAll("button").forEach((b) => b.addEventListener("click", async () => {
+    const link = decodeURIComponent(b.dataset.l);
+    try { await navigator.clipboard.writeText(link); toast("Enlace copiado"); }
+    catch { prompt("Copia tu enlace:", link); }
+  }));
+}
 // ---------- modal / print ----------
 function openModal(html) {
   $("modal-card").innerHTML = html;
@@ -2824,6 +2863,8 @@ function rutaInicial() {
   try {
     const hs = String(location.hash || "").replace(/^#\/?/, "");
     const hp = hs.split("/").filter(Boolean);
+    if (hp.length >= 3 && /^[a-z0-9-]+$/i.test(hp[0]) && !/^login$/i.test(hp[0]) && !/^aptadmin$/i.test(hp[0]))
+      return { modo: "vista", code: hp[0].toUpperCase(), vista: normVista(hp[1]), token: hp.slice(2).join("/") };
     if (hp.length && /^aptadmin$/i.test(hp[0])) return { modo: "super" };
     if (hp.length && /^[a-z0-9-]+$/i.test(hp[0]) && !/^login$/i.test(hp[0])) return { modo: "negocio", code: hp[0].toUpperCase() };
     if (hp.length && /^login$/i.test(hp[0])) return { modo: "redireccion" };
@@ -2833,6 +2874,52 @@ function rutaInicial() {
     if (m && m[1] !== "www" && m[1] !== "kapta") return { modo: "negocio", code: m[1].toUpperCase() };
   } catch {}
   return { modo: "redireccion" };
+}
+function normVista(v) {
+  v = String(v || "").toLowerCase();
+  if (v === "panel") return "dashboard";
+  if (["inicio", "venta", "inventario", "usuarios", "finanzas", "dashboard", "deudores"].includes(v)) return v;
+  return v;
+}
+function nombreVista(v) {
+  return { dashboard: "Panel", inicio: "Inicio", venta: "Venta", inventario: "Inventario", usuarios: "Usuarios", finanzas: "Finanzas", deudores: "Deudores" }[v] || "Inicio";
+}
+let MODO_AISLADO = null;
+let MI_TOKEN = null;
+async function probarVista(R, vista) {
+  try {
+    const r = await api({ action: "validar_acceso", token: R.token, vista });
+    if (r.status !== "success") return false;
+    const u = r.data.usuario;
+    SES = { code: R.code, negocio: R.code, correo: u.correo, nombre: u.nombre, rol: u.rol, uid: u.id };
+    try {
+      const e = await fetch(BASE + "?action=resolver_empresa&codigo=" + encodeURIComponent(R.code)).then((x) => x.json());
+      const emp = (e.status === "success" && e.data && e.data.empresa) || null;
+      if (emp) { SES.negocio = emp.nombre || R.code; EMPRESA = emp; aplicarIdentidad(emp); }
+    } catch {}
+    MODO_AISLADO = { code: R.code, vista, token: R.token };
+    MI_TOKEN = R.token;
+    $("pos-negocio").textContent = SES.negocio;
+    $("pos-usuario").textContent = SES.nombre + " • " + SES.rol;
+    ver("pos");
+    try { await recargar(); } catch {
+      toast("Sin conexión: revisa tu internet");
+      ME = ME || { row: null, funciones: "", sec: null, codes: new Set() };
+      if (!ME.sec) ME.sec = resolverSec();
+    }
+    document.getElementById("p-pos").classList.add("aislado");
+    await cargarFicha();
+    tab(vista);
+    return true;
+  } catch { return false; }
+}
+async function entrarAislado(R) {
+  if (await probarVista(R, R.vista)) return;
+  if (R.vista !== "inicio" && await probarVista(R, "inicio")) {
+    location.hash = `#/${R.code}/Inicio/${R.token}`;
+    return;
+  }
+  location.hash = `#/${R.code}/Login`;
 }
 async function entrarDirecto(code) {
   try {
@@ -2863,8 +2950,10 @@ async function entrarDirecto(code) {
   } catch { /* noop */ }
   const tel = $("cuenta-tel");
   SES = cargarSesion();
+  MI_TOKEN = null;
   const RUTA = rutaInicial();
-  if (RUTA.modo === "super") { ver("superlogin"); }
+  if (RUTA.modo === "vista") { entrarAislado(RUTA); }
+  else if (RUTA.modo === "super") { ver("superlogin"); }
   else if (RUTA.modo === "negocio") {
     if (SES && SES.code && SES.code !== RUTA.code) { SES = null; localStorage.removeItem("kapta_pwa"); sessionStorage.removeItem("kapta_pwa"); }
     entrarDirecto(RUTA.code);
@@ -2890,6 +2979,7 @@ async function entrarDirecto(code) {
   }
   }
   $("in-codigo").addEventListener("change", () => localStorage.setItem("kapta_code", $("in-codigo").value.trim()));
+  window.addEventListener("hashchange", () => location.reload());
   // precarga teléfono del negocio al abrir cuenta
   const obs = new MutationObserver(() => {
     if (!$("t-cuenta").classList.contains("oculto") && EMPRESA && !tel.value) tel.value = EMPRESA.celular1 || "";

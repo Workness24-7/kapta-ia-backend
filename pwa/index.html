@@ -48,6 +48,10 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 #btn-ayuda { display: none; }
 #btn-yo { border: 2px solid transparent; border-radius: 999px; padding: 8px 26px; font-weight: 800; font-size: 15px; cursor: pointer; background: linear-gradient(#f4f4f4,#f4f4f4) padding-box, linear-gradient(135deg, #5ce1e6, #8c52ff) border-box; flex-shrink: 0; }
 #btn-yo span { background: linear-gradient(135deg, #5ce1e6, #8c52ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+#btn-salir-ais { display: none; border: 1.5px solid transparent; border-radius: 999px; padding: 8px 22px; font-weight: 800; font-size: 14px; cursor: pointer; background: linear-gradient(#f4f4f4,#f4f4f4) padding-box, linear-gradient(135deg, #e10000, #8c52ff) border-box; color: #ab0101; flex-shrink: 0; }
+#p-pos.aislado #dock, #p-pos.aislado #dock-search { display: none; }
+#p-pos.aislado #btn-yo, #p-pos.aislado #pos-avatar, #p-pos.aislado #btn-notif { display: none; }
+#p-pos.aislado #btn-salir-ais { display: block; }
 #btn-notif { position: relative; width: 48px; height: 48px; border-radius: 50%; border: 1.5px solid transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: linear-gradient(#f7f7f7,#f7f7f7) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; }
 #btn-notif img { width: 22px; height: 22px; transform: rotate(-45deg); }
 #notif-dot { position: absolute; top: 5px; right: 5px; width: 12px; height: 12px; border-radius: 50%; background: linear-gradient(135deg, #5ce1e6, #8c52ff); border: 2px solid #f7f7f7; }
@@ -65,6 +69,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 /* Sección 3: contenido + resumen general */
 @media (min-width: 901px) {
   #p-pos { padding-bottom: 0; }
+  #p-pos.aislado .tab { padding: 20px 28px 0; }
   /* En inicio: la página nunca scrollea; solo la lista de alertas (y solo si desborda) */
   #p-pos:has(> #t-inicio:not(.oculto)) { height: 100dvh; overflow: hidden; }
   #p-pos .tab { padding: 20px 28px 0 116px; }
@@ -556,7 +561,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
   </section>
 
   <section id="p-pos" class="pantalla oculto">
-    <header id="pos-header"><span id="pos-logo-sq"><img id="pos-logo" class="oculto" alt=""><b id="pos-logo-fb">K</b></span><span id="pos-nombre-col"><span id="pos-planbar"></span><span id="pos-negocio">Negocio</span></span><span id="pos-usuario" class="oculto"></span><button id="btn-ayuda" class="hbtn oculto" title="Ayuda">❓</button><span class="pos-esp"></span><button id="btn-yo" title="Mi cuenta"><span>POS</span></button><button id="btn-notif" title="Notificaciones"><img src="img/pos/notificacion.png?v=1" alt=""><span id="notif-dot"></span></button><button id="pos-avatar" title="Mi cuenta"><b id="avatar-letra">?</b><span id="avatar-ia"><i>IA</i></span></button></header>
+    <header id="pos-header"><span id="pos-logo-sq"><img id="pos-logo" class="oculto" alt=""><b id="pos-logo-fb">K</b></span><span id="pos-nombre-col"><span id="pos-planbar"></span><span id="pos-negocio">Negocio</span></span><span id="pos-usuario" class="oculto"></span><button id="btn-ayuda" class="hbtn oculto" title="Ayuda">❓</button><span class="pos-esp"></span><button id="btn-yo" title="Mi cuenta"><span>POS</span></button><button id="btn-salir-ais" title="Salir">Salir</button><button id="btn-notif" title="Notificaciones"><img src="img/pos/notificacion.png?v=1" alt=""><span id="notif-dot"></span></button><button id="pos-avatar" title="Mi cuenta"><b id="avatar-letra">?</b><span id="avatar-ia"><i>IA</i></span></button></header>
 
     <div id="t-inicio" class="tab">
       <div id="col-izq">
@@ -689,6 +694,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
       </div>
       <div class="card" id="jornada-mia"></div>
       <p class="muted" style="text-align:center" id="cuenta-version"></p>
+      <div class="card" id="mis-enlaces"><b>🔗 Mis enlaces por vista</b><div id="enlaces-lista"></div></div>
       <button id="btn-soporte" class="btn link">Ayuda y soporte</button>
       <button id="btn-salir" class="btn peligro">Cerrar sesión</button>
     </div>
@@ -701,7 +707,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=32"></script>
+<script src="app.js?v=33"></script>
 </body>
 </html>
 
