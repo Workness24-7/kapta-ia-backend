@@ -200,6 +200,13 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .gto-fila .ag-buscar { margin-bottom: 10px; }
 .gto-foto { width: 72px; height: 72px; flex-shrink: 0; border: 1.5px solid transparent; border-radius: 13px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; display: flex; align-items: center; justify-content: center; font-size: 30px; color: #a6a6a6; cursor: pointer; overflow: hidden; margin-bottom: 10px; }
 .gto-foto img { width: 100%; height: 100%; object-fit: cover; }
+.fac { max-width: 340px; margin: 0 auto; text-align: center; font-size: 12px; color: #010101; }
+.fac-c { border-top: 1px solid #999; padding: 8px 4px; }
+.fac-fila { text-align: left; padding: 6px 4px; border-top: 1px solid #999; font-size: 12px; }
+.fac-tot { font-size: 20px; font-weight: 800; text-align: right; padding: 6px 4px; }
+.fac-cufe { word-break: break-all; font-size: 10px; }
+canvas.bc39 { max-width: 100%; height: 56px; }
+@media print { .fac { max-width: 100%; } .salto-pag { page-break-after: always; } }
 @media (max-width: 1100px) {
   .ag-grid { grid-template-columns: repeat(2, 1fr); }
 }
@@ -600,6 +607,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
       </div>
       <div id="venh">
         <h3>Historial de ventas</h3>
+        <div class="fila" id="venh-facrow"><button class="btn-mini" id="venh-exp">Exportar Facturas</button><button class="btn-mini" id="venh-plant">Plantilla</button><input id="venh-plantup" type="file" accept=".xlsx" class="oculto"></div>
         <div id="venh-filtros" class="seg"></div>
         <div id="venh-rango" class="oculto fila">
           <input id="venh-desde" placeholder="dd/mm/aaaa" inputmode="numeric">
@@ -668,6 +676,15 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
         <b>Teléfono del negocio</b>
         <div class="fila"><input id="cuenta-tel" inputmode="tel" placeholder="+57 ..."><button class="btn-mini" id="btn-tel">Guardar</button></div>
       </div>
+      <div class="card oculto" id="cuenta-fact">
+        <b>Datos de facturación</b>
+        <div class="fila"><input id="cf-nit" placeholder="NIT"><input id="cf-ciudad" placeholder="Ciudad"></div>
+        <input id="cf-dir" placeholder="Dirección">
+        <div class="fila"><input id="cf-tel2" placeholder="Teléfono 2"><input id="cf-calidad" placeholder="Calidad (ej. Responsable de IVA)"></div>
+        <input id="cf-aut" placeholder="Autorización DIAN">
+        <div class="fila"><input id="cf-rango" placeholder="Rango"><input id="cf-vig" placeholder="Vigencia"></div>
+        <button class="btn-mini" id="btn-cf">Guardar</button>
+      </div>
       <div class="card" id="jornada-mia"></div>
       <p class="muted" style="text-align:center" id="cuenta-version"></p>
       <button id="btn-soporte" class="btn link">Ayuda y soporte</button>
@@ -682,7 +699,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=28"></script>
+<script src="app.js?v=29"></script>
 </body>
 </html>
 

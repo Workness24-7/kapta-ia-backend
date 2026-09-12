@@ -1,5 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-16";
+const VERSION_PWA = "PWA-2026-09-17";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -397,6 +397,7 @@ function cfgValor(k, fb) {
   } catch { return fb; }
 }
 function happyPara(prod, cuando) {
+  if (!tieneFuncion("BAR3")) return null;
   const list = cfgHappy();
   if (!list.length) return null;
   const d = cuando || new Date();
@@ -428,7 +429,6 @@ function lineaConPromo(p, q, usarMin) {
   }
   return { pu: pn, sub: pn * q, desc: 0, promo: "" };
 }
-const turnosRows = () => (TODO.turnos || []).filter((x) => x[2] && x[2] !== "Usuario");
 function costoDe(prod) {
   const p = (TODO.inventario || []).find((x) => (x[2] || "") === prod);
   return p ? num(p[5]) : 0;
@@ -464,7 +464,8 @@ function vrCerrar() {
 }
 function vrRender() {
   if (!vrAbierta() || !TODO) return;
-  const modos = vrModos();
+  const modos = vrModos().filter((m) => (m !== "Bolirrana" || tieneFuncion("BAR1")) && (m !== "Dados" || tieneFuncion("BAR2")));
+  if (!modos.length) return;
   if (!modos.includes(VR_MODO)) VR_MODO = modos[0];
   const mb = $("vr-modos");
   mb.innerHTML = "";
@@ -587,7 +588,9 @@ async function vrCobrar(fiabl) {
     if (esBol) chicoSiguiente(mesa, chico);
     CARRITO = {}; $("vr-cliente").value = ""; $("vr-cliente-x").classList.add("oculto");
     await recargar();
-    if (folio) verComprobante({ cod: folio, fecha: hoyLat(), hora: horaHM(), cliente, modo: tipoTxt, usuario: SES.nombre, estado: "Activo", items: det, total: det.reduce((a, d) => a + d.sub, 0) });
+    const fac = folio ? await emitirFactura(det, { folio, cliente, modo: tipoTxt, medio: "Efectivo" }) : null;
+    if (fac) verFacturaDIAN(fac);
+    else if (folio) verComprobante({ cod: folio, fecha: hoyLat(), hora: horaHM(), cliente, modo: tipoTxt, usuario: SES.nombre, estado: "Activo", items: det, total: det.reduce((a, d) => a + d.sub, 0) });
     else toast("Registrado");
     if (vrAbierta()) vrRender();
   } catch { toast("Error de conexión"); }
@@ -711,7 +714,7 @@ const esCajeroLike = (rol) => /cajero|empleado|mesero|barman/i.test(rol || "") &
 
 function resolverSec() {
   const admin = /admin|supervisor/i.test(SES.rol || "");
-  if (admin) { ME.admin = true; return FULL(); }
+  if (admin) { ME.admin = true; ME.codes = new Set(FUNC_CATALOG.map((f) => f.c)); return FULL(); }
   ME.admin = false;
   const raw = ME.funciones || "";
   let obj = null;
@@ -722,10 +725,14 @@ function resolverSec() {
     s._dockVentas = dock.Ventas === true; s._dockFinanzas = dock.Finanzas === true; s._dockInventario = dock.Inventario === true;
     s._tabDeudores = (obj.caps || []).includes("deudores") || s._dockVentas;
     if (s.invLectura) { ["invCarga", "invMovimientos", "invCrear", "invEditar", "invEliminar", "invGuardar", "invHacer"].forEach((k) => (s[k] = false)); }
+    ME.codes = new Set(["BAR1", "BAR2", "BAR3", "BAR4"]);
+    if (s.invEditar) ME.codes.add("BAR5");
     return s;
   }
   if (obj && obj.dock) {
     const d = obj.dock, inv = d.Inventario === true && !esCajeroLike(SES.rol);
+    ME.codes = new Set(["BAR1", "BAR2", "BAR3", "BAR4"]);
+    if (inv) ME.codes.add("BAR5");
     return Object.assign(FULL(), {
       _dockVentas: d.Ventas === true, _dockFinanzas: d.Finanzas === true, _dockInventario: d.Inventario === true,
       _tabDeudores: true,
@@ -733,6 +740,13 @@ function resolverSec() {
       invLectura: esCajeroLike(SES.rol),
     });
   }
+  // Compacto "1 - 5 - BAR1": funciones por número.
+  const codes = String(raw).split("-").map((x) => x.trim().toUpperCase()).filter(Boolean);
+  if (codes.length && codes.some((c) => /^\d+$/.test(c) || /^BAR\d+$/.test(c))) {
+    ME.codes = new Set(codes);
+    return secFromCodes(ME.codes);
+  }
+  ME.codes = new Set(["BAR1", "BAR2", "BAR3", "BAR4"]);
   // Legado: reproduce la vista anterior por rol.
   const mesero = /mesero|barman/i.test(SES.rol || "");
   return Object.assign(FULL(), {
@@ -966,7 +980,7 @@ $("btn-ver-soportes").addEventListener("click", async () => {
 });
 
 async function entrarComoAdmin(emp) {
-  SES = { code: (emp.codigo || "").toUpperCase(), negocio: emp.nombre || emp.codigo, correo: emp.correo || SUPER.correo, nombre: "SuperAdmin", rol: "Administrador", super: true };
+  SES = { code: (emp.codigo || "").toUpperCase(), negocio: emp.nombre || emp.codigo, correo: emp.correo || SUPER.correo, nombre: "SuperAdmin", rol: "Administrador", uid: "SUPERADMIN", super: true };
   EMPRESA = emp;
   aplicarIdentidad(emp);
   const ck = "kapta_consent_" + SES.code + "_superadmin";
@@ -997,6 +1011,7 @@ $("btn-login").addEventListener("click", async () => {
     const d = r.data || {};
     SES.correo = correo;
     SES.nombre = d.nombre || correo;
+    SES.uid = d.idUsuario || correo;
     SES.rol = d.rol || r.rol || "Empleado";
     guardarSesion();
     const ck = "kapta_consent_" + SES.code + "_" + correo.toLowerCase();
@@ -1098,13 +1113,14 @@ async function recargar() {
       if (emp && (emp.codigo || "").toUpperCase() === SES.code) EMPRESA = emp;
     }
     const urow = (TODO.usuarios || []).find((u) => (u[2] || "").toLowerCase() === (SES.correo || "").toLowerCase());
-    ME = { row: urow || null, funciones: urow ? (urow[11] || "") : "", sec: null };
+    ME = { row: urow || null, funciones: urow ? (urow[22] || "") : "", sec: null };
     ME.sec = resolverSec();
     if (urow && urow[1]) SES.nombre = urow[1];
     if (urow && urow[4]) SES.rol = urow[4];
     $("pos-usuario").textContent = SES.nombre + " • " + SES.rol;
     pintarCuentaInfo();
     pintarResumen(); pintarVenta(); pintarInventario(); pintarDeudores(); pintarFinanzas(); pintarUsuarios(); pintarDashboard();
+    await cargarFicha();
     refrescarChrome();
     if (vrAbierta()) vrRender();
   } catch { toast("Sin conexión"); }
@@ -1117,7 +1133,7 @@ const venVivas = () => venRows().filter((v) => String(v[14] || "").toLowerCase()
 const deuRows = () => (TODO.deudores || []).filter((x) => x[1] && x[1] !== "Nom_Cliente");
 const gasRows = () => (TODO.gastos || []).filter((x) => x[0] && String(x[0]).startsWith("G-"));
 const movRows = () => (TODO.movimientos || []).filter((x) => x[0] && String(x[0]).startsWith("M-"));
-const usuRows = () => (TODO.usuarios || []).filter((x) => x[2] && x[2] !== "Correo");
+const usuRows = () => (TODO.usuarios || []).filter((x) => x[2] && x[2] !== "Correo").map((x) => x.concat(Array(Math.max(0, 23 - x.length)).fill("")));
 const kpi = (t, v) => `<div class="kpi"><small>${t}</small><b>${v}</b></div>`;
 
 // ---------- inicio ----------
@@ -1236,6 +1252,9 @@ function chicoSiguiente(mesa, actual) {
   localStorage.setItem(`kapta_chico_${SES.code}_${mesa}`, JSON.stringify({ n: actual + 1, ts: Date.now() }));
 }
 function pintarVenta() {
+  const selM = $("venta-modo");
+  [...selM.options].forEach((o) => { if ((o.value === "Bolirrana" && !tieneFuncion("BAR1")) || (o.value === "Dados" && !tieneFuncion("BAR2"))) o.remove(); });
+  if (![...selM.options].some((o) => o.value === selM.value)) selM.value = "Normal";
   const modo = $("venta-modo").value;
   const esBol = modo === "Bolirrana";
   $("venta-mesa").classList.toggle("oculto", !esBol);
@@ -1353,7 +1372,9 @@ $("btn-cobrar").addEventListener("click", async () => {
     if (esBol) chicoSiguiente(mesa, chico);
     CARRITO = {}; $("venta-cliente").value = ""; $("venta-fiado").checked = false;
     await recargar();
-    if (folio) verComprobante({ cod: folio, fecha: hoyLat(), hora: horaHM(), cliente, modo: tipoTxt, usuario: SES.nombre, estado: "Activo", items: det, total: det.reduce((a, d) => a + d.sub, 0) });
+    const fac = folio ? await emitirFactura(det, { folio, cliente, modo: tipoTxt, medio: esTransf ? "Transferencia" : "Efectivo" }) : null;
+    if (fac) verFacturaDIAN(fac);
+    else if (folio) verComprobante({ cod: folio, fecha: hoyLat(), hora: horaHM(), cliente, modo: tipoTxt, usuario: SES.nombre, estado: "Activo", items: det, total: det.reduce((a, d) => a + d.sub, 0) });
     else { toast(esBol ? `Chico ${chico} de Bolirrana ${mesa} registrado` : fiado ? "Fiado registrado" : "Venta registrada"); tab("inicio"); }
   } catch { toast("Error de conexión"); }
   $("btn-cobrar").disabled = false;
@@ -1420,6 +1441,8 @@ function gruposVentas() {
 function pintarHistorial() {
   const box = $("venh-lista");
   if (!box) return;
+  const fr = $("venh-facrow");
+  if (fr) fr.classList.toggle("oculto", !tieneFuncion("BAR4"));
   const F = $("venh-filtros");
   F.innerHTML = ["Día", "Semana", "Mes", "Rango"].map((t) => `<button data-f="${t}" class="${VENH_F === t ? "on" : ""}">${t}</button>`).join("");
   F.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { VENH_F = b.dataset.f; pintarHistorial(); }));
@@ -1431,12 +1454,18 @@ function pintarHistorial() {
     const div = document.createElement("div");
     div.className = "card fila-deu";
     div.innerHTML = `<div><b>${esc(g.cod)}</b> ${g.estado === "Anulado" ? '<span class="badge susp">Anulada</span>' : ""}<br><small>${esc(g.fecha)} ${esc(g.hora)} • ${esc(g.cliente)} • ${g.items.length} item(s)</small></div>`
-      + `<div class="cant"><span class="monto">${fmt(g.total)}</span>${g.ids.length && g.estado !== "Anulado" ? '<button class="btn-mini" data-a="fac">FAC</button><button class="btn-mini" data-a="anular">Anular</button>' : ""}</div>`;
+      + `<div class="cant"><span class="monto">${fmt(g.total)}</span>${g.ids.length && g.estado !== "Anulado" ? '<button class="btn-mini" data-a="pdf">PDF</button><button class="btn-mini" data-a="anular">Anular</button>' : ""}</div>`;
     div.addEventListener("click", (e) => {
       const b = e.target.closest("button[data-a]");
       if (b && b.dataset.a === "anular") { e.stopPropagation(); anularVenta(g); return; }
-      if (b && b.dataset.a === "fac") { e.stopPropagation(); crearFactura(g); return; }
-      verComprobante(g);
+      if (b && b.dataset.a === "pdf") {
+        e.stopPropagation();
+        const f = facLeer().find((x) => x.folio === g.cod);
+        if (f) { imprimir("Factura " + f.cod, facturaHTML(f)); dibujarBarras(); }
+        else toast("Sin factura electrónica");
+        return;
+      }
+      verDocumento(g);
     });
     box.appendChild(div);
   });
@@ -1528,8 +1557,8 @@ function pintarInventario() {
   }
   if (s.invMovimientos) addBtn("Movimientos", () => { MOV_VER = !MOV_VER; pintarMovimientos(); });
   if (s.invCrear) addBtn("+ Producto", () => formProducto(null), true);
-  if (s.invEditar) addBtn("Merma", () => formMerma());
-  if (s.invEditar) addBtn("Conteo", () => formConteo());
+  if (s.invEditar && tieneFuncion("BAR5")) addBtn("Merma", () => formMerma());
+  if (s.invEditar && tieneFuncion("BAR5")) addBtn("Conteo", () => formConteo());
   let cbox = $("inv-cats");
   if (!cbox) { cbox = document.createElement("div"); cbox.id = "inv-cats"; cbox.className = "chips"; $("inv-botones").after(cbox); }
   const cats = ["Todos", ...new Set(invRows().map((p) => (p[3] || "General").trim()).filter(Boolean))];
@@ -1951,6 +1980,7 @@ function pintarDashboard() {
 function pintarDashHappy(V) {
   const box = $("dash-happy");
   if (!box) return;
+  if (!tieneFuncion("BAR3")) { box.innerHTML = ""; return; }
   const VHH = V.filter((v) => String(v[17] || "").toUpperCase().startsWith("HH"));
   const tHH = VHH.reduce((a, v) => a + num(v[12]), 0);
   const cantHH = VHH.reduce((a, v) => a + num(v[6]), 0);
@@ -2023,6 +2053,152 @@ function pintarDashAlertas() {
   });
 }
 
+// ---------- factura electrónica DIAN ----------
+const CODE39 = { "0": "101001101101", "1": "110100001011", "2": "101100001011", "3": "110110000101", "4": "101001101011", "5": "110100110101", "6": "101100110101", "7": "101001011011", "8": "110100101101", "9": "101100101101", "A": "110101000011", "B": "101101000011", "C": "110110100001", "D": "101011000011", "E": "110101100001", "F": "101101100001", "G": "101010011011", "H": "110101001101", "I": "101101001101", "J": "101011001101", "K": "110101010001", "L": "101101010001", "M": "110110101000", "N": "101010110001", "O": "110101011000", "P": "101101011000", "Q": "101010111000", "R": "110101011100", "S": "101101011100", "T": "101011011100", "U": "110010101011", "V": "100110101011", "W": "110011010101", "X": "100101101011", "Y": "110010110101", "Z": "100110110101", "-": "100101011011", ".": "110010101101", " ": "100110101101", "*": "100101101101", "$": "100100100101", "/": "100100101001", "+": "100101001001", "%": "101001001001" };
+function dibujarBarras() {
+  document.querySelectorAll("canvas.bc39").forEach((cv) => {
+    const txt = "*" + String(cv.dataset.code || "").toUpperCase() + "*";
+    let patron = "";
+    for (const ch of txt) patron += (CODE39[ch] || CODE39[" "]) + "0";
+    const w = cv.width, h = cv.height, bw = w / patron.length;
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#000";
+    for (let i = 0; i < patron.length; i++) if (patron[i] === "1") ctx.fillRect(Math.floor(i * bw), 0, Math.ceil(bw), h);
+  });
+}
+async function generarCUFE(txt) {
+  try {
+    if (window.crypto && crypto.subtle) {
+      const d = await crypto.subtle.digest("SHA-384", new TextEncoder().encode(txt));
+      return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    }
+  } catch {}
+  let h1 = 0x811c9dc5, h2 = 0x01000193, h3 = 0xdeadbeef, h4 = 0x41c6ce57;
+  const s = String(txt);
+  let out = "";
+  for (let r = 0; r < 4; r++) {
+    for (let i = 0; i < s.length; i++) { h1 = (h1 ^ (s.charCodeAt(i) + r)) * 16777619 >>> 0; h2 = (h2 + (h1 ^ (i + r * 7))) * 31 >>> 0; h3 = (h3 ^ h2) * 16777619 >>> 0; h4 = (h4 + h3 + i) * 131 >>> 0; }
+    out += [h1, h2, h3, h4].map((x) => (x >>> 0).toString(16).padStart(8, "0")).join("");
+  }
+  return (out + out).slice(0, 96);
+}
+function fechaYMDHora() {
+  const d = new Date(), p = (x) => String(x).padStart(2, "0");
+  const f = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  let h = d.getHours();
+  const ap = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return { fecha: f, hora: `${p(h)}:${p(d.getMinutes())}:${p(d.getSeconds())} ${ap}` };
+}
+function cliKey() { return "kapta_cli_" + ((SES && SES.code) || "pub"); }
+function cliLeer() { try { return JSON.parse(localStorage.getItem(cliKey()) || "{}"); } catch { return {}; } }
+function cliGuardar(o) { try { localStorage.setItem(cliKey(), JSON.stringify(o)); } catch {} }
+async function emitirFactura(det, info) {
+  if (!tieneFuncion("BAR4")) return null;
+  try {
+    const arr = facLeer();
+    const mx = arr.reduce((a, x) => { const m = /^FV-(\d+)$/.exec(x.cod || ""); return m ? Math.max(a, parseInt(m[1], 10)) : a; }, 0);
+    const fv = "FV-" + String(mx + 1).padStart(4, "0");
+    const ts = fechaYMDHora();
+    const mem = cliLeer()[info.cliente] || {};
+    const mostrador = /^(cliente mostrador|bolirrana)/i.test(info.cliente);
+    const total = det.reduce((a, d) => a + d.sub, 0);
+    const f = {
+      cod: fv, folio: info.folio, fecha: ts.fecha, hora: ts.hora,
+      cliente: mostrador ? "Consumidor Fiscal" : info.cliente,
+      nit: mem.nit || (mostrador ? "999999999" : ""), tel: mem.tel || "",
+      items: det.map((d) => ({ prod: d.prod, cant: d.cant, pu: d.pu, sub: d.sub })),
+      total, modo: info.modo, medio: info.medio || "Efectivo", usuario: SES.nombre,
+      emision: ts.fecha + " " + ts.hora, nc: null, cufe: "",
+    };
+    f.cufe = await generarCUFE([fv, f.folio, ts.fecha, ts.hora, f.cliente, total, SES.code].join("|"));
+    arr.push(f); facGuardar(arr);
+    return f;
+  } catch { return null; }
+}
+function facQR(f) {
+  return ["FACTURA " + f.cod, "REF " + f.folio, f.fecha + " " + f.hora,
+    "CLIENTE " + f.cliente + " CC " + (f.nit || ""), "TOTAL " + Math.round(f.total),
+    "CUFE " + f.cufe].join("\n") + "\n" + f.items.map((it) => `${it.cant}x ${it.prod} ${Math.round(it.sub)}`).join("\n");
+}
+function facturaHTML(f) {
+  const e = EMPRESA_FULL || {};
+  const base = Math.round(f.total / 1.19 * 100) / 100, iva = Math.round((f.total - base) * 100) / 100;
+  return `<div class="fac">`
+    + `<div class="fac-c"><b>${esc(e.nombre || SES.negocio)}</b><br><small>Nit: ${esc(e.nit || "")}</small><br><small>${esc(e.direccion || "")}</small><br><small>Tels: ${esc(e.celular1 || "")}</small></div>`
+    + `<div class="fac-c"><b>FACTURA ELECTRÓNICA DE VENTA</b><br><b>No. ${esc(f.cod)}</b>${f.nc ? ' • <span class="badge susp">NOTA CRÉDITO</span>' : ""}</div>`
+    + `<canvas class="bc39" data-code="${esc(f.folio)}" width="300" height="56"></canvas>`
+    + `<div class="fac-fila"><b>Fecha:</b> ${esc(f.fecha)}&nbsp;&nbsp;Hora:${esc(f.hora)}</div>`
+    + `<div class="fac-fila"><b>Cliente:</b> ${esc(f.cliente)}<br>C.C. ${esc(f.nit || "999999999")}<br>Tel: ${esc(f.tel || "")}</div>`
+    + `<div class="fac-fila"><b>Forma de Pago:</b> Contado<br><b>Medio de Pago:</b> ${esc(f.medio || "Efectivo")}<br><b>Vendedor:</b> Barra</div>`
+    + `<table class="tabla"><tr><th>Cant</th><th>Detalle</th><th>Iva</th><th>Total</th></tr>`
+    + f.items.map((it) => `<tr><td>${it.cant}</td><td>${esc(it.prod)}<br><small>Precio Unitario: ${fmt(it.pu)}</small></td><td>19</td><td>${fmt(it.sub)}</td></tr>`).join("")
+    + `</table><div class="fac-tot">Total: ${fmtM(f.total)}</div><small>Cantidad ítems: ${f.items.length}</small>`
+    + `<div class="fac-c"><b>DETALLES DE IMPUESTOS</b><br><small>IVA 19% — Base: ${fmt(base)} — Impuesto: ${fmt(iva)}</small></div>`
+    + `<div class="fac-c"><small>${esc(cfgValor("EMP_CALIDAD", "Responsable de IVA"))}<br>RANGO ${esc(cfgValor("DIAN_RANGO", ""))}<br>AUTORIZACIÓN NUMERACIÓN DE FACTURACIÓN<br>No. ${esc(cfgValor("DIAN_AUT", ""))} VENCE ${esc(cfgValor("DIAN_VIG", ""))}</small></div>`
+    + `<div class="fac-c"><small>Fabricante: KAPTA CORP.<br>Software KAPTA Contable 1.0<br>www.kaptacontable.com<br>Nit: 1012319596</small></div>`
+    + `<img src="${qrURL(facQR(f))}" width="150" height="150" loading="lazy" onerror="this.outerHTML='<b>${esc(f.cod)}</b>'">`
+    + `<div class="fac-c"><b>CUFE:</b><br><small class="fac-cufe">${esc(f.cufe)}</small></div>`
+    + `<div class="fac-fila"><small>Emisión: ${esc(f.emision || (f.fecha + " " + f.hora))}<br>Expedición: ${esc(f.emision || (f.fecha + " " + f.hora))}</small></div>`
+    + `</div>`;
+}
+function verFacturaDIAN(f) {
+  openModal(`<h2>Factura ${esc(f.cod)}</h2>` + facturaHTML(f)
+    + `<div class="fila"><input id="fd-nit" placeholder="NIT / C.C." value="${esc(f.nit || "")}"><input id="fd-tel" placeholder="Tel" value="${esc(f.tel || "")}"></div>`
+    + `<button class="btn exito" id="fd-guardar">Guardar cliente</button>`
+    + `<button class="btn exito" id="fd-print">🖨️ Imprimir / PDF</button>`
+    + `<button class="btn link" id="fd-cerrar">Cerrar</button>`);
+  dibujarBarras();
+  $("fd-cerrar").addEventListener("click", closeModal);
+  $("fd-print").addEventListener("click", () => { imprimir("Factura " + f.cod, facturaHTML(f)); dibujarBarras(); });
+  $("fd-guardar").addEventListener("click", () => {
+    const arr = facLeer(), i = arr.findIndex((x) => x.cod === f.cod);
+    const nit = ($("fd-nit").value || "").trim(), tel = ($("fd-tel").value || "").trim();
+    if (i >= 0) { arr[i].nit = nit; arr[i].tel = tel; facGuardar(arr); }
+    const mem = cliLeer(); mem[f.cliente] = { nit, tel }; cliGuardar(mem);
+    f.nit = nit; f.tel = tel;
+    toast("Cliente guardado"); verFacturaDIAN(f);
+  });
+}
+function verDocumento(g) {
+  const f = facLeer().find((x) => x.folio === g.cod);
+  if (f) verFacturaDIAN(f);
+  else verComprobante(g);
+}
+function exportarFacturas() {
+  const arr = facLeer();
+  if (!arr.length) { toast("Sin facturas"); return; }
+  $("print-area").innerHTML = `<h2>${esc(SES.negocio)} — Facturas electrónicas</h2>` + arr.map((f) => facturaHTML(f) + `<div class="salto-pag"></div>`).join("");
+  dibujarBarras();
+  window.print();
+}
+function plantKey() { return "kapta_plant_" + ((SES && SES.code) || "pub"); }
+async function plantillaBytes() {
+  try {
+    const b64 = localStorage.getItem(plantKey());
+    if (b64) {
+      const bin = atob(b64.split(",")[1] || b64);
+      const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      return u8;
+    }
+  } catch {}
+  return new Uint8Array(await (await fetch("plantilla_factura.xlsx")).arrayBuffer());
+}
+async function descargarPlantilla() {
+  try {
+    const u8 = await plantillaBytes();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([u8], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    a.download = "plantilla_factura.xlsx";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  } catch { toast("No se pudo descargar"); }
+}
+function verFactura(f) { verFacturaDIAN(f); }
+
 // ---------- facturación local premium ----------
 function facKey() { return "kapta_fact_" + ((SES && SES.code) || "pub"); }
 function facLeer() { try { const a = JSON.parse(localStorage.getItem(facKey()) || "[]"); return Array.isArray(a) ? a : []; } catch { return []; } }
@@ -2042,26 +2218,6 @@ function verFactura(f) {
   openModal(facturaHTML(f));
   $("fc-cerrar").addEventListener("click", closeModal);
   $("fc-print").addEventListener("click", () => imprimir("Factura " + f.cod, facturaHTML(f).replace(/<button[^]*$/, "")));
-}
-function crearFactura(g) {
-  openModal(`<h2>Crear factura</h2><small class="muted">Venta ${esc(g.cod)} • ${fmt(g.total)}</small>
-    <input id="fc-cliente" value="${esc(g.cliente)}" autocomplete="off">
-    <div class="fila"><input id="fc-nit" placeholder="NIT / Identificación *" inputmode="numeric"><input id="fc-correo" placeholder="Correo cliente" autocomplete="off"></div>
-    <p id="fc-err" class="error"></p>
-    <button class="btn exito" id="fc-guardar">Generar</button>
-    <button class="btn link" id="fc-cancelar">Cancelar</button>`);
-  $("fc-cancelar").addEventListener("click", closeModal);
-  $("fc-guardar").addEventListener("click", () => {
-    const nit = ($("fc-nit").value || "").trim();
-    if (!nit) { $("fc-err").textContent = "La identificación es obligatoria"; return; }
-    const arr = facLeer();
-    const mx = arr.reduce((a, x) => { const m = /^FV-(\d+)$/.exec(x.cod || ""); return m ? Math.max(a, parseInt(m[1], 10)) : a; }, 0);
-    const cod = "FV-" + String(mx + 1).padStart(4, "0");
-    arr.push({ cod, folio: g.cod, fecha: hoyLat(), hora: horaHM(), cliente: ($("fc-cliente").value || "").trim() || g.cliente, nit, correo: ($("fc-correo").value || "").trim(), items: g.items, total: g.total, modo: g.modo, usuario: SES.nombre, nc: null });
-    facGuardar(arr);
-    closeModal(); toast("Factura " + cod);
-    pintarFacturas();
-  });
 }
 async function crearNC(f) {
   const arr = facLeer();
@@ -2094,6 +2250,15 @@ function pintarFacturas() {
   });
 }
 if ($("fac-buscar")) $("fac-buscar").addEventListener("input", pintarFacturas);
+if ($("venh-exp")) $("venh-exp").addEventListener("click", exportarFacturas);
+if ($("venh-plant")) $("venh-plant").addEventListener("click", descargarPlantilla);
+if ($("venh-plantup")) $("venh-plantup").addEventListener("change", () => {
+  const f = ($("venh-plantup").files || [])[0];
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => { try { localStorage.setItem(plantKey(), String(rd.result || "")); toast("Plantilla actualizada"); } catch { toast("Plantilla muy pesada"); } };
+  rd.readAsDataURL(f);
+});
 if ($("fac-exp")) $("fac-exp").addEventListener("click", () => {
   const arr = facLeer();
   if (!arr.length) { toast("Sin facturas para exportar"); return; }
@@ -2121,32 +2286,110 @@ function imprimir(titulo, html) {
 
 // ---------- usuarios ----------
 const ROLES_BASE = ["Administrador", "Cajero", "Mesero", "Barman", "Supervisor"];
-const SPEC_SECCIONES = [
-  { v: "Inicio", grupos: [
-    { t: "Resumen general", tipo: "set", key: "resumen", items: [["ventas", "Ventas del día"], ["gastos", "Gastos del mes"], ["deudores", "Deudores"], ["clientes", "Clientes Activos"]] },
-    { t: "Acciones rápidas", tipo: "set", key: "acciones", items: [["venta", "Venta"], ["gasto", "Gasto"], ["agregar", "Agregar"], ["deudores", "Deudores"]] },
-    { t: "Alertas de stock", tipo: "bool", key: "alertas" } ] },
-  { v: "Ventas", grupos: [
-    { t: "Resumen financiero", tipo: "set", key: "ventasResumen", items: [["hoy", "Ventas Hoy"], ["semana", "Esta Semana"], ["mes", "Este Mes"]] },
-    { t: "Ranking de productos", tipo: "bool", key: "ventasRanking" },
-    { t: "Botón Ver más", tipo: "bool", key: "ventasVerMas" },
-    { t: "Botón Ver Inventario Completo", tipo: "bool", key: "ventasVerInventario" } ] },
-  { v: "Finanzas", grupos: [
-    { t: "Botón Exportar a PDF", tipo: "bool", key: "finPdf" },
-    { t: "Filtros", tipo: "set", key: "finFiltros", items: [["dia", "Día"], ["mes", "Mes"], ["rango", "Rango de fechas"]] },
-    { t: "Ventas", tipo: "bool", key: "finVentas" },
-    { t: "Gastos", tipo: "bool", key: "finGastos" },
-    { t: "Botón Registrar Gasto", tipo: "bool", key: "finRegistrar" } ] },
-  { v: "Inventario", grupos: [
-    { t: "Botón Carga masiva", tipo: "bool", key: "invCarga" },
-    { t: "Botón Movimientos", tipo: "bool", key: "invMovimientos" },
-    { t: "Botón Crear producto", tipo: "bool", key: "invCrear" },
-    { t: "Editar productos", tipo: "bool", key: "invEditar" },
-    { t: "Eliminar productos", tipo: "bool", key: "invEliminar" },
-    { t: "Botón Guardar inventario", tipo: "bool", key: "invGuardar" },
-    { t: "Botón Hacer inventario", tipo: "bool", key: "invHacer" },
-    { t: "Modo lectura (solo ver)", tipo: "bool", key: "invLectura" } ] },
+// Catálogo de funciones por número (plan Básico 1-63 + exclusivas BAR).
+// a = fragmento de permiso que otorga: r resumen, a acciones, al alertas,
+// dv/di/df docks, td tab deudores, fr resumen financiero, rk ranking, vm ver más,
+// vi ver inventario, fp pdf, ff filtros, fv ventas, fg gastos, frg registrar,
+// ic carga, im movimientos, icr crear, ie editar, idel eliminar, ig guardar, ih hacer.
+const FUNC_CATALOG = [
+  { c: "1", n: "Seleccionar país", g: "Acceso", a: {} },
+  { c: "2", n: "Identificador del negocio", g: "Acceso", a: {} },
+  { c: "3", n: "Continuar", g: "Acceso", a: {} },
+  { c: "4", n: "Ayuda empresa", g: "Acceso", a: {} },
+  { c: "5", n: "Ingresar al POS", g: "Acceso", a: {} },
+  { c: "6", n: "Recuérdame", g: "Acceso", a: {} },
+  { c: "7", n: "Cambiar empresa", g: "Acceso", a: {} },
+  { c: "8", n: "Cerrar sesión", g: "Acceso", a: {} },
+  { c: "9", n: "YO / Mi cuenta", g: "Acceso", a: {} },
+  { c: "10", n: "Campana de alertas", g: "Inicio", a: { al: 1 } },
+  { c: "11", n: "Dock por rol", g: "Inicio", a: { dv: 1, di: 1, df: 1, td: 1 } },
+  { c: "12", n: "Lupa de búsqueda", g: "Inicio", a: {} },
+  { c: "13", n: "Ventas del día", g: "Inicio", a: { r: ["ventas"] } },
+  { c: "14", n: "Gastos del mes", g: "Inicio", a: { r: ["gastos"] } },
+  { c: "15", n: "Deudores (tarjeta)", g: "Inicio", a: { r: ["deudores"] } },
+  { c: "16", n: "Clientes activos", g: "Inicio", a: { r: ["clientes"] } },
+  { c: "17", n: "Redimensionar secciones", g: "Inicio", a: {} },
+  { c: "18", n: "Cambiar modo (VR)", g: "Venta Rápida", a: { a: ["venta"], dv: 1 } },
+  { c: "19", n: "Crear modo (VR)", g: "Venta Rápida", a: { a: ["venta"], dv: 1 } },
+  { c: "20", n: "Buscar y agregar producto", g: "Venta Rápida", a: { a: ["venta"], dv: 1 } },
+  { c: "21", n: "Sumar/restar cantidad", g: "Venta Rápida", a: { a: ["venta"], dv: 1 } },
+  { c: "22", n: "Cliente (VR)", g: "Venta Rápida", a: { a: ["venta"], dv: 1 } },
+  { c: "23", n: "Precio mínimo (VR)", g: "Venta Rápida", a: { a: ["venta"], dv: 1 } },
+  { c: "24", n: "Redimensionar tarjetas", g: "Venta Rápida", a: { a: ["venta"], dv: 1 } },
+  { c: "25", n: "Paga", g: "Venta Rápida", a: { a: ["venta"], dv: 1 } },
+  { c: "26", n: "Debe", g: "Venta Rápida", a: { a: ["venta"], dv: 1 } },
+  { c: "27", n: "Buscar (Agregar)", g: "Agregar", a: { a: ["agregar"] } },
+  { c: "28", n: "Vista lista/recuadro", g: "Agregar", a: { a: ["agregar"] } },
+  { c: "29", n: "Cantidad (Agregar)", g: "Agregar", a: { a: ["agregar"] } },
+  { c: "30", n: "Agregar Stock masivo", g: "Agregar", a: { a: ["agregar"] } },
+  { c: "31", n: "Listar deudores", g: "Deudores", a: { a: ["deudores"], td: 1 } },
+  { c: "32", n: "Resumen por deudor", g: "Deudores", a: { a: ["deudores"], td: 1 } },
+  { c: "33", n: "Historial por pedido", g: "Deudores", a: { a: ["deudores"], td: 1 } },
+  { c: "34", n: "Pago total", g: "Deudores", a: { a: ["deudores"], td: 1 } },
+  { c: "35", n: "Abono parcial", g: "Deudores", a: { a: ["deudores"], td: 1 } },
+  { c: "36", n: "Efectivo/Transferencia", g: "Deudores", a: { a: ["deudores"], td: 1 } },
+  { c: "37", n: "Tipo de gasto", g: "Gasto", a: { a: ["gasto"] } },
+  { c: "38", n: "Concepto/Valor/Descripción", g: "Gasto", a: { a: ["gasto"] } },
+  { c: "39", n: "Foto comprobante", g: "Gasto", a: { a: ["gasto"] } },
+  { c: "40", n: "Registrar gasto", g: "Gasto", a: { a: ["gasto"] } },
+  { c: "41", n: "Ver Bajo/Medio/Nulo", g: "Alertas", a: { al: 1 } },
+  { c: "42", n: "Surtir (+)", g: "Alertas", a: { al: 1 } },
+  { c: "43", n: "Perfil + clave", g: "Perfil", a: {} },
+  { c: "44", n: "Tipo + mesa/chico", g: "Venta", a: { dv: 1 } },
+  { c: "45", n: "Buscar/categorías", g: "Venta", a: { dv: 1 } },
+  { c: "46", n: "Carrito", g: "Venta", a: { dv: 1 } },
+  { c: "47", n: "Cobrar + QR", g: "Venta", a: { dv: 1 } },
+  { c: "48", n: "Regalo de la casa", g: "Venta", a: {} },
+  { c: "49", n: "Historial + anular", g: "Venta", a: { dv: 1 } },
+  { c: "50", n: "Buscar/categorías (inv)", g: "Inventario", a: { di: 1 } },
+  { c: "51", n: "Crear/editar/eliminar", g: "Inventario", a: { icr: 1, ie: 1, idel: 1 } },
+  { c: "52", n: "Surtir stock", g: "Inventario", a: { ie: 1 } },
+  { c: "53", n: "Movimientos", g: "Inventario", a: { im: 1 } },
+  { c: "54", n: "Carga masiva", g: "Inventario", a: { ic: 1 } },
+  { c: "55", n: "Nuevo deudor", g: "Deudores", a: { td: 1 } },
+  { c: "56", n: "Detalle + abonos", g: "Deudores", a: { td: 1 } },
+  { c: "57", n: "Registrar pago", g: "Deudores", a: { td: 1 } },
+  { c: "58", n: "Chicos + perdedor", g: "Deudores", a: { td: 1 } },
+  { c: "59", n: "Exportar PDF", g: "Finanzas", a: { fp: 1 } },
+  { c: "60", n: "Filtros + KPIs", g: "Finanzas", a: { ff: ["dia", "mes", "rango"], fv: 1, fg: 1 } },
+  { c: "61", n: "Registrar gasto (fin)", g: "Finanzas", a: { frg: 1 } },
+  { c: "62", n: "Usuarios y roles", g: "Usuarios", a: {} },
+  { c: "63", n: "Cuenta", g: "Cuenta", a: {} },
+  { c: "BAR1", n: "Venta Bolirrana", g: "BAR", a: {} },
+  { c: "BAR2", n: "Venta Dados", g: "BAR", a: {} },
+  { c: "BAR3", n: "Happy Hours", g: "BAR", a: {} },
+  { c: "BAR4", n: "Facturación", g: "BAR", a: {} },
+  { c: "BAR5", n: "Merma/conteo", g: "BAR", a: {} },
 ];
+const FUNC_MAP = Object.fromEntries(FUNC_CATALOG.map((f) => [f.c, f]));
+const FUNC_GRUPOS = [...new Set(FUNC_CATALOG.map((f) => f.g))];
+function secFromCodes(codes) {
+  const s = { resumen: [], acciones: [], alertas: false, ventasResumen: [], ventasRanking: false, ventasVerMas: false, ventasVerInventario: false, finPdf: false, finFiltros: [], finVentas: false, finGastos: false, finRegistrar: false, invCarga: false, invMovimientos: false, invCrear: false, invEditar: false, invEliminar: false, invGuardar: false, invHacer: false, invLectura: true, _dockVentas: false, _dockFinanzas: false, _dockInventario: false, _tabDeudores: false };
+  const union = (k, v) => v.forEach((x) => { if (!s[k].includes(x)) s[k].push(x); });
+  codes.forEach((c) => {
+    const e = FUNC_MAP[String(c).toUpperCase()];
+    if (!e || !e.a) return;
+    const a = e.a;
+    if (a.r) union("resumen", a.r);
+    if (a.a) union("acciones", a.a);
+    if (a.ff) union("finFiltros", a.ff);
+    if (a.al) s.alertas = true;
+    if (a.dv) s._dockVentas = true;
+    if (a.di) s._dockInventario = true;
+    if (a.df) s._dockFinanzas = true;
+    if (a.td) s._tabDeudores = true;
+    const BOOLS = { rk: "ventasRanking", vm: "ventasVerMas", vi: "ventasVerInventario", fp: "finPdf", fv: "finVentas", fg: "finGastos", frg: "finRegistrar", ic: "invCarga", im: "invMovimientos", icr: "invCrear", ie: "invEditar", idel: "invEliminar", ig: "invGuardar", ih: "invHacer" };
+    Object.keys(BOOLS).forEach((k) => { if (a[k]) s[BOOLS[k]] = true; });
+  });
+  if (!(s.invCarga || s.invMovimientos || s.invCrear || s.invEditar || s.invEliminar || s.invGuardar || s.invHacer)) s.invLectura = true;
+  else s.invLectura = false;
+  return s;
+}
+function tieneFuncion(cod) {
+  if (!ME) return true;
+  if (ME.admin) return true;
+  return !!(ME.codes && ME.codes.has(String(cod).toUpperCase()));
+}
 const MODULOS = ["Reportes y Analytics", "Control de Turnos y Caja", "Facturación Electrónica DIAN", "Happy Hour & Promociones", "Venta por Mesa & Comandero", "División de Cuentas (Split)", "Agente IA Kapta Assistant"];
 
 function pintarUsuarios() {
@@ -2182,28 +2425,83 @@ async function cambiarEstadoUsuario(u) {
   if (act && (u[2] || "").toLowerCase() === (SES.correo || "").toLowerCase()) { toast("No puedes desactivar tu propia cuenta"); return; }
   const nuevo = act ? "Inactivo" : "Activo";
   if (!confirm(`¿${act ? "Desactivar" : "Activar"} a ${u[1]}?${act ? " No podrá ingresar." : ""}`)) return;
+  const motivo = ((prompt(`Motivo del cambio a ${u[1]}:`, "") || "").trim());
+  if (!motivo) { toast("Escribe el motivo del cambio"); return; }
   const r = await api({ action: "crear_usuario", tableName: "Usuarios",
-    data: [u[0] || "", u[1] || "", u[2] || "", u[3] || "", u[4] || "Cajero", nuevo, u[6] || hoyLat(), fechaHora(), u[8] || "", u[9] || "", u[10] || "", u[11] || ""] });
+    data: [u[0] || "", u[1] || "", u[2] || "", u[3] || "", u[4] || "Cajero", nuevo,
+      u[6] || "", u[7] || "", u[8] || "", u[9] || "0", u[10] || "", u[11] || "",
+      u[12] || "0", u[13] || "0", u[14] || "", u[15] || "", u[16] || "",
+      u[17] || hoyLat(), u[18] || "", fmtFechaHora(new Date()), motivo, SES.uid || SES.correo, u[22] || ""] });
   toast(r.status === "success" ? `Usuario ${nuevo.toLowerCase()}` : (r.message || "No se pudo actualizar"));
   await recargar();
 }
 
+function fmtFechaHora(d) {
+  const ME_ = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  const p = (x) => String(x).padStart(2, "0");
+  return `${p(d.getDate())} ${ME_[d.getMonth()]} ${String(d.getFullYear()).slice(2)} - ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+function codesFromSec(sec) {
+  const out = [];
+  FUNC_CATALOG.forEach((f) => {
+    const a = f.a;
+    if (!a || !Object.keys(a).length) { out.push(f.c); return; }
+    const okR = !a.r || a.r.every((x) => (sec.resumen || []).includes(x));
+    const okA = !a.a || a.a.every((x) => (sec.acciones || []).includes(x));
+    const okF = !a.ff || a.ff.every((x) => (sec.finFiltros || []).includes(x));
+    const M = { al: "alertas", dv: "_dockVentas", di: "_dockInventario", df: "_dockFinanzas", td: "_tabDeudores", rk: "ventasRanking", vm: "ventasVerMas", vi: "ventasVerInventario", fp: "finPdf", fv: "finVentas", fg: "finGastos", frg: "finRegistrar", ic: "invCarga", im: "invMovimientos", icr: "invCrear", ie: "invEditar", idel: "invEliminar", ig: "invGuardar", ih: "invHacer" };
+    const okB = Object.keys(M).every((k) => !a[k] || sec[M[k]]);
+    if (okR && okA && okF && okB) out.push(f.c);
+  });
+  return out;
+}
+function dockCapsFromCodes(codes) {
+  const has = (c) => codes.has(c);
+  const num = [...codes].some((c) => /^\d+$/.test(c));
+  const ventas = num && ["18", "19", "20", "21", "22", "23", "24", "25", "26", "44", "45", "46", "47", "49"].some(has);
+  const deu = ["31", "32", "33", "34", "35", "36", "55", "56", "57", "58"].some(has);
+  const gasto = ["37", "38", "39", "40"].some(has);
+  const inv = ["50", "51", "52", "53", "54"].some(has);
+  const fin = ["59", "60", "61"].some(has);
+  const dock = { Inicio: true, Ventas: ventas, Finanzas: fin, Inventario: inv };
+  const caps = new Set();
+  if (ventas) ["ventas", "deudores", "clientes"].forEach((c) => caps.add(c));
+  if (deu) caps.add("deudores");
+  if (fin) ["gastos", "reporte"].forEach((c) => caps.add(c));
+  if (gasto) caps.add("gastos");
+  if (inv) caps.add("inventario");
+  if (has("BAR4")) caps.add("facturacion");
+  return { dock, caps: [...caps] };
+}
+function presetCods(rol) {
+  const all = FUNC_CATALOG.map((f) => f.c);
+  if (/admin|supervisor/i.test(rol || "")) return all;
+  if (/cajero/i.test(rol || "")) return all.filter((c) => !["48", "51", "52", "53", "54", "59", "62", "BAR5"].includes(c));
+  return all.filter((c) => !["27", "28", "29", "30", "37", "38", "39", "40", "48", "51", "52", "53", "54", "59", "60", "61", "62", "BAR5"].includes(c));
+}
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 function formUsuario(u) {
   USU_EDIT = u;
-  let sec = FULL();
   let dock = { Inicio: true, Ventas: true, Finanzas: true, Inventario: true };
   let mods = Object.fromEntries(MODULOS.map((m) => [m, true]));
   let rol = u ? (u[4] || "Cajero") : "Cajero";
+  let codes = new Set();
   if (u) {
-    try {
-      const o = JSON.parse(u[11] || "null");
-      if (o && o.secciones) sec = Object.assign(FULL(), o.secciones);
-      if (o && o.dock) dock = Object.assign(dock, o.dock);
-      if (o && o.modulos) mods = Object.assign(mods, o.modulos);
-    } catch { /* legado */ }
+    const raw = u[22] || "";
+    if (raw.trim().startsWith("{")) {
+      try {
+        const o = JSON.parse(raw);
+        if (o && o.compact) String(o.compact).split("-").map((x) => x.trim().toUpperCase()).filter((x) => /^\d+$/.test(x) || /^BAR\d+$/.test(x)).forEach((c) => codes.add(c));
+        else if (o && o.secciones) codes = new Set(codesFromSec(Object.assign(FULL(), o.secciones)));
+        if (o && o.dock) dock = Object.assign(dock, o.dock);
+        if (o && o.modulos) mods = Object.assign(mods, o.modulos);
+      } catch { codes = new Set(presetCods(rol)); }
+    } else {
+      String(raw).split("-").map((x) => x.trim().toUpperCase()).filter((x) => /^\d+$/.test(x) || /^BAR\d+$/.test(x)).forEach((c) => codes.add(c));
+    }
+    if (!codes.size) codes = new Set(presetCods(rol));
   } else {
-    aplicarDefaultsRol(rol, sec, dock, mods);
+    codes = new Set(presetCods(rol));
   }
   const roles = [...ROLES_BASE];
   openModal(`<h2>${u ? "Editar usuario" : "Crear usuario"}</h2>
@@ -2216,45 +2514,21 @@ function formUsuario(u) {
     <p id="u-err-pin" class="error"></p>
     <div class="fila"><select id="u-rol">${roles.map((r) => `<option ${r === rol ? "selected" : ""}>${r}</option>`).join("")}</select>
     <button class="btn-mini" id="u-mas-rol">+ Rol</button></div>
-    <h3>Funciones (vistas)</h3>
-    ${["Inicio", "Ventas", "Finanzas", "Inventario"].map((v) => `
-      <label class="check"><input type="checkbox" data-dock="${v}" ${dock[v] ? "checked" : ""}> <b>${v}</b></label>
-      <div data-det="${v}" style="margin-left:14px"></div>`).join("")}
+    <h3>Funciones por número (separadas por -)</h3>
+    <div id="u-cods">${FUNC_GRUPOS.map((g) => `<b style="font-size:12px">${esc(g)}</b>` + FUNC_CATALOG.filter((f) => f.g === g).map((f) => `<label class="check"><input type="checkbox" data-cod="${f.c}"${codes.has(f.c) ? " checked" : ""}> ${f.c} · ${esc(f.n)}</label>`).join("")).join("")}</div>
     <h3>Funciones avanzadas</h3>
     <div id="u-mods">${MODULOS.map((m) => `<label class="check"><input type="checkbox" data-mod="${esc(m)}" ${mods[m] ? "checked" : ""}> ${esc(m)}</label>`).join("")}</div>
     <p id="u-err" class="error"></p>
     <button class="btn exito" id="u-guardar">Guardar Usuario y Permisos</button>
     <button class="btn link" id="u-cancelar">Cancelar</button>`);
 
-  const pintarDet = () => {
-    ["Inicio", "Ventas", "Finanzas", "Inventario"].forEach((v) => {
-      const box = document.querySelector(`[data-det="${v}"]`);
-      const on = document.querySelector(`[data-dock="${v}"]`).checked;
-      box.innerHTML = "";
-      if (!on) return;
-      const spec = SPEC_SECCIONES.find((s) => s.v === v);
-      spec.grupos.forEach((g) => {
-        const h = document.createElement("div");
-        h.innerHTML = `<b style="font-size:12px">${g.t}</b>`;
-        box.appendChild(h);
-        if (g.tipo === "bool") {
-          const lab = document.createElement("label");
-          lab.className = "check";
-          lab.innerHTML = `<input type="checkbox" data-sec="${g.key}" ${sec[g.key] ? "checked" : ""}> Activado`;
-          box.appendChild(lab);
-        } else {
-          g.items.forEach(([k, t]) => {
-            const lab = document.createElement("label");
-            lab.className = "check";
-            lab.innerHTML = `<input type="checkbox" data-sec="${g.key}" value="${k}" ${(sec[g.key] || []).includes(k) ? "checked" : ""}> ${t}`;
-            box.appendChild(lab);
-          });
-        }
-      });
-    });
+  const pintarCods = () => {
+    document.querySelectorAll("#u-cods [data-cod]").forEach((c) => { c.checked = codes.has(c.dataset.cod); });
   };
-  document.querySelectorAll("[data-dock]").forEach((c) => c.addEventListener("change", pintarDet));
-  pintarDet();
+  pintarCods();
+  document.querySelectorAll("#u-cods [data-cod]").forEach((c) => c.addEventListener("change", () => {
+    c.checked ? codes.add(c.dataset.cod) : codes.delete(c.dataset.cod);
+  }));
 
   const checarPin = () => {
     const p = $("u-pin").value, p2 = $("u-pin2").value;
@@ -2268,10 +2542,10 @@ function formUsuario(u) {
 
   $("u-rol").addEventListener("change", (e) => {
     rol = e.target.value;
-    aplicarDefaultsRol(rol, sec, dock, mods);
-    document.querySelectorAll("[data-dock]").forEach((c) => { c.checked = !!dock[c.dataset.dock]; });
+    codes = new Set(presetCods(rol));
+    aplicarDefaultsRol(rol, dock, mods);
     document.querySelectorAll("[data-mod]").forEach((c) => { c.checked = !!mods[c.dataset.mod]; });
-    pintarDet();
+    pintarCods();
   });
   $("u-mas-rol").addEventListener("click", () => {
     const n = prompt("Nombre del rol personalizado:", "");
@@ -2294,94 +2568,85 @@ function formUsuario(u) {
       }
       if (pin !== pin2) { $("u-err").textContent = "Las contraseñas no coinciden"; return; }
     }
-    ["Inicio", "Ventas", "Finanzas", "Inventario"].forEach((v) => { dock[v] = document.querySelector(`[data-dock="${v}"]`).checked; });
+    ["Inicio", "Ventas", "Finanzas", "Inventario"].forEach((v) => { dock[v] = true; });
     document.querySelectorAll("[data-mod]").forEach((c) => { mods[c.dataset.mod] = c.checked; });
-    SPEC_SECCIONES.forEach((sp) => sp.grupos.forEach((g) => {
-      const boxes = [...document.querySelectorAll(`[data-det] [data-sec="${g.key}"]`)];
-      if (g.tipo === "bool") sec[g.key] = boxes.length ? boxes[0].checked : sec[g.key];
-      else sec[g.key] = boxes.filter((b) => b.checked).map((b) => b.value);
-    }));
+    const sec = secFromCodes(codes);
     if (sec.invLectura) ["invCarga", "invMovimientos", "invCrear", "invEditar", "invEliminar", "invGuardar", "invHacer"].forEach((k) => (sec[k] = false));
-    const ningunDock = !["Inicio", "Ventas", "Finanzas", "Inventario"].some((v) => dock[v]);
-    if (ningunDock && !confirm("Este usuario no tendrá acceso a ninguna vista (todo desactivado). ¿Guardar de todos modos?")) return;
-    const caps = new Set();
-    if (dock.Ventas) ["ventas", "deudores", "clientes"].forEach((c) => caps.add(c));
-    if (dock.Finanzas) ["gastos", "reporte"].forEach((c) => caps.add(c));
-    if (dock.Inventario) caps.add("inventario");
-    Object.entries(mods).forEach(([m, on]) => {
-      if (!on) return;
-      if (m === "Control de Turnos y Caja") caps.add("gastos");
-      if (m === "Reportes y Analytics") caps.add("reporte");
-      if (m === "Facturación Electrónica DIAN") caps.add("facturacion");
-      if (["Venta por Mesa & Comandero", "División de Cuentas (Split)", "Happy Hour & Promociones"].includes(m)) caps.add("ventas");
-    });
-    const payload = { dock, functions: [], caps: [...caps], secciones: sec };
-    const fecha = hoyLat();
+    if (!codes.size && !confirm("Este usuario no tendrá ninguna función. ¿Guardar de todos modos?")) return;
+    const dc = dockCapsFromCodes(codes);
+    Object.assign(dock, dc.dock);
+    const payload = { compact: [...codes].join(" - "), dock, functions: [], caps: dc.caps, modulos: mods, secciones: sec };
+    const motivo = u ? ((prompt(`Motivo del cambio a ${nombre}:`, "") || "").trim()) : "Creación de usuario";
+    if (u && !motivo) { toast("Escribe el motivo del cambio"); return; }
+    const ahora = fmtFechaHora(new Date());
+    const por = SES.uid || SES.correo;
     const r = await api({ action: "crear_usuario", tableName: "Usuarios",
-      data: ["", nombre, correo, (!u || pin) ? pin : (u[3] || ""), rol, "Activo", u ? (u[6] || fecha) : fecha, fechaHora(), "", "", "", JSON.stringify(payload)] });
+      data: [u ? (u[0] || "") : "", nombre, correo, (!u || pin) ? pin : (u[3] || ""), rol, u ? (u[5] || "Activo") : "Activo",
+        u ? (u[6] || "") : "", u ? (u[7] || "") : "", u ? (u[8] || "") : "", u ? (u[9] || "0") : "0",
+        u ? (u[10] || "") : "", u ? (u[11] || "") : "", u ? (u[12] || "0") : "0", u ? (u[13] || "0") : "0",
+        u ? (u[14] || "") : "", u ? (u[15] || "") : "", u ? (u[16] || "") : "",
+        u ? (u[17] || hoyLat()) : hoyLat(), u ? (u[18] || "") : "",
+        ahora, motivo, por, JSON.stringify(payload)] });
     if (r.status !== "success") { $("u-err").textContent = r.message || "No se pudo guardar"; return; }
     closeModal(); toast("Usuario guardado");
     await recargar();
   });
 }
 
-function aplicarDefaultsRol(rol, sec, dock, mods) {
-  const F = FULL();
+function aplicarDefaultsRol(rol, dock, mods) {
   const admin = /admin|supervisor/i.test(rol);
-  const cajero = /cajero/i.test(rol);
-  Object.assign(sec, admin ? F : Object.assign(F, {
-    acciones: cajero ? ["venta", "gasto", "deudores"] : ["venta", "deudores"],
-    finPdf: admin, finFiltros: admin ? F.finFiltros : [], finVentas: admin, finGastos: admin, finRegistrar: admin,
-    invCarga: admin, invMovimientos: admin, invCrear: admin, invEditar: admin, invEliminar: admin,
-    invGuardar: admin, invHacer: admin, invLectura: !admin,
-  }));
-  Object.assign(dock, admin ? { Inicio: true, Ventas: true, Finanzas: true, Inventario: true }
-    : cajero ? { Inicio: true, Ventas: true, Finanzas: true, Inventario: false }
-    : { Inicio: true, Ventas: true, Finanzas: false, Inventario: false });
+  Object.assign(dock, { Inicio: true, Ventas: true, Finanzas: admin, Inventario: true });
   Object.keys(mods).forEach((m) => {
-    mods[m] = admin || ["Control de Turnos y Caja", "Facturación Electrónica DIAN", "Happy Hour & Promociones", "Venta por Mesa & Comandero", "División de Cuentas (Split)"].includes(m) && (cajero || admin);
+    mods[m] = admin || ["Control de Turnos y Caja", "Facturación Electrónica DIAN", "Happy Hour & Promociones", "Venta por Mesa & Comandero", "División de Cuentas (Split)"].includes(m);
   });
 }
 
-// ---------- jornada y rendimiento del equipo ----------
-function misTurnos() {
-  const yo = (SES.nombre || "").toLowerCase();
-  return turnosRows().filter((t) => (t[2] || "").toLowerCase() === yo);
+// ---------- jornada y rendimiento del equipo (columnas del usuario) ----------
+function miUsuario() {
+  const c = (SES.correo || "").toLowerCase();
+  return usuRows().find((u) => (u[2] || "").toLowerCase() === c) || null;
 }
-function horasRango(turnos, fechaD, fechaH, abierto) {
-  const porDia = {};
-  turnos.forEach((t) => {
-    const f = normFecha(t[1]); if (!f || f < fechaD || f > fechaH) return;
-    (porDia[f] = porDia[f] || []).push(t);
-  });
-  const aMin = (h) => { const p = String(h || "").split(":"); return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0); };
-  const hoy = normFecha(hoyLat());
-  let min = 0;
-  Object.entries(porDia).forEach(([f, arr]) => {
-    arr.sort((a, b) => aMin(a[4]) - aMin(b[4]));
-    let ini = null;
-    arr.forEach((t) => {
-      if (String(t[3] || "").toLowerCase().startsWith("entrada")) { if (ini == null) ini = aMin(t[4]); }
-      else if (ini != null) { min += Math.max(0, aMin(t[4]) - ini); ini = null; }
-    });
-    if (ini != null && abierto && f === hoy) { const now = new Date(); min += Math.max(0, now.getHours() * 60 + now.getMinutes() - ini); }
-  });
-  return min / 60;
+function fhParse(s) {
+  const m = /^(\d{2}) ([A-Za-z]{3}) (\d{2}) - (\d{2}):(\d{2})(?::(\d{2}))?/.exec(String(s || ""));
+  if (!m) return null;
+  const ME_ = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  const mi = ME_.indexOf(m[2][0].toUpperCase() + m[2].slice(1).toLowerCase());
+  if (mi < 0) return null;
+  return new Date(2000 + Number(m[3]), mi, Number(m[1]), Number(m[4]), Number(m[5]), Number(m[6] || 0));
+}
+function fhHoy(s) {
+  const d = fhParse(s);
+  if (!d) return false;
+  const n = new Date();
+  return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+}
+function fhHora(s) {
+  const p = String(s || "").split(" - ");
+  return p.length > 1 ? p[1].slice(0, 5) : "—";
+}
+function refNum(s, yyMon) {
+  const m = String(s || "").match(new RegExp(yyMon.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*\\(([^)]*)\\)"));
+  return m ? (parseFloat(String(m[1]).replace(",", "")) || 0) : 0;
+}
+function refHoy(s) {
+  const d = new Date(), ME_ = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  return refNum(s, String(d.getFullYear()).slice(2) + ME_[d.getMonth()]);
+}
+function sumaRefs(s) {
+  let t = 0;
+  String(s || "").replace(/\(([^)]*)\)/g, (_, v) => { t += parseFloat(String(v).replace(",", "")) || 0; return ""; });
+  return t;
 }
 function pintarJornadaMia() {
   const box = $("jornada-mia");
   if (!box || !SES) return;
-  const mios = misTurnos();
-  const hoy = normFecha(hoyLat());
-  const aMin = (h) => { const p = String(h || "").split(":"); return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0); };
-  const deHoy = mios.filter((t) => normFecha(t[1]) === hoy).sort((a, b) => aMin(a[4]) - aMin(b[4]));
-  const ultimo = deHoy[deHoy.length - 1];
-  const dentro = ultimo && String(ultimo[3] || "").toLowerCase().startsWith("entrada");
-  const rM = rangoPeriodo("Mes", 0);
+  const u = miUsuario();
+  if (!u) { box.innerHTML = ""; return; }
+  const dentro = fhHoy(u[6]) && (!fhHoy(u[7]) || fhParse(u[7]) < fhParse(u[6]));
   box.innerHTML = `<b>🕐 Mi jornada</b> <span class="badge ${dentro ? "activo" : "plan"}">${dentro ? "En turno" : "Fuera"}</span><br>`
-    + `<small>Hoy: ${horasRango(mios, hoy, hoy, true).toFixed(1)} h • Mes: ${horasRango(mios, rM.d, rM.h, true).toFixed(1)} h</small><br>`
-    + `<div class="fila"><button class="btn-mini${dentro ? "" : " verde"}" id="jor-in">Entrada</button><button class="btn-mini${dentro ? " verde" : ""}" id="jor-out">Salida</button></div>`
-    + (deHoy.length ? `<small>${deHoy.map((t) => `${t[4]} ${t[3]}`).join(" • ")}</small>` : `<small>Sin marcas hoy.</small>`);
+    + `<small>Mes: ${refHoy(u[8]).toFixed(1)} h • Total: ${num(u[9]).toFixed(1)} h</small><br>`
+    + `<small>Entrada ${fhHora(u[6])} • Salida ${fhHora(u[7])}</small><br>`
+    + `<div class="fila"><button class="btn-mini${dentro ? "" : " verde"}" id="jor-in">Entrada</button><button class="btn-mini${dentro ? " verde" : ""}" id="jor-out">Salida</button></div>`;
   const marcar = async (tipo) => {
     const r = await api({ action: "registrar_jornada", sheetName: SES.code, tipo, usuario: SES.nombre });
     toast(r.status === "success" ? tipo + " registrada" : (r.message || "No se pudo registrar"));
@@ -2394,28 +2659,33 @@ function pintarJornadaMia() {
 function pintarEquipo() {
   const box = $("usu-equipo");
   if (!box || !ME.admin) { if (box) box.innerHTML = ""; return; }
-  const rM = rangoPeriodo("Mes", 0);
-  const hoy = normFecha(hoyLat());
-  let h = `<h3>📈 Rendimiento del equipo (mes)</h3>`;
+  let h = `<h3>📈 Rendimiento del equipo</h3><button class="btn-mini" id="equipo-sync">Sincronizar estadísticas</button>`;
   usuRows().forEach((u) => {
-    const nom = u[1] || "";
-    const turnos = turnosRows().filter((t) => (t[2] || "").toLowerCase() === nom.toLowerCase());
-    const hs = horasRango(turnos, rM.d, rM.h, true);
-    const deHoy = turnos.filter((t) => normFecha(t[1]) === hoy);
-    const ult = deHoy[deHoy.length - 1];
-    const enTurno = ult && String(ult[3] || "").toLowerCase().startsWith("entrada");
-    const V = venVivas().filter((v) => (v[13] || "") === nom && enPeriodo(v[1], rM));
-    const nv = gruposVentas().filter((g) => g.usuario === nom && enPeriodo(g.fecha, rM)).length;
-    const tv = V.reduce((a, v) => a + num(v[12]), 0);
-    h += `<div class="card"><b>${esc(nom)}</b> ${enTurno ? '<span class="badge activo">En turno</span>' : ""}<br>`
-      + `<small>Ventas: ${nv} • Valor: ${fmt(tv)} • Promedio: ${fmt(nv ? tv / nv : 0)}</small><br>`
-      + `<small>Horas: ${hs.toFixed(1)} h • $/h: ${fmt(hs > 0.05 ? tv / hs : 0)} • Productos: ${V.reduce((a, v) => a + num(v[6]), 0)}</small><br>`
-      + `<small>Anulaciones: ${venRows().filter((v) => v[20] === nom && String(v[14] || "").toLowerCase() === "anulado" && enPeriodo(v[1], rM)).length} • Descuentos: ${fmt(V.reduce((a, v) => a + num(v[9]), 0))}</small></div>`;
+    const dentro = fhHoy(u[6]) && (!fhHoy(u[7]) || fhParse(u[7]) < fhParse(u[6]));
+    h += `<div class="card"><b>${esc(u[1])}</b> ${dentro ? '<span class="badge activo">En turno</span>' : ""} <span class="badge ${String(u[5] || "") === "Activo" ? "activo" : "susp"}">${esc(u[5] || "")}</span><br>`
+      + `<small>Ventas mes: ${refHoy(u[10])} • Valor mes: ${fmt(refHoy(u[11]))} • Promedio: ${fmt(num(u[12]))}</small><br>`
+      + `<small>Horas mes: ${refHoy(u[8]).toFixed(1)} • $/hora: ${fmt(num(u[13]))} • Productos: ${sumaRefs(u[14])}</small><br>`
+      + `<small>Anulaciones mes: ${refHoy(u[15])} • Descuentos mes: ${fmt(refHoy(u[16]))}</small></div>`;
   });
   box.innerHTML = h || '<div class="card">Sin equipo.</div>';
+  const sb = $("equipo-sync");
+  if (sb) sb.addEventListener("click", async () => {
+    for (const u of usuRows()) {
+      await api({ action: "sincronizar_usuario", sheetName: SES.code, correo: u[2] || "" });
+    }
+    toast("Estadísticas sincronizadas");
+    await recargar();
+  });
 }
 
 // ---------- cuenta ----------
+let EMPRESA_FULL = null;
+async function cargarFicha() {
+  try {
+    const r = await api({ action: "ficha_negocio", sheetName: SES.code });
+    if (r.status === "success" && r.data) EMPRESA_FULL = r.data.empresa || null;
+  } catch {}
+}
 function pintarCuentaInfo() {
   $("cuenta-info").innerHTML = `<b>${esc(SES.nombre)}</b><br><small>${esc(SES.correo)} • ${esc(SES.rol)} • ${esc(SES.negocio)}</small>`;
 }
@@ -2439,7 +2709,33 @@ function pintarCuenta() {
   $("clave-actualizar").addEventListener("click", cargar);
   cargar();
   CLAVE_TIMER = setInterval(() => { if (!$("t-cuenta").classList.contains("oculto")) cargar(); }, 30000);
+  pintarDatosFact();
 }
+function pintarDatosFact() {
+  const card = $("cuenta-fact");
+  if (!card) return;
+  card.classList.toggle("oculto", !ME.admin);
+  if (!ME.admin) return;
+  const e = EMPRESA_FULL || {};
+  $("cf-nit").value = e.nit || "";
+  $("cf-ciudad").value = e.ciudad || "";
+  $("cf-dir").value = e.direccion || "";
+  $("cf-tel2").value = e.celular2 || "";
+  $("cf-calidad").value = cfgValor("EMP_CALIDAD", "Responsable de IVA");
+  $("cf-aut").value = cfgValor("DIAN_AUT", "");
+  $("cf-rango").value = cfgValor("DIAN_RANGO", "");
+  $("cf-vig").value = cfgValor("DIAN_VIG", "");
+}
+if ($("btn-cf")) $("btn-cf").addEventListener("click", async () => {
+  try {
+    const r = await api({ action: "actualizar_empresa", codigo: SES.code, nit: $("cf-nit").value.trim(), direccion: $("cf-dir").value.trim(), ciudad: $("cf-ciudad").value.trim(), celular2: $("cf-tel2").value.trim() });
+    if (r.status !== "success") { toast(r.message || "No se pudo guardar"); return; }
+    for (const [k, id] of [["EMP_CALIDAD", "cf-calidad"], ["DIAN_AUT", "cf-aut"], ["DIAN_RANGO", "cf-rango"], ["DIAN_VIG", "cf-vig"]])
+      await api({ action: "guardar_config", sheetName: SES.code, parametro: k, valor: $(id).value.trim() });
+    toast("Datos guardados");
+    await recargar();
+  } catch { toast("Error de conexión"); }
+});
 $("btn-tel").addEventListener("click", async () => {
   const tel = $("cuenta-tel").value.trim();
   if (!tel) { toast("Escribe el número"); return; }

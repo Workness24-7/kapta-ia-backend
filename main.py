@@ -52,7 +52,6 @@ TABLAS = {
     "USUARIOS": {"INICIO": 69, "FILA_INICIO": 3, "COLUMNAS": 11},
     "CONFIG_NEGOCIO": {"INICIO": 81, "FILA_INICIO": 3, "COLUMNAS": 6},
     "MOVIMIENTOS": {"INICIO": 110, "FILA_INICIO": 3, "COLUMNAS": 10},
-    "TURNOS": {"INICIO": 130, "FILA_INICIO": 3, "COLUMNAS": 6},
 }
 
 CABECERAS = {
@@ -69,7 +68,6 @@ CABECERAS = {
     "MOVIMIENTOS": ["Id_Movimiento", "Fecha", "Id_Producto", "Nom_Producto",
                    "Tipo", "Cantidad", "Stock_Anterior", "Stock_Nuevo",
                    "Usuario", "Observacion"],
-    "TURNOS": ["Id_Turno", "Fecha", "Usuario", "Tipo", "Hora", "Nota"],
 }
 
 # Vista tenant de las tablas globales (sin la columna Código_Empresa,
@@ -82,7 +80,9 @@ CABECERAS_GLOBALES = {
                          "Usuario", "Fecha_Hora", "Detalles", "Estado"],
     "USUARIOS": ["Id_Usuario", "Nombre", "Correo", "Contraseña", "Rol",
                   "Estado", "Fecha_Creacion", "Ultimo_Acceso",
-                  "Fecha_Cambio_Estado", "Motivo_Cambio", "Cambiado_Por", "Funciones"],
+                  "Fecha_Cambio_Estado", "Motivo_Cambio", "Cambiado_Por", "Funciones",
+                  "Entrada", "Salida", "Horas_Mensuales", "Horas", "Ventas", "Valor",
+                  "Promedio", "Venta_Hora", "Productos", "Anulaciones", "Descuentos"],
     "CONFIG_NEGOCIO": ["Parametro", "Valor", "Descripcion", "Fecha_Actualizacion",
                        "Usuario", "Observaciones"],
 }
@@ -225,6 +225,19 @@ def _super_token_valido(params):
         _SUPER_TOKENS.pop(tok, None)
         return False
     return True
+
+
+def action_ficha_negocio(params=None):
+    """Ficha completa del negocio propio (facturación): NIT, dirección, teléfonos."""
+    codigo = str(((params or {}).get("sheetName") or (params or {}).get("codigo")) or "").strip().upper()
+    if not codigo:
+        return respuesta_error("Negocio no encontrado.")
+    emp = db.buscar_empresa(codigo)
+    if not emp or str(emp.get("estado") or "").strip().upper() == "ELIMINADO":
+        return respuesta_error("Negocio no encontrado.")
+    return respuesta_success({"empresa": {k: (emp.get(k) or "") for k in
+        ("codigo", "nombre", "nit", "tipo", "pais", "ciudad", "direccion",
+         "correo", "celular1", "celular2", "plan", "estado")}})
 
 
 def action_resolver_empresa(params=None):
@@ -433,7 +446,11 @@ def action_login(params):
             pass
 
     db.reset_fallos_login(codigo, correo)
-    db.actualizar_ultimo_acceso(empresa, correo, fecha_actual())
+    db.actualizar_ultimo_acceso(codigo, correo, _fmt_fechahora(datetime.datetime.now()))
+    try:
+        _asegurar_mes_usuario(codigo, correo)
+    except Exception:
+        pass
 
     admin_datos = {
         "idUsuario": usuario[0], "nombre": usuario[1], "correo": usuario[2],
@@ -837,6 +854,7 @@ def action_actualizar_empresa(params):
         ("ciudad", "ciudad"),
         ("direccion", "direccion"),
         ("correo", "correo"),
+        ("nit", "nit"),
         ("celular1", "celular1"),
         ("celular2", "celular2"),
         ("estado", "estado"),
@@ -968,6 +986,36 @@ def action_escribir_fila(params):
         if pwd and not pwd.startswith("pbkdf2$"):
             datos = list(datos)
             datos[3] = _hash_password(pwd[:128])
+
+    # Usuarios: esquema extendido (23 cols). En creación inicializa jornada y
+    # referencias mensuales; en edición conserva las columnas que no vengan.
+    if tabla_key == "USUARIOS":
+        datos = list(datos) + [""] * max(0, 23 - len(datos))
+        existe, previo = False, None
+        try:
+            for (_, dd) in db.leer_tabla(empresa, "usuarios"):
+                if str(dd[2] if len(dd) > 2 else "" or "").strip().lower() == str(datos[2] or "").strip().lower():
+                    existe = True
+                    previo = list(dd) + [""] * max(0, 23 - len(dd))
+                    break
+        except Exception:
+            existe = True
+        ahora_u = datetime.datetime.now()
+        if not existe:
+            ref0 = _ref_mes(ahora_u) + " (0)"
+            dtc = _parse_fechahora(str(datos[6] or "").strip()) or ahora_u
+            datos[6] = _fmt_fechahora(dtc)
+            datos[12] = _fmt_fechahora(ahora_u)
+            datos[13] = ""
+            for i in (14, 16, 17, 20, 21, 22):
+                datos[i] = ref0
+            datos[15] = "0"
+            datos[18] = "0"
+            datos[19] = "0"
+        elif previo:
+            for i in range(12, 23):
+                if not str(datos[i] or "").strip():
+                    datos[i] = previo[i]
 
     if tabla_key == "INVENTARIO":
         prefijo = prefijo_inventario(empresa)
@@ -1636,12 +1684,12 @@ def action_guardar_config(params):
 
 
 def action_registrar_jornada(params):
-    """Marca Entrada/Salida de jornada: {sheetName, tipo, usuario, nota}."""
+    """Marca Entrada/Salida en la fila del usuario y acumula Horas (+mensual).
+    Al cerrar turno recalcula derivados. Sin tabla nueva."""
     params = params or {}
     clave = str(params.get("sheetName") or params.get("codigo") or "").strip()
     tipo = str(params.get("tipo") or "").strip().capitalize()
     usuario = str(params.get("usuario") or "").strip()
-    nota = str(params.get("nota") or "")[:80]
     if not clave:
         return respuesta_error("No se recibió sheetName.")
     if tipo not in ("Entrada", "Salida"):
@@ -1651,12 +1699,185 @@ def action_registrar_jornada(params):
     empresa = resolver_hoja(clave)
     if not empresa:
         return respuesta_error("No existe la hoja: " + clave)
+    got, d, nrow = None, None, None
+    try:
+        for (n, dd) in db.leer_tabla(empresa, "usuarios"):
+            dd = list(dd) + [""] * max(0, 23 - len(dd))
+            if str(dd[1] or "").strip().lower() == usuario.lower() or str(dd[2] if len(dd) > 2 else "" or "").strip().lower() == usuario.lower():
+                got, d, nrow = True, dd, n
+                break
+    except Exception:
+        pass
+    if not got:
+        return respuesta_error("Usuario no encontrado.")
     ahora = datetime.datetime.now()
-    fila = db.siguiente_fila_libre(empresa, "turnos", TABLAS["TURNOS"]["FILA_INICIO"])
-    nid = db.siguiente_id(empresa, "turnos", "T-", 4)
-    db.guardar_fila(empresa, "turnos", fila,
-                     [nid, ahora.strftime("%d/%m/%Y"), usuario, tipo, ahora.strftime("%H:%M"), nota])
-    return respuesta_success({"id": nid, "tipo": tipo})
+    if tipo == "Entrada":
+        d[12] = _fmt_fechahora(ahora)
+    else:
+        d[13] = _fmt_fechahora(ahora)
+        ent = _parse_fechahora(d[12])
+        if ent and ent.date() == ahora.date():
+            ses = max(0, (ahora - ent).total_seconds() / 3600)
+            if ses > 0:
+                d[15] = str(round(_fnum(d[15]) + ses, 2))
+                d[14] = _bump_mensual(d[14], ahora, _num_ref(d[14], ahora) + ses, False)
+    _guardar_usuario(empresa, nrow, d)
+    try:
+        _sincronizar_usuario(empresa, str(d[2] or ""))
+    except Exception:
+        pass
+    return respuesta_success({"tipo": tipo})
+
+
+MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+
+
+def _fmt_fechahora(dt):
+    """DD MMM AA - HH:MM:SS (ej. 12 Sep 26 - 15:30:45)."""
+    return f"{dt.day:02d} {MESES_ES[dt.month - 1]} {dt.strftime('%y')} - {dt.strftime('%H:%M:%S')}"
+
+
+def _ref_mes(dt):
+    return dt.strftime("%y") + MESES_ES[dt.month - 1]
+
+
+def _parse_fechahora(s):
+    """Inverso de _fmt_fechahora. Acepta también dd/mm/aaaa[.]( HH:MM[:SS])."""
+    try:
+        m = re.match(r"(\d{2}) ([A-Za-z]{3}) (\d{2}) - (\d{2}):(\d{2})(?::(\d{2}))?", str(s or "").strip())
+        if m:
+            dd, mon, aa, hh, mm, ss = m.groups()
+            mes = MESES_ES.index(mon[:1].upper() + mon[1:].lower()) + 1
+            return datetime.datetime(2000 + int(aa), mes, int(dd), int(hh), int(mm), int(ss or 0))
+        m2 = re.match(r"(\d{2})/(\d{2})/(\d{4})(?: (\d{2}):(\d{2})(?::(\d{2}))?)?", str(s or "").strip())
+        if m2:
+            dd, mm, aa, hh, mi, ss = m2.groups()
+            return datetime.datetime(int(aa), int(mm), int(dd), int(hh or 0), int(mi or 0), int(ss or 0))
+    except (ValueError, TypeError):
+        pass
+    return None
+
+
+def _bump_mensual(actual, dt, numero, entero=True):
+    """Historial compacto '26Ene (5) - 26Feb (3)': fija el mes actual en numero,
+    conserva los anteriores y agrega la referencia si falta. Nunca borra."""
+    pares = re.findall(r"(\d{2}[A-Za-z]{3})\s*\(([^)]*)\)", str(actual or ""))
+    ref = _ref_mes(dt)
+    val = str(int(round(numero))) if entero else f"{round(numero, 2):.2f}"
+    vistos, out = set(), []
+    for (r, _) in pares:
+        if r in vistos:
+            continue
+        vistos.add(r)
+        out.append((r, val if r == ref else _.strip()))
+    if ref not in vistos:
+        out.append((ref, val))
+    return " - ".join(f"{r} ({v})" for (r, v) in out)
+
+
+def _leer_usuario(empresa, correo):
+    try:
+        for (n, d) in db.leer_tabla(empresa, "usuarios"):
+            if str(d[2] if len(d) > 2 else "" or "").strip().lower() == str(correo or "").strip().lower():
+                return n, list(d) + [""] * max(0, 23 - len(d))
+    except Exception:
+        pass
+    return None, None
+
+
+def _guardar_usuario(empresa, n, d):
+    db.guardar_fila(empresa, "usuarios", n, (list(d) + [""] * 23)[:23])
+
+
+def _asegurar_mes_usuario(empresa, correo):
+    """Agrega la referencia del mes actual (en 0) a los historiales del usuario."""
+    ahora = datetime.datetime.now()
+    got, d = _leer_usuario(empresa, correo)
+    if not got:
+        return
+    for i in (14, 16, 17, 20, 22):
+        d[i] = _bump_mensual(d[i], ahora, _num_ref(d[i], ahora), i != 17 and i != 22)
+    _guardar_usuario(empresa, got, d)
+
+
+def _num_ref(actual, dt):
+    """Número guardado en la referencia del mes actual (0 si no existe)."""
+    for (r, v) in re.findall(r"(\d{2}[A-Za-z]{3})\s*\(([^)]*)\)", str(actual or "")):
+        if r == _ref_mes(dt):
+            try:
+                return float(str(v).replace(",", "").strip() or 0)
+            except (ValueError, TypeError):
+                return 0
+    return 0
+
+
+def _sincronizar_usuario(empresa, correo):
+    """Núcleo compartido: recalcula mensuales de ventas y derivados."""
+    got, d = _leer_usuario(empresa, correo)
+    if not got:
+        return None
+    nombre = str(d[1] or "")
+    ventas = db.leer_tabla(empresa, "ventas")
+    meses = {}
+    for (_, v) in ventas:
+        v = list(v) + [""] * max(0, 22 - len(v))
+        if str(v[13] or "") != nombre:
+            continue
+        f1 = str(v[1] or "").strip()
+        dt = _parse_fechahora(f1 + (" 00:00" if len(f1) <= 10 else ""))
+        if not dt:
+            continue
+        m = meses.setdefault(_ref_mes(dt), {"n": set(), "valor": 0, "prod": 0, "desc": 0, "anu": 0})
+        m["n"].add(str(v[0] or "") or f"{v[1]}|{v[2]}|{v[5]}")
+        if str(v[14] or "").strip().lower() == "anulado":
+            m["anu"] += 1
+            continue
+        m["valor"] += _fnum(v[12])
+        m["prod"] += _fnum(v[6])
+        m["desc"] += _fnum(v[9])
+    tot_n = sum(len(m["n"]) for m in meses.values())
+    tot_v = sum(m["valor"] for m in meses.values())
+    horas = _fnum(d[15])
+    for idx, campo, entero in ((16, "n", True), (17, "valor", False), (20, "prod", True), (21, "anu", True), (22, "desc", False)):
+        pares = []
+        for ref in sorted(meses.keys()):
+            n = len(meses[ref][campo]) if campo == "n" else meses[ref][campo]
+            val = str(int(round(n))) if entero else f"{n:.2f}"
+            pares.append(ref + " (" + val + ")")
+        d[idx] = " - ".join(pares)
+    d[18] = str(int(round(tot_v / tot_n))) if tot_n else "0"
+    d[19] = f"{(tot_v / horas):.2f}" if horas > 0 else "0"
+    _guardar_usuario(empresa, got, d)
+    return {"ventas": tot_n, "valor": round(tot_v, 2)}
+
+
+def action_sincronizar_usuario(params):
+    """Recalcula Ventas/Valor/Productos/Descuentos/Anulaciones (mensual compacto),
+    Promedio y Venta_Hora desde las ventas reales del usuario."""
+    params = params or {}
+    clave = str(params.get("sheetName") or params.get("codigo") or "").strip()
+    correo = str(params.get("correo") or params.get("userEmail") or "").strip()
+    if not clave:
+        return respuesta_error("No se recibió sheetName.")
+    if not correo:
+        return respuesta_error("No se recibió correo.")
+    empresa = resolver_hoja(clave)
+    if not empresa:
+        return respuesta_error("No existe la hoja: " + clave)
+    try:
+        r = _sincronizar_usuario(empresa, correo)
+    except Exception:
+        return respuesta_error("No se pudo sincronizar.")
+    if not r:
+        return respuesta_error("Usuario no encontrado.")
+    return respuesta_success(r)
+
+
+def _fnum(v):
+    try:
+        return float(str(v).replace(",", "").strip() or 0)
+    except (ValueError, TypeError):
+        return 0
 
 
 def action_anular_venta(params):
@@ -1868,6 +2089,8 @@ POST_ACTIONS = {
     "anular_venta": action_anular_venta,
     "registrar_jornada": action_registrar_jornada,
     "guardar_config": action_guardar_config,
+    "sincronizar_usuario": action_sincronizar_usuario,
+    "ficha_negocio": action_ficha_negocio,
     "registrar_deudor": action_escribir_fila,
     "registrar_gasto": action_escribir_fila,
     "crear_usuario": action_escribir_fila,

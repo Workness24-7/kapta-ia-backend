@@ -34,8 +34,10 @@ CABECERAS = {
 # A los tenants se les sirven las filas SIN la columna codigo (índices intactos).
 CABECERAS_GLOBALES = {
     "usuarios": ["Codigo_Empresa", "Id_Usuario", "Nombre", "Correo", "Contrasena",
-                 "Rol", "Estado", "Fecha_Creacion", "Ultimo_Acceso",
-                 "Fecha_Cambio_Estado", "Motivo_Cambio", "Cambiado_Por", "Funciones"],
+               "Rol", "Estado", "Fecha_Creacion", "Ultimo_Acceso",
+               "Fecha_Cambio_Estado", "Motivo_Cambio", "Cambiado_Por", "Funciones",
+               "Entrada", "Salida", "Horas_Mensuales", "Horas", "Ventas", "Valor",
+               "Promedio", "Venta_Hora", "Productos", "Anulaciones", "Descuentos"],
     "gastos": ["Codigo_Empresa", "Id_Gasto", "Fecha", "Hora", "Categoria",
                "Concepto", "Descripcion", "Proveedor", "Monto", "Metodo_Pago",
                "Referencia", "Usuario", "Estado", "Fecha_Modificacion",
