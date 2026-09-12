@@ -203,13 +203,13 @@ _SUPER_TOKENS = {}
 _DURACION_TOKEN_SUPER = 12 * 3600
 
 
-def _emitir_token_superadmin():
+def _emitir_token_superadmin(correo=""):
     ahora = _time.time()
     # ponytail: purga perezosa, sin hilos ni dependencias
-    for tok in [t for (t, exp) in _SUPER_TOKENS.items() if exp <= ahora]:
+    for tok in [t for (t, v) in _SUPER_TOKENS.items() if (v[0] if isinstance(v, list) else v) <= ahora]:
         _SUPER_TOKENS.pop(tok, None)
     tok = secrets.token_urlsafe(32)
-    _SUPER_TOKENS[tok] = ahora + _DURACION_TOKEN_SUPER
+    _SUPER_TOKENS[tok] = [ahora + _DURACION_TOKEN_SUPER, str(correo or "")]
     return tok
 
 
@@ -220,11 +220,19 @@ def _super_token_valido(params):
         return False
     if not tok:
         return False
-    exp = _SUPER_TOKENS.get(tok)
+    v = _SUPER_TOKENS.get(tok)
+    exp = v[0] if isinstance(v, list) else v
     if not exp or exp <= _time.time():
         _SUPER_TOKENS.pop(tok, None)
         return False
     return True
+
+
+def _super_correo(tok):
+    v = _SUPER_TOKENS.get(tok or "")
+    if isinstance(v, list) and v[0] > _time.time():
+        return v[1]
+    return ""
 
 
 def action_ficha_negocio(params=None):
@@ -565,7 +573,7 @@ def action_login_superadmin(params):
     email_ok = str(os.getenv("SUPERADMIN_EMAIL") or "AdminMauricio@kaptaia.com").lower().strip()
     pass_ok = str(os.getenv("SUPERADMIN_PASS") or "M4ur1C10*")
     if correo == email_ok and password == pass_ok and correo:
-        return respuesta_success({"superadmin": True, "correo": correo, "token": _emitir_token_superadmin()})
+        return respuesta_success({"superadmin": True, "correo": correo, "token": _emitir_token_superadmin(correo)})
     return respuesta_error("Credenciales de superadmin inválidas.")
 
 
@@ -1929,7 +1937,8 @@ def _vista_permitida(rol, funciones, vista):
 
 
 def action_crear_enlace(params):
-    """Emite token firmado para accesos por vista: {sheetName, correo}."""
+    """Emite token firmado para accesos por vista: {sheetName, correo[, super]}.
+    Con sesión superadmin válida emite token atado a ella (uid SUPERADMIN)."""
     params = params or {}
     clave = str(params.get("sheetName") or params.get("codigo") or "").strip()
     correo = str(params.get("correo") or params.get("userEmail") or "").strip()
@@ -1939,13 +1948,16 @@ def action_crear_enlace(params):
     if not empresa:
         return respuesta_error("No existe la hoja: " + clave)
     got, d = _leer_usuario(empresa, correo)
-    if not got:
-        return respuesta_error("Usuario no encontrado.")
-    if str(d[5] if len(d) > 5 else "" or "").strip().lower() != "activo":
-        return respuesta_error("Usuario inactivo.")
-    uid = str(d[0] or "")
     exp = int(datetime.datetime.now().timestamp()) + 30 * 24 * 3600
-    payload = f"{empresa}.{uid}.{exp}"
+    if got:
+        if str(d[5] if len(d) > 5 else "" or "").strip().lower() != "activo":
+            return respuesta_error("Usuario inactivo.")
+        payload = f"{empresa}.{d[0]}.{exp}"
+    else:
+        sup = str(params.get("super") or params.get("token") or "").strip()
+        if not sup or not _super_token_valido({"token": sup}):
+            return respuesta_error("Usuario no encontrado.")
+        payload = f"{empresa}.SUPERADMIN.{exp}.{sup}"
     b64 = _b64.b64encode(payload.encode()).decode().replace("+", "-").replace("/", "_").rstrip("=")
     return respuesta_success({"token": f"{b64}.{_firmar_enlace(payload)}"})
 
@@ -1958,7 +1970,9 @@ def action_validar_acceso(params):
     try:
         b64, sig = token.rsplit(".", 1)
         payload = _b64.b64decode(b64.replace("-", "+").replace("_", "/") + "==").decode()
-        code, uid, exp = payload.split(".")
+        parts = payload.split(".")
+        code, uid, exp = parts[0], parts[1], parts[2]
+        supertok = parts[3] if len(parts) > 3 else ""
         if _firmar_enlace(payload) != sig or int(exp) < int(datetime.datetime.now().timestamp()):
             return respuesta_error("Enlace inválido o vencido.")
     except (ValueError, TypeError, AttributeError):
@@ -1966,6 +1980,14 @@ def action_validar_acceso(params):
     empresa = resolver_hoja(code)
     if not empresa:
         return respuesta_error("Negocio no encontrado.")
+    if uid == "SUPERADMIN":
+        correo = _super_correo(supertok)
+        if not correo:
+            return respuesta_error("Enlace inválido.")
+        return respuesta_success({"usuario": {
+            "id": "SUPERADMIN", "nombre": "SuperAdmin", "correo": correo,
+            "rol": "Administrador", "estado": "Activo", "funciones": "",
+        }})
     got, d = None, None
     try:
         for (n, dd) in db.leer_tabla(empresa, "usuarios"):

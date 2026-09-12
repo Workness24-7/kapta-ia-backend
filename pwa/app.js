@@ -1,5 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-21";
+const VERSION_PWA = "PWA-2026-09-22";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -2830,7 +2830,9 @@ async function pintarEnlaces() {
   if (!MI_TOKEN) {
     box.innerHTML = `<small class="muted">Generando...</small>`;
     try {
-      const r = await api({ action: "crear_enlace", sheetName: SES.code, correo: SES.correo });
+      const args = { action: "crear_enlace", sheetName: SES.code, correo: SES.correo };
+      if (SES.super && SUPER) args.super = SUPER.token;
+      const r = await api(args);
       if (r.status === "success" && r.data) MI_TOKEN = r.data.token;
     } catch {}
   }
