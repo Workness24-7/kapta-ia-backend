@@ -1,5 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-19";
+const VERSION_PWA = "PWA-2026-09-20";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -2822,6 +2822,11 @@ function imprimir(titulo, html) {
 // ---------- arranque ----------
 function rutaInicial() {
   try {
+    const hs = String(location.hash || "").replace(/^#\/?/, "");
+    const hp = hs.split("/").filter(Boolean);
+    if (hp.length && /^aptadmin$/i.test(hp[0])) return { modo: "super" };
+    if (hp.length && /^[a-z0-9-]+$/i.test(hp[0]) && !/^login$/i.test(hp[0])) return { modo: "negocio", code: hp[0].toUpperCase() };
+    if (hp.length && /^login$/i.test(hp[0])) return { modo: "redireccion" };
     const h = String(location.hostname || "").toLowerCase();
     if (h === "aptadmin.kaptaia.app") return { modo: "super" };
     const m = h.match(/^([a-z0-9-]+)\.kaptaia\.app$/);
