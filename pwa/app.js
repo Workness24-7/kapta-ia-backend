@@ -1,5 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-18";
+const VERSION_PWA = "PWA-2026-09-19";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -833,7 +833,7 @@ $("btn-codigo").addEventListener("click", async () => {
     EMPRESA = emp;
     aplicarIdentidad(emp);
     $("login-nombre").textContent = SES.negocio;
-    $("login-dominio").textContent = code.toLowerCase() + ".kaptaia.com";
+    $("login-dominio").textContent = code.toLowerCase() + ".kaptaia.app";
     localStorage.setItem("kapta_code", code);
     ver("login");
   } catch { $("err-codigo").textContent = "Sin conexión. Intenta de nuevo."; }
@@ -2838,7 +2838,7 @@ async function entrarDirecto(code) {
     EMPRESA = emp;
     aplicarIdentidad(emp);
     $("login-nombre").textContent = SES.negocio;
-    $("login-dominio").textContent = code.toLowerCase() + ".kaptaia.com";
+    $("login-dominio").textContent = code.toLowerCase() + ".kaptaia.app";
     localStorage.setItem("kapta_code", code);
     if (SES.correo) { entrar(); return; }
     ver("login");
