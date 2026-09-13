@@ -1,5 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-22";
+const VERSION_PWA = "PWA-2026-09-23";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -98,11 +98,51 @@ function tab(nombre) {
     location.hash = `#/${MODO_AISLADO.code}/${nombreVista(MODO_AISLADO.vista)}/${MODO_AISLADO.token}`;
     return;
   }
+  if (SES && ME && ME.sec && !vistasPermitidas().includes(nombre)) nombre = "inicio";
   stopClave();
   document.querySelectorAll(".tab").forEach((t) => t.classList.add("oculto"));
   $("t-" + nombre).classList.remove("oculto");
   document.querySelectorAll("#dock button").forEach((b) => b.classList.toggle("on", b.dataset.tab === nombre));
   if (nombre === "cuenta") pintarCuenta();
+  syncHash();
+}
+function vistasPermitidas() {
+  if (!ME || !ME.sec) return ["inicio"];
+  const s = ME.sec, out = ["inicio"];
+  if (s._dockVentas) out.push("venta");
+  if (s._dockInventario) out.push("inventario");
+  if (ME.admin) out.push("usuarios");
+  if (s._dockFinanzas) out.push("finanzas");
+  if (ME.admin || s._dockFinanzas) out.push("dashboard");
+  if (s._tabDeudores) out.push("deudores");
+  out.push("cuenta");
+  return out;
+}
+function vistaActual() {
+  const mapa = { "t-inicio": "inicio", "t-venta": "venta", "t-inventario": "inventario", "t-usuarios": "usuarios", "t-finanzas": "finanzas", "t-dashboard": "dashboard", "t-deudores": "deudores", "t-cuenta": "cuenta" };
+  for (const id in mapa) {
+    const el = $(id);
+    if (el && !el.classList.contains("oculto")) return mapa[id];
+  }
+  return "inicio";
+}
+function syncHash() {
+  try {
+    if (!SES || !SES.code || !MI_TOKEN) return;
+    const v = vistaActual();
+    const nom = { dashboard: "Panel" }[v] || v[0].toUpperCase() + v.slice(1);
+    const h = `#/${SES.code}/${nom}/${MI_TOKEN}`;
+    if (location.hash !== h) history.replaceState(null, "", h);
+  } catch {}
+}
+async function asegurarToken() {
+  if (MI_TOKEN || !SES || !SES.code || !SES.correo) return;
+  try {
+    const args = { action: "crear_enlace", sheetName: SES.code, correo: SES.correo };
+    if (SES.super && SUPER) args.super = SUPER.token;
+    const r = await api(args);
+    if (r.status === "success" && r.data) MI_TOKEN = r.data.token;
+  } catch {}
 }
 function armarDock(sec) {
   const tabs = [["inicio", "Inicio"]];
@@ -1048,6 +1088,8 @@ async function entrar() {
   $("btn-regalo").style.display = ME.admin ? "" : "none";
   tab("inicio");
   activarSplits(); aplicarLayout();
+  await asegurarToken();
+  syncHash();
   rellenarFunciones().catch(() => {});
   try {
     const cv = document.getElementById("cuenta-version");
@@ -1119,12 +1161,12 @@ function salir() {
     return;
   }
   const ais = MODO_AISLADO;
+  const code = ais ? ais.code : (SES && SES.code);
   SES = null; ME = null; MI_TOKEN = null; MODO_AISLADO = null;
   try { document.getElementById("p-pos").classList.remove("aislado"); } catch {}
   localStorage.removeItem("kapta_pwa"); sessionStorage.removeItem("kapta_pwa");
   aplicarIdentidad(null);
-  if (ais) location.hash = `#/${ais.code}/Login`;
-  else ver("negocio");
+  location.hash = code ? `#/${code}/Login` : `#/Login`;
 }
 $("btn-salir").addEventListener("click", salir);
 if ($("btn-salir-ais")) $("btn-salir-ais").addEventListener("click", salir);
@@ -2829,12 +2871,7 @@ async function pintarEnlaces() {
   if (ME.sec._tabDeudores) vistas.push(["deudores", "Deudores"]);
   if (!MI_TOKEN) {
     box.innerHTML = `<small class="muted">Generando...</small>`;
-    try {
-      const args = { action: "crear_enlace", sheetName: SES.code, correo: SES.correo };
-      if (SES.super && SUPER) args.super = SUPER.token;
-      const r = await api(args);
-      if (r.status === "success" && r.data) MI_TOKEN = r.data.token;
-    } catch {}
+    await asegurarToken();
   }
   if (!MI_TOKEN) { box.innerHTML = `<small>No se pudo generar.</small>`; return; }
   const base = location.origin + location.pathname;
