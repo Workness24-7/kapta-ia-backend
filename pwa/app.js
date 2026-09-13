@@ -1,5 +1,5 @@
 /* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-23";
+const VERSION_PWA = "PWA-2026-09-24";
 const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -1040,6 +1040,7 @@ $("btn-neg-salir").addEventListener("click", () => {
   sessionStorage.removeItem("kapta_super");
   sessionStorage.removeItem("kapta_super_tok");
   aplicarIdentidad(null);
+  try { history.replaceState(null, "", "#/Login"); } catch {}
   ver("negocio");
 });
 
@@ -1157,6 +1158,7 @@ $("btn-nuevo-deudor").addEventListener("click", () => {
 function salir() {
   if (SES && SES.super && SUPER) {
     SES = null; ME = null;
+    try { history.replaceState(null, "", "#/aptadmin/Login"); } catch {}
     cargarNegocios();
     return;
   }
@@ -2992,8 +2994,14 @@ async function entrarDirecto(code) {
   MI_TOKEN = null;
   const RUTA = rutaInicial();
   if (RUTA.modo === "vista") { entrarAislado(RUTA); }
-  else if (RUTA.modo === "super") { ver("superlogin"); }
+  else if (RUTA.modo === "super") {
+    SES = null; ME = null;
+    localStorage.removeItem("kapta_pwa"); sessionStorage.removeItem("kapta_pwa");
+    ver("superlogin");
+  }
   else if (RUTA.modo === "negocio") {
+    SUPER = null;
+    sessionStorage.removeItem("kapta_super"); sessionStorage.removeItem("kapta_super_tok");
     if (SES && SES.code && SES.code !== RUTA.code) { SES = null; localStorage.removeItem("kapta_pwa"); sessionStorage.removeItem("kapta_pwa"); }
     entrarDirecto(RUTA.code);
   }
