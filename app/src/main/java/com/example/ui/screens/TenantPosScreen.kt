@@ -159,6 +159,9 @@ import com.example.data.local.entity.PosProductEntity
 import com.example.data.local.entity.PosSaleEntity
 import com.example.ui.KaptaViewModel
 import com.example.ui.components.EtherealBackground
+import com.example.ui.components.DockSearchItem
+import com.example.ui.components.PosDockKey
+import com.example.ui.components.PosSideDock
 import com.example.ui.components.GlassCard
 import com.example.ui.components.iOSButton
 import com.example.ui.components.iOSLargeTitle
@@ -1211,8 +1214,6 @@ private fun DebtorDetailFloatingModal(
     }
 }
 
-private data class TopDockItem(val index: Int, val label: String, val icon: ImageVector)
-
 private data class BusinessModule(
     val title: String,
     val description: String,
@@ -1509,6 +1510,9 @@ fun TenantPosScreen(
     // Fixed Top Dock Navigation Index (0: Inicio, 1: Ventas, 2: Finanzas, 3: Inventario, 4: Menú Adicional)
     var selectedDockTab by remember { mutableIntStateOf(if (isMesero) 0 else if (isCajero) 1 else 0) }
 
+    // Dock lateral Canva: strip de iconos + panel sobre el contenido al posicionarse
+    var selectedDockKey by remember { mutableStateOf(if (isCajero) PosDockKey.VENTAS else PosDockKey.INICIO) }
+
     var searchPosQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Todos") }
 
@@ -1685,6 +1689,77 @@ fun TenantPosScreen(
         android.util.Log.d("KAPTA_ISOLATION", "[KAPTA_ISOLATION] TenantPosScreen state: role=$logRole, companyCode=${company.code}, salesCount=${cashSalesFlow.size}, salesTotal=$totalSalesAmount")
         android.util.Log.d("KAPTA_UI_TOTAL", "[KAPTA_UI_TOTAL] role=$logRole, screen=TenantPosDashboard, salesCount=${cashSalesFlow.size}, salesTotal=$todaySalesAmount, displayedTotal=$todaySalesAmount")
 
+    // Dock lateral Canva: opciones visibles según el acceso del rol (solo cambia el dock)
+    val dockItems = remember(isAdminUser, allowedDockTabs, userCapabilities) {
+        buildList {
+            if (0 in allowedDockTabs) add(PosDockKey.INICIO)
+            if (1 in allowedDockTabs) add(PosDockKey.VENTAS)
+            if (2 in allowedDockTabs) add(PosDockKey.PANEL)
+            if (hasCap("deudores")) add(PosDockKey.DEUDORES)
+            if (3 in allowedDockTabs) add(PosDockKey.INVENTARIO)
+            add(PosDockKey.USUARIOS)
+            add(PosDockKey.ASISTENTE)
+        }
+    }
+    // Búsqueda global del negocio, ya filtrada por permisos del rol
+    val dockSearchItems = remember(productsFlow, debtorsList, expensesList, salesDetailList, allowedDockTabs, userCapabilities) {
+        buildList {
+            productsFlow.forEach { prod ->
+                add(DockSearchItem("Productos", prod.name, "${formatCurrency(prod.price)} • Stock ${prod.stock} • ${prod.category.ifBlank { "General" }}", "prod:${prod.id}"))
+            }
+            if (1 in allowedDockTabs) {
+                salesDetailList.forEachIndexed { i, s ->
+                    add(DockSearchItem("Ventas", s.productName.ifBlank { "Venta" }, "${s.quantity} x ${formatCurrency(s.unitPrice)} • ${s.dateStr}", "sale:$i"))
+                }
+            }
+            if (hasCap("deudores")) {
+                debtorsList.forEach { d ->
+                    add(DockSearchItem("Deudores", d.name, "Debe ${formatCurrency((d.amountOwed - d.abonoAmount).coerceAtLeast(0.0))} • ${d.date}", "deud:${d.id}"))
+                }
+            }
+            if (2 in allowedDockTabs) {
+                expensesList.forEach { e ->
+                    add(DockSearchItem("Gastos", e.concept, "${formatCurrency(e.amount)} • ${e.category} • ${e.date}", "exp:${e.id}"))
+                }
+            }
+        }
+    }
+    val onDockSelect: (PosDockKey) -> Unit = { key ->
+        selectedDockKey = key
+        when (key) {
+            PosDockKey.INICIO -> selectedDockTab = 0
+            PosDockKey.VENTAS -> selectedDockTab = 1
+            PosDockKey.PANEL -> selectedDockTab = 2
+            PosDockKey.INVENTARIO -> selectedDockTab = 3
+            PosDockKey.DEUDORES -> showDebtorsModal = true
+            PosDockKey.USUARIOS -> showUserProfileModal = true
+            PosDockKey.ASISTENTE -> showAdditionalMenuSheet = true
+        }
+    }
+    val onDockSearchSelect: (DockSearchItem) -> Unit = { item ->
+        val id = item.key.substringAfter(":")
+        when {
+            item.key.startsWith("prod:") -> {
+                productsFlow.find { it.id.toString() == id }?.let { searchPosQuery = it.name }
+                selectedDockKey = PosDockKey.VENTAS
+                selectedDockTab = 1
+            }
+            item.key.startsWith("sale:") -> {
+                selectedDockKey = PosDockKey.VENTAS
+                selectedDockTab = 1
+            }
+            item.key.startsWith("deud:") -> {
+                selectedDebtorForHistory = debtorsList.find { it.id.toString() == id }
+                selectedDockKey = PosDockKey.DEUDORES
+                showDebtorsModal = true
+            }
+            item.key.startsWith("exp:") -> {
+                selectedDockKey = PosDockKey.PANEL
+                selectedDockTab = 2
+            }
+        }
+    }
+
     // Neutral de la paleta de la empresa = tono del fondo del sistema (solo si es claro)
     val parsedNeutral = try {
         Color(android.graphics.Color.parseColor(company.neutralColorHex))
@@ -1694,7 +1769,15 @@ fun TenantPosScreen(
     // ponytail: umbral de luminancia fijo; un neutral oscuro de la paleta cae al gris claro por defecto
     val neutralBgTint = parsedNeutral?.takeIf { it.luminance() > 0.5f }
     EtherealBackground(tintColor = neutralBgTint) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            PosSideDock(
+                items = dockItems,
+                selected = selectedDockKey,
+                onSelect = onDockSelect,
+                searchItems = dockSearchItems,
+                onSearchSelect = onDockSearchSelect
+            )
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
             MembershipAlertBanner(company = company)
             // Header Bar flotante estilo SuperAdmin: logo + circulo de plan + campana + perfil
             val isMaxIaPlan = company.plan.contains("MAX", ignoreCase = true) || company.plan.contains("IA", ignoreCase = true)
@@ -1989,121 +2072,6 @@ fun TenantPosScreen(
                 }
             }
         }
-
-        // -------------------------------------------------------------------------------------
-        // DOCK DE NAVEGACIÓN FLOTANTE PREMIUM (cápsula blanca, icono + texto, búsqueda separada)
-        // -------------------------------------------------------------------------------------
-        val dockBg = if (isDarkMode) Color(0xFF1C1C1E) else Color.White
-        val dockBorder = if (isDarkMode) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)
-        val selectedBg = if (isDarkMode) Color(0xFF2A2A2E) else Color(0xFFF1F4F9)
-        val inactiveFg = if (isDarkMode) Color(0xFF94A3B8) else Color(0xFF64748B)
-        val selectedFg = MaterialTheme.colorScheme.primary
-
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Dock principal: cápsula flotante con las opciones
-            Surface(
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(50),
-                color = dockBg,
-                border = BorderStroke(0.6.dp, dockBorder),
-                shadowElevation = 6.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val baseDockItems = if (isMesero) {
-                        listOf(
-                            TopDockItem(0, "Inicio", Icons.Default.Home),
-                            TopDockItem(3, "Inventario", Icons.Default.Inventory2)
-                        )
-                    } else if (isCajero) {
-                        listOf(
-                            TopDockItem(1, "Ventas", Icons.Default.TrendingUp),
-                            TopDockItem(3, "Inventario", Icons.Default.Inventory2)
-                        )
-                    } else {
-                        listOf(
-                            TopDockItem(0, "Inicio", Icons.Default.Home),
-                            TopDockItem(1, "Ventas", Icons.Default.TrendingUp),
-                            TopDockItem(2, "Finanzas", Icons.Default.AccountBalanceWallet),
-                            TopDockItem(3, "Inventario", Icons.Default.Inventory2),
-                            TopDockItem(4, "Menú", Icons.Default.MoreHoriz)
-                        )
-                    }
-                    val topDockItems = if (isAdminUser) baseDockItems else baseDockItems.filter { it.index in allowedDockTabs }
-
-                    topDockItems.forEach { item ->
-                        val isSelected = selectedDockTab == item.index && item.index != 4
-                        val bg by animateColorAsState(
-                            if (isSelected) selectedBg else Color.Transparent,
-                            animationSpec = tween(250)
-                        )
-                        val fg by animateColorAsState(
-                            if (isSelected) selectedFg else inactiveFg,
-                            animationSpec = tween(250)
-                        )
-                        Surface(
-                            onClick = {
-                                if (item.index == 4) {
-                                    showAdditionalMenuSheet = true
-                                } else {
-                                    selectedDockTab = item.index
-                                }
-                            },
-                            shape = RoundedCornerShape(50),
-                            color = bg,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(vertical = 10.dp)
-                        ) {
-                            Icon(
-                                imageVector = item.icon,
-                                contentDescription = item.label,
-                                tint = fg,
-                                modifier = Modifier.size(26.dp)
-                            )
-                }
-            }
-        }
-                }
-            }
-
-            // Botón de búsqueda circular independiente (lleva a Inicio, donde está el buscador)
-            Surface(
-                onClick = { selectedDockTab = 0 },
-                shape = CircleShape,
-                color = dockBg,
-                border = BorderStroke(0.6.dp, dockBorder),
-                shadowElevation = 6.dp,
-                modifier = Modifier.size(56.dp)
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Buscar",
-                        tint = inactiveFg,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
         }
     }
 

@@ -1128,6 +1128,10 @@ class KaptaViewModel(application: Application) : AndroidViewModel(application) {
     fun setCurrentUser(user: CompanyUserEntity?) {
         _currentUser.value = user
         iniciarClaveDinamica()
+        if (user != null) {
+            // Sortea el wallpaper de cada modo en cada inicio de sesión.
+            com.example.ui.components.KaptaWallpaper.rollOnLogin(getApplication())
+        }
         val isSuperAdmin = _isSuperAdminSession.value || user?.role.equals("superadmin", ignoreCase = true) || user?.role.equals("SuperAdmin", ignoreCase = true)
         val roleLabel = if (isSuperAdmin) "SUPER_ADMIN" else "BUSINESS"
         android.util.Log.d("KAPTA_ISOLATION", "[KAPTA_ISOLATION] Login/UserChanged: role=$roleLabel, activeCompanyCode='${activeCompanyCode.value}', selectedCompany='${_selectedCompany.value?.code ?: ""}'")
