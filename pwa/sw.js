@@ -1,6 +1,6 @@
 /* Service Worker: CSS dentro del HTML; formas individuales + shell offline, API a red, HTML fresco. */
-const CACHE = "kapta-pwa-v40";
-const SHELL = ["./app.js?v=36", "./manifest.webmanifest", "./img/logo-app.png?v=2", "./img/logo-slogan.png?v=9",
+const CACHE = "kapta-pwa-v41";
+const SHELL = ["./app.js?v=37", "./manifest.webmanifest", "./img/logo-app.png?v=2", "./img/logo-slogan.png?v=9",
   "./img/formas/morada-tl.png?v=10", "./img/formas/nube.png?v=10",
   "./img/formas/destellos.png?v=10", "./img/formas/cian-bl.png?v=10",
   "./img/formas/cian-abajo.png?v=10", "./img/formas/gris.png?v=10",
@@ -9,10 +9,14 @@ const SHELL = ["./app.js?v=36", "./manifest.webmanifest", "./img/logo-app.png?v=
   "./img/formas/blanca.png?v=10",
   "./img/formas/cuadro-mor.png?v=10", "./img/formas/frijol-der.png?v=10",
   "./img/pos/notificacion.png?v=1",
-  "./img/pos/dock/Inicio.png?v=1", "./img/pos/dock/Venta.png?v=1",
-  "./img/pos/dock/Inventario.png?v=1", "./img/pos/dock/Admin.png?v=1",
-  "./img/pos/dock/Finanzas.png?v=1", "./img/pos/dock/Deudores.png?v=1",
-  "./img/pos/dock/busqueda.png?v=1",
+  "./img/pos/dock/Inicio.png?v=2", "./img/pos/dock/Venta.png?v=2",
+  "./img/pos/dock/Inventario.png?v=2", "./img/pos/dock/Admin.png?v=2",
+  "./img/pos/dock/Finanzas.png?v=1", "./img/pos/dock/Deudores.png?v=2",
+  "./img/pos/dock/Panel.png?v=1",
+  "./img/pos/dock/busqueda.png?v=2",
+  "./img/wallpaper/wallpaper_light_one.png?v=1",
+  "./img/wallpaper/wallpaper_light_two.jpg?v=1",
+  "./img/wallpaper/wallpaper_light_three.jpg?v=1",
   "./img/pos/resumen/Ventas.png?v=1", "./img/pos/resumen/Gastos.png?v=1",
   "./img/pos/resumen/Deudores.png?v=1", "./img/pos/resumen/cliente_Activos.png?v=1",
   "./img/pos/acciones/Venta.png?v=1", "./img/pos/acciones/Gasto.png?v=1",

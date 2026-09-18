@@ -157,12 +157,31 @@ function armarDock(sec) {
     const b = document.createElement("button");
     b.dataset.tab = k; if (!i) b.classList.add("on");
     b.title = txt;
-    b.innerHTML = DOCK_ICONS[k] ? `<img src="img/pos/dock/${DOCK_ICONS[k]}?v=1" alt="${txt}">` : `<span class="dock-emoji">📊</span>`;
+    b.innerHTML = `<img src="img/pos/dock/${DOCK_ICONS[k]}?v=2" alt="${txt}"><span class="dock-txt">${txt}</span>`;
     b.addEventListener("click", () => { if (k === "inicio") vrCerrar(); tab(k); });
     $("dock").appendChild(b);
   });
+  const an = document.createElement("div");
+  an.id = "dock-anuncio";
+  an.textContent = "anuncio prox.";
+  $("dock").appendChild(an);
 }
-const DOCK_ICONS = { inicio: "Inicio.png", venta: "Venta.png", inventario: "Inventario.png", usuarios: "Admin.png", finanzas: "Finanzas.png", deudores: "Deudores.png", dashboard: "" };
+const DOCK_ICONS = { inicio: "Inicio.png", venta: "Venta.png", inventario: "Inventario.png", usuarios: "Admin.png", finanzas: "Finanzas.png", deudores: "Deudores.png", dashboard: "Panel.png" };
+// Wallpaper del sistema (modo claro): se sortea en cada inicio de sesion.
+const WP_LIGHT = ["img/wallpaper/wallpaper_light_one.png?v=1", "img/wallpaper/wallpaper_light_two.jpg?v=1", "img/wallpaper/wallpaper_light_three.jpg?v=1"];
+function sortearWallpaper() { try { localStorage.setItem("kapta_wp", String(Math.floor(Math.random() * WP_LIGHT.length))); } catch {} }
+function aplicarWallpaper() {
+  try {
+    let i = parseInt(localStorage.getItem("kapta_wp") || "-1", 10);
+    if (!(i >= 0 && i < WP_LIGHT.length)) { i = Math.floor(Math.random() * WP_LIGHT.length); localStorage.setItem("kapta_wp", String(i)); }
+    const url = WP_LIGHT[i];
+    const a = $("wp-a"), b = $("wp-b");
+    if (!a || !b) return;
+    const show = a.style.opacity === "1" ? b : a, hide = show === a ? b : a;
+    if (show.dataset.u !== url) { show.style.backgroundImage = `url("${url}")`; show.dataset.u = url; }
+    show.style.opacity = "1"; hide.style.opacity = "0";
+  } catch {}
+}
 if ($("btn-yo")) $("btn-yo").addEventListener("click", () => tab("cuenta"));
 if ($("pos-avatar")) $("pos-avatar").addEventListener("click", () => tab("cuenta"));
 if ($("btn-soporte")) $("btn-soporte").addEventListener("click", () => $("btn-ayuda").click());
@@ -1025,6 +1044,7 @@ $("btn-ver-soportes").addEventListener("click", async () => {
 
 async function entrarComoAdmin(emp) {
   SES = { code: (emp.codigo || "").toUpperCase(), negocio: emp.nombre || emp.codigo, correo: emp.correo || SUPER.correo, nombre: "SuperAdmin", rol: "Administrador", uid: "SUPERADMIN", super: true };
+  try { sessionStorage.setItem("kapta_pwa", JSON.stringify(SES)); } catch {}
   EMPRESA = emp;
   aplicarIdentidad(emp);
   const ck = "kapta_consent_" + SES.code + "_superadmin";
@@ -1071,6 +1091,7 @@ $("btn-login").addEventListener("click", async () => {
 });
 
 async function entrar() {
+  sortearWallpaper(); aplicarWallpaper();
   $("pos-negocio").textContent = SES.negocio;
   $("pos-usuario").textContent = SES.nombre + " • " + SES.rol;
   ver("pos");
@@ -1162,6 +1183,21 @@ function salir() {
     cargarNegocios();
     return;
   }
+  // Vengo del SuperAdmin en esta pestana (sesion super vigente): volver al panel,
+  // no al login del negocio.
+  try {
+    const sup = sessionStorage.getItem("kapta_super"), tok = sessionStorage.getItem("kapta_super_tok");
+    if (sup && tok) {
+      SUPER = { correo: sup, token: tok };
+      SES = null; ME = null; MI_TOKEN = null; MODO_AISLADO = null;
+      try { document.getElementById("p-pos").classList.remove("aislado"); } catch {}
+      localStorage.removeItem("kapta_pwa"); sessionStorage.removeItem("kapta_pwa");
+      aplicarIdentidad(null);
+      try { history.replaceState(null, "", "#/aptadmin/Login"); } catch {}
+      cargarNegocios();
+      return;
+    }
+  } catch {}
   const ais = MODO_AISLADO;
   const code = ais ? ais.code : (SES && SES.code);
   SES = null; ME = null; MI_TOKEN = null; MODO_AISLADO = null;
@@ -2940,6 +2976,7 @@ async function probarVista(R, vista) {
     } catch {}
     MODO_AISLADO = { code: R.code, vista, token: R.token };
     MI_TOKEN = R.token;
+    sortearWallpaper(); aplicarWallpaper();
     $("pos-negocio").textContent = SES.negocio;
     $("pos-usuario").textContent = SES.nombre + " • " + SES.rol;
     ver("pos");
@@ -2953,6 +2990,24 @@ async function probarVista(R, vista) {
     tab(vista);
     return true;
   } catch { return false; }
+}
+async function entrarVistaOSesion(R) {
+  // Refresh del dueno: hay sesion completa guardada del mismo negocio y el token
+  // del enlace pertenece al mismo usuario -> POS completo, no vista aislada.
+  try {
+    if (SES && SES.code === R.code && SES.correo) {
+      const r = await api({ action: "validar_acceso", token: R.token, vista: R.vista });
+      const u = r && r.status === "success" && r.data && r.data.usuario;
+      if (u && (u.correo || "").toLowerCase() === String(SES.correo || "").toLowerCase()) {
+        const sup = sessionStorage.getItem("kapta_super"), tok = sessionStorage.getItem("kapta_super_tok");
+        if (sup && tok) SUPER = { correo: sup, token: tok };
+        MI_TOKEN = null;
+        await entrar();
+        return;
+      }
+    }
+  } catch {}
+  entrarAislado(R);
 }
 async function entrarAislado(R) {
   if (await probarVista(R, R.vista)) return;
@@ -2992,8 +3047,9 @@ async function entrarDirecto(code) {
   const tel = $("cuenta-tel");
   SES = cargarSesion();
   MI_TOKEN = null;
+  aplicarWallpaper();
   const RUTA = rutaInicial();
-  if (RUTA.modo === "vista") { entrarAislado(RUTA); }
+  if (RUTA.modo === "vista") { entrarVistaOSesion(RUTA); }
   else if (RUTA.modo === "super") {
     SES = null; ME = null;
     localStorage.removeItem("kapta_pwa"); sessionStorage.removeItem("kapta_pwa");

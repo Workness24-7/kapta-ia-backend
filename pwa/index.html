@@ -58,14 +58,26 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 #pos-avatar { position: relative; width: 48px; height: 48px; border-radius: 50%; background: #e9e9ee; border: 1.5px solid #d9d9de; cursor: pointer; font-size: 20px; font-weight: 800; color: #0F172A; flex-shrink: 0; }
 #avatar-ia { position: absolute; right: -7px; bottom: -7px; border: 2px solid transparent; border-radius: 7px; font-size: 9px; font-weight: 800; padding: 1px 4px; line-height: 1.2; background: linear-gradient(#ffffff,#ffffff) padding-box, linear-gradient(135deg, #5ce1e6, #8c52ff) border-box; }
 #avatar-ia i { font-style: normal; background: linear-gradient(135deg, #5ce1e6, #8c52ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
-/* Sección 2: dock vertical de funciones */
-#dock { position: fixed; left: 16px; top: 112px; z-index: 25; width: 76px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0; border: 1.5px solid transparent; border-radius: 26px; background: linear-gradient(#f4f4f4,#f4f4f4) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; box-shadow: 0 8px 24px rgba(0,0,0,.06); }
-#dock button { position: relative; width: 56px; height: 56px; border: 0; background: none; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
-#dock button img { width: 34px; height: 34px; object-fit: contain; opacity: .45; filter: grayscale(1); position: relative; z-index: 1; }
-#dock button.on img { opacity: 1; filter: brightness(0) invert(1); }
-#dock button.on::before { content: ""; position: absolute; width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, #5ce1e6, #8c52ff); }
-#dock-search { position: fixed; left: 27px; bottom: 24px; z-index: 25; width: 54px; height: 54px; border-radius: 50%; border: 1.5px solid transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; background: linear-gradient(#f4f4f4,#f4f4f4) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; box-shadow: 0 8px 24px rgba(0,0,0,.06); }
-#dock-search img { width: 26px; height: 26px; opacity: .55; }
+/* Sección 2: dock vertical de funciones (diseño Canva: vidrio + pill #1400FF) */
+#wp-a, #wp-b { position: fixed; inset: -45px; background-size: cover; background-position: center; filter: blur(29px); -webkit-filter: blur(29px); z-index: -2; opacity: 0; transition: opacity .7s ease; pointer-events: none; }
+#wp-velo { position: fixed; inset: 0; background: rgba(242,242,247,.45); z-index: -1; pointer-events: none; }
+#dock { position: fixed; left: 16px; top: 112px; z-index: 25; width: 76px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 10px; border: 1.5px solid transparent; border-radius: 36px; background: linear-gradient(135deg, rgba(255,255,255,.675), rgba(255,255,255,.39)) padding-box, linear-gradient(135deg, rgba(255,255,255,.67), rgba(166,166,166,.67)) border-box; box-shadow: 0 8px 24px rgba(0,0,0,.06); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); transition: width .25s ease; overflow: hidden; }
+#dock:hover, #dock:focus-within { width: 220px; }
+#dock button { position: relative; width: 56px; height: 56px; border: 0; background: none; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0; }
+#dock:hover button, #dock:focus-within button { width: 100%; justify-content: flex-start; padding: 0 12px; border-radius: 36px; }
+#dock button img { width: 34px; height: 34px; object-fit: contain; position: relative; z-index: 1; flex-shrink: 0; }
+#dock button.on { background: linear-gradient(135deg, rgba(20,0,255,.375), rgba(20,0,255,.66)); border-radius: 50%; }
+#dock:hover button.on, #dock:focus-within button.on { width: 100%; border-radius: 36px; }
+#dock button.on img { filter: brightness(0) invert(1); }
+#dock button.on::before { content: none; }
+#dock .dock-txt { display: none; font-size: 13px; font-weight: 600; color: #000; margin-left: 12px; white-space: nowrap; }
+#dock:hover .dock-txt, #dock:focus-within .dock-txt { display: block; }
+#dock button.on .dock-txt { color: #fff; font-weight: 800; }
+#dock-anuncio { display: none; width: 100%; height: 120px; border-radius: 24px; background: linear-gradient(135deg, #8B8BFA, #6E6EEF); color: #fff; font-size: 15px; align-items: center; justify-content: center; text-align: center; margin-top: 6px; flex-shrink: 0; }
+#dock:hover #dock-anuncio, #dock:focus-within #dock-anuncio { display: flex; }
+#dock-search { position: fixed; left: 16px; bottom: 24px; z-index: 25; display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 18px 0 14px; border-radius: 36px; border: 1.5px solid transparent; cursor: pointer; background: linear-gradient(135deg, rgba(255,255,255,.675), rgba(255,255,255,.39)) padding-box, linear-gradient(135deg, rgba(255,255,255,.67), rgba(166,166,166,.67)) border-box; box-shadow: 0 8px 24px rgba(0,0,0,.06); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); font-family: inherit; }
+#dock-search img { width: 26px; height: 26px; opacity: .53; }
+#dock-search span { font-size: 13px; color: rgba(0,0,0,.47); }
 /* Sección 3: contenido + resumen general */
 @media (min-width: 901px) {
   #p-pos { padding-bottom: 0; }
@@ -322,7 +334,9 @@ canvas.bc39 { max-width: 100%; height: 56px; }
   #p-pos { padding-bottom: 100px; }
   #dock { left: 0; right: 0; top: auto; bottom: 0; width: auto; flex-direction: row; justify-content: space-around; border-radius: 20px 20px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding: 8px 6px calc(8px + env(safe-area-inset-bottom)); }
   #dock button { width: 48px; height: 48px; }
-  #dock button.on::before { width: 44px; height: 44px; }
+  #dock button.on { border-radius: 50%; }
+  #dock .dock-txt, #dock-anuncio { display: none !important; }
+  #dock:hover, #dock:focus-within { width: auto; }
   #dock-search { display: none; }
   #resumen.kpi-resumen { gap: 12px; }
   .kcard .knum { font-size: 38px; }
@@ -700,14 +714,15 @@ canvas.bc39 { max-width: 100%; height: 56px; }
     </div>
 
     <nav id="dock"></nav>
-    <button id="dock-search" title="Buscar"><img src="img/pos/dock/busqueda.png?v=1" alt=""></button>
+    <button id="dock-search" title="Buscar"><img src="img/pos/dock/busqueda.png?v=2" alt=""><span>Busqueda</span></button>
   </section>
 </div>
+<div id="wp-a"></div><div id="wp-b"></div><div id="wp-velo"></div>
 
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=36"></script>
+<script src="app.js?v=37"></script>
 </body>
 </html>
 
