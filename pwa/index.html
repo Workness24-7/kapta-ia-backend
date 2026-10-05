@@ -168,6 +168,55 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 #alerta-box { border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#f4f4f4,#f4f4f4) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 14px; box-shadow: 0 10px 26px rgba(0,0,0,.05); }
 #alertas { display: flex; flex-direction: column; gap: 12px; max-height: 430px; overflow-y: auto; padding: 2px; }
 #alertas > * { flex-shrink: 0; }
+/* Inicio glass (diseno Canva) */
+.ini-sub { font-size: 14px; color: #000; margin: 0 0 14px; }
+.inipanel { border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(135deg, rgba(255,255,255,.5), rgba(255,255,255,.25)) padding-box, linear-gradient(135deg, rgba(255,255,255,.67), #a6a6a6) border-box; box-shadow: 0 10px 26px rgba(0,0,0,.05); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 20px 22px; margin-top: 14px; }
+.inipanel h3 { margin: 0 0 12px; font-size: 20px; font-weight: 700; color: #010101; }
+#resumen.kpi-resumen { grid-template-columns: repeat(4, minmax(0,1fr)); }
+.kcard { border-radius: 28px; --kico: 56px; }
+.kcard .kico { border: 0; background: none; top: 18px; }
+.kcard .kico img { width: 100%; height: 100%; }
+.kcard h4 { font-size: 13px; font-weight: 500; }
+.kcard .knum { font-size: clamp(22px, 20cqi, 34px); }
+.delta-up { color: #00aa5d; font-weight: 700; }
+.delta-down { color: #e10000; font-weight: 700; }
+.accb { flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px; padding: 16px; border-radius: 23px; }
+.accb img { width: 64px; height: 64px; }
+.accb span { font-size: 15px; font-weight: 800; }
+.ini-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; border-radius: 50%; background: #ff3b30; color: #fff; font-size: 13px; font-weight: 800; padding: 0 6px; margin-left: 8px; vertical-align: middle; }
+.ini-ph { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.ini-ph h3 { margin: 0; }
+.ini-ph .seg { margin: 0; }
+.ini-chartwrap { display: grid; grid-template-columns: minmax(0,1fr) 230px; gap: 14px; align-items: stretch; }
+.ibars { display: flex; align-items: flex-end; gap: 8px; height: 190px; padding-top: 8px; }
+.ibarcol { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; height: 100%; justify-content: flex-end; }
+.ibar { width: 70%; max-width: 34px; border-radius: 9px; background: linear-gradient(180deg, #a78bfa, #7c5cf0); min-height: 6px; }
+.ibarx { font-size: 10px; color: #3f3f46; white-space: nowrap; }
+.ibary { font-size: 10px; color: #3f3f46; }
+#ini-meta { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; }
+#ini-meta b { font-size: 14px; color: #010101; }
+#ini-meta small { font-size: 12px; color: #3f3f46; }
+.ini-duo { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 14px; }
+.estmini { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+.estmini .est { border: 1px solid #e4e4e7; border-radius: 18px; padding: 12px 8px; text-align: left; background: rgba(255,255,255,.55); }
+.estmini .est img { width: 44px; height: 44px; }
+.estmini .est b { display: block; font-size: 13px; margin-top: 8px; color: #010101; }
+.estmini .est .n { font-size: 26px; font-weight: 800; color: #010101; }
+.estmini .est small { font-size: 10px; color: #3f3f46; }
+.prow { display: flex; align-items: center; gap: 12px; border: 1.5px solid transparent; border-radius: 20px; background: linear-gradient(#f4f4f4,#f4f4f4) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 10px 12px; margin-bottom: 10px; cursor: pointer; }
+.prow:last-child { margin-bottom: 0; }
+.prow .pthumb { width: 52px; height: 52px; border-radius: 16px; background: #edf0f2; border: 1.5px solid #e4e4e7; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.prow .pthumb img { width: 100%; height: 100%; object-fit: cover; }
+.prow .pinfo { flex: 1; min-width: 0; }
+.prow .pinfo b { font-size: 13px; color: #010101; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prow .pinfo small { font-size: 11px; color: #3f3f46; display: block; }
+.prow .pdot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; display: inline-block; margin-right: 6px; }
+.prow .pgo { border: 0; background: none; font-size: 20px; cursor: pointer; padding: 4px 8px; color: #010101; }
+.donutwrap { display: flex; align-items: center; gap: 14px; }
+.donutleg { font-size: 12px; color: #010101; display: flex; flex-direction: column; gap: 8px; }
+.donutleg .lr { display: flex; align-items: center; gap: 8px; }
+.donutleg .ld { width: 12px; height: 12px; border-radius: 50%; }
+.donutleg .lp { margin-left: auto; font-weight: 800; padding-left: 12px; }
 .acard { display: flex; align-items: center; gap: 12px; border: 1.5px solid transparent; border-radius: 23px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 10px 12px; }
 .acard .athumb { width: 52px; height: 52px; border-radius: 16px; border: 1.5px solid transparent; background: linear-gradient(#edf0f2,#edf0f2) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .acard .athumb img { width: 100%; height: 100%; object-fit: cover; }
@@ -271,6 +320,8 @@ canvas.bc39 { max-width: 100%; height: 56px; }
 @media (max-width: 1150px) {
   #p-pos .tab { padding: 16px clamp(10px, 2vw, 20px) 0 clamp(96px, 10vw, 116px); }
   #t-inicio.tab { gap: 2px 8px; }
+  #resumen.kpi-resumen { grid-template-columns: 1fr 1fr; }
+  .ini-chartwrap { grid-template-columns: minmax(0,1fr) 200px; }
   #col-izq > h2, #venta-rapida > h2 { font-size: clamp(16px, 2.2vw, 22px); }
   #t-inicio .sec-t { font-size: clamp(15px, 2vw, 20px); margin: 12px 0 8px; }
   .alerta-head { flex-wrap: wrap; gap: 4px 8px; }
@@ -334,6 +385,9 @@ canvas.bc39 { max-width: 100%; height: 56px; }
   #btn-notif, #pos-avatar { width: 40px; height: 40px; }
   #pos-logo-sq { width: 40px; height: 40px; }
   #p-pos { padding-bottom: 100px; }
+  .ini-duo, .ini-chartwrap { grid-template-columns: 1fr; }
+  #resumen.kpi-resumen { grid-template-columns: 1fr 1fr; }
+  .accb img { width: 56px; height: 56px; }
   #dock { left: 0; right: 0; top: auto; bottom: 0; width: auto; flex-direction: row; justify-content: space-around; border-radius: 20px 20px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding: 8px 6px calc(8px + env(safe-area-inset-bottom)); }
   #dock button { width: 48px; height: 48px; }
   #dock button.on { border-radius: 50%; }
@@ -582,15 +636,19 @@ canvas.bc39 { max-width: 100%; height: 56px; }
     <div id="t-inicio" class="tab">
       <div id="col-izq">
       <h2>Resumen General</h2>
+      <p class="ini-sub">Bienvenido de nuevo. ¿Listo para empezar un gran dia?</p>
       <div id="resumen" class="kpi-resumen"></div>
       <div id="split-hl" class="split h" title="Arrastra para ajustar Resumen / Perfil (doble clic restablece)"></div>
       <div id="bloque-perfil"><h3 class="sec-t">Resumen de perfil</h3><div id="perfil"></div></div>
+      <div id="ini-ventas" class="inipanel"><div class="ini-ph"><h3>Resumen de ventas</h3><div class="seg" id="ini-filtros"></div></div><div class="ini-chartwrap"><div id="ini-chart"></div><div id="ini-meta"></div></div></div>
+      <div class="ini-duo"><div id="ini-estado" class="inipanel"></div><div id="ini-pagos" class="inipanel"></div></div>
       </div>
       <div id="split-v" class="split v" title="Arrastra para ajustar columnas (doble clic restablece)"></div>
       <div id="col-der">
       <div id="bloque-acciones"><h3 class="sec-t">Acciones rápidas</h3><div id="acciones" class="acc-grid"></div></div>
       <div id="split-ha" class="split h" title="Arrastra para ajustar Acciones / Alertas (doble clic restablece)"></div>
       <div id="bloque-alertas"><div class="alerta-head"><h3 class="sec-t">Alerta de Stock</h3><div class="vista-dock" id="vista-dock"><button data-v="lista" class="on" title="Vista lista"><img src="img/pos/alerta/lista.png?v=1" alt=""></button><button data-v="recuadro" title="Vista recuadro"><img src="img/pos/alerta/recuadro.png?v=1" alt=""></button></div></div><div id="alerta-box"><div id="alertas"></div></div></div>
+      <div id="ini-productos" class="inipanel"><h3>Productos y Movimientos</h3><div id="prod-rows"></div></div>
       </div>
       <div id="venta-rapida" class="oculto">
         <h2>Venta Rapida</h2>
@@ -724,7 +782,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=37"></script>
+<script src="app.js?v=38"></script>
 </body>
 </html>
 

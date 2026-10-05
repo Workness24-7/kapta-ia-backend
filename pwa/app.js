@@ -1263,15 +1263,23 @@ function pintarResumen() {
     return set.size;
   })();
   const miles = (n) => Math.round(n).toLocaleString("es-CO");
+  const ayerISO = (() => { const d = new Date(); d.setDate(d.getDate() - 1); const p = (x) => String(x).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; })();
+  const ayerLat = (() => { const d = new Date(); d.setDate(d.getDate() - 1); const p = (x) => String(x).padStart(2, "0"); return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`; })();
+  const esAyer = (f) => { f = String(f || "").trim().slice(0, 10); if (/^\d{4}-\d{2}-\d{2}$/.test(f)) return f === ayerISO; return f === ayerLat; };
+  const totVentasAyer = venVivas().filter((v) => esAyer(v[1])).reduce((a, v) => a + num(v[12]), 0);
+  const mesAnt = (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); const p = (x) => String(x).padStart(2, "0"); return `${d.getFullYear()}${p(d.getMonth() + 1)}`; })();
+  const totGastosMesAnt = gasRows().filter((g) => normFecha(g[1]).slice(0, 6) === mesAnt).reduce((a, g) => a + num(g[7]), 0);
+  const pctC = (a, b) => b > 0.5 ? Math.round((a - b) / b * 100) : (a > 0.5 ? 100 : 0);
+  const dv = pctC(totVentasHoy, totVentasAyer), dg = pctC(totGastosMes, totGastosMesAnt);
   const cards = [
-    ["ventas", "k-verde", "Ventas.png", "Ventas del dia", `<small>$</small>${miles(totVentasHoy)}`, "En tiempo Real (Clic)", "finanzas"],
-    ["gastos", "k-rojo", "Gastos.png", "Gastos del mes", `<small>$</small>${miles(totGastosMes)}`, "Total Acumulado", ""],
-    ["deudores", "k-amarillo", "Deudores.png", "Deudores", `${deud.length} <span class="pers">Personas</span>`, `Total: $ ${miles(totDeuda)} (Clic)`, "deudores"],
+    ["ventas", "k-verde", "Ventas.png", "Ventas del dia", `<small>$</small>${miles(totVentasHoy)}`, `<span class="${dv >= 0 ? "delta-up" : "delta-down"}">${dv >= 0 ? "&#8593;" : "&#8595;"} ${Math.abs(dv)}%</span> vs ayer`, "finanzas"],
+    ["gastos", "k-rojo", "Gastos.png", "Gastos del mes", `<small>$</small>${miles(totGastosMes)}`, `<span class="delta-down">${dg >= 0 ? "&#8593;" : "&#8595;"} ${Math.abs(dg)}%</span> vs mes anterior`, ""],
+    ["deudores", "k-amarillo", "Deudores.png", "Deudores", `${deud.length} <span class="pers">Personas</span>`, `Total: $ ${miles(totDeuda)}`, "deudores"],
     ["clientes", "k-cian", "cliente_Activos.png", "Clientes Activos", `${cliAct} <span class="pers">Personas</span>`, "En el establecimiento", ""],
   ].filter(([k]) => s.resumen.includes(k));
   const box = $("resumen");
   box.innerHTML = cards.length ? cards.map(([, cls, icon, titulo, numHtml, sub, go]) =>
-    `<div class="kcard ${cls}"${go ? ` data-ir="${go}"` : ""}><span class="kico"><img src="img/pos/resumen/${icon}?v=1" alt=""></span><h4>${titulo}</h4><div class="knum">${numHtml}</div><div class="ksub">${sub}</div></div>`
+    `<div class="kcard ${cls}"${go ? ` data-ir="${go}"` : ""}><span class="kico"><img src="img/pos/resumen/${icon}?v=2" alt=""></span><h4>${titulo}</h4><div class="knum">${numHtml}</div><div class="ksub">${sub}</div></div>`
   ).join("") : '<div class="card">Sin tarjetas activas.</div>';
   box.querySelectorAll("[data-ir]").forEach((d) => d.addEventListener("click", () => tab(d.dataset.ir)));
   const accs = [["venta", "acc-venta", "Venta.png", "Venta", "venta"], ["gasto", "acc-gasto", "Gasto.png", "Gasto", "finanzas"], ["agregar", "acc-agregar", "Agregar.png", "Agregar", "inventario"], ["deudores", "acc-deudores", "Deudores.png", "Deudores", "deudores"]]
@@ -1299,6 +1307,7 @@ function pintarResumen() {
     if (dot) dot.style.display = "none";
   }
   pintarPerfil();
+  pintarIniPaneles();
 }
 function pintarAlertas() {
   const items = invRows().map((p) => [p, alertaDe(p)]).filter(([, n]) => n > 0);
@@ -1316,8 +1325,15 @@ function pintarAlertas() {
         const nulo = num(p[4]) === 0;
         return `<div class="acard"><span class="athumb">${img}</span><span class="ainfo"><b>${esc(p[2])}</b><small>Quedan ${p[4]} und</small></span><span class="abadge ${nulo ? "anulo" : n === 2 ? "abajo" : "amedio"}">${nulo ? "Stock Nulo" : n === 2 ? "Stock Bajo" : "Stock Medio"}</span><button class="aplus" data-i="${idx}" title="Agregar stock"><img src="img/pos/alerta/agregar2.png?v=1" alt="+"></button></div>`;
     }).join("");
-    abox.querySelectorAll(".aplus").forEach((b) => b.addEventListener("click", async () => {
-      const p = TODO.inventario[Number(b.dataset.i)];
+    const deud0 = agruparDeudores();
+    if (deud0.length) {
+      const tot0 = deud0.reduce((a, x) => a + (x.pendiente || 0), 0);
+      abox.insertAdjacentHTML("afterbegin", `<div class="prow" data-go="deudores"><span class="pthumb"></span><span class="pinfo"><b><span class="pdot" style="background:#eab308;display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px"></span>Caja Pendiente</b><small>Deben ${deud0.length} personas &bull; Total $ ${Math.round(tot0).toLocaleString("es-CO")}</small></span><button class="pgo" title="Ver">&rarr;</button></div>`);
+    }
+    const head0 = document.querySelector("#bloque-alertas .sec-t");
+    if (head0) head0.innerHTML = `Alertas <span class="ini-badge">${items.length}</span>`;
+    abox.querySelectorAll("[data-go]").forEach((d) => d.addEventListener("click", () => tab(d.dataset.go)));
+    abox.querySelectorAll(".aplus").forEach((b) => b.addEventListener("click", async () => {      const p = TODO.inventario[Number(b.dataset.i)];
       if (!p) return;
       const c = prompt("¿Cuántas unidades ingresan de " + p[2] + "?", "10");
       const n = parseInt(c || "", 10);
@@ -1335,6 +1351,107 @@ function alertaDe(p) {
   if (stock <= min) return 2;
   if (min > 0 && stock <= min * 1.5) return 1;
   return 0;
+}
+// ---------- paneles glass del Inicio (diseno Canva) ----------
+let IV_F = "Hoy";
+const fmtCorto = (n) => n >= 1000000 ? "$" + (Math.round(n / 100000) / 10) + "M" : n >= 1000 ? "$" + Math.round(n / 1000) + "K" : "$" + Math.round(n);
+function pintarIniPaneles() {
+  pintarIniEstado(); pintarIniProductos(); pintarIniFiltros(); pintarIniChart(); pintarIniPagos();
+}
+function iniCliAct() {
+  const deud = agruparDeudores();
+  const set = new Set(deud.map((d) => d.nombre));
+  venVivas().filter((v) => esHoy(v[1])).forEach((v) => {
+    const c = (v[3] || "").trim();
+    if (c && !/^cliente mostrador$/i.test(c)) set.add(c);
+  });
+  return set.size;
+}
+function pintarIniEstado() {
+  const box = $("ini-estado"); if (!box) return;
+  const deud = agruparDeudores();
+  const nAlert = invRows().map((p) => alertaDe(p)).filter((n) => n > 0).length;
+  const est = (icon, bg, titulo, n, sub, go) => `<div class="est"${go ? ` data-go="${go}" style="cursor:pointer"` : ""}><span style="display:flex;width:56px;height:56px;border-radius:50%;background:${bg};align-items:center;justify-content:center"><img src="img/pos/${icon}" alt="" style="width:44px;height:44px"></span><b>${titulo}</b><span class="n">${n}</span><small>${sub}</small></div>`;
+  box.innerHTML = `<h3>Estado del negocio</h3><div class="estmini">` +
+    est("resumen/cliente_Activos.png?v=2", "#e0e7ff", "Clientes", iniCliAct(), "Activos", "") +
+    est("resumen/Deudores.png?v=2", "#fef3c7", "Pendientes", deud.length, "Cuentas por Cobrar", "deudores") +
+    est("notificacion.png?v=1", "#fee2e2", "Alertas", nAlert, "Requieren atencion", "") +
+    `</div>`;
+  box.querySelectorAll("[data-go]").forEach((d) => d.addEventListener("click", () => tab(d.dataset.go)));
+}
+function pintarIniProductos() {
+  const box = $("prod-rows"); if (!box) return;
+  const porProd = {};
+  venVivas().forEach((v) => {
+    const p = v[5] || "";
+    porProd[p] = porProd[p] || { cant: 0, total: 0 };
+    porProd[p].cant += num(v[6]); porProd[p].total += num(v[12]);
+  });
+  const top = Object.entries(porProd).sort((a, b) => b[1].cant - a[1].cant)[0];
+  const bajo = invRows().map((p) => [p, alertaDe(p)]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1])[0];
+  const deud = agruparDeudores();
+  const totD = deud.reduce((a, x) => a + (x.pendiente || 0), 0);
+  let h = "";
+  if (top) h += `<div class="prow" data-go="venta"><span class="pthumb"></span><span class="pinfo"><b>Producto mas vendido</b><small>${esc(top[0])} &bull; ${top[1].cant} unidades</small></span><button class="pgo">&rarr;</button></div>`;
+  if (bajo) h += `<div class="prow" data-go="inventario"><span class="pthumb">${bajo[0][12] ? `<img src="${esc(bajo[0][12])}" alt="" loading="lazy">` : ""}</span><span class="pinfo"><b><span class="pdot" style="background:#ef4444"></span>Inventario bajo</b><small>${esc(bajo[0][2])} &bull; solo quedan ${bajo[0][4]}</small></span><button class="pgo">&rarr;</button></div>`;
+  if (deud.length) h += `<div class="prow" data-go="deudores"><span class="pthumb"></span><span class="pinfo"><b><span class="pdot" style="background:#22c55e"></span>Cobros pendientes</b><small>${deud.length} clientes &bull; $ ${Math.round(totD).toLocaleString("es-CO")}</small></span><button class="pgo">&rarr;</button></div>`;
+  box.innerHTML = h || '<div class="card">Sin movimientos todavia.</div>';
+  box.querySelectorAll("[data-go]").forEach((d) => d.addEventListener("click", () => tab(d.dataset.go)));
+}
+function pintarIniFiltros() {
+  const box = $("ini-filtros"); if (!box) return;
+  box.innerHTML = ["Hoy", "Semana", "Mes", "Anio"].map((f) => `<button data-f="${f}" class="${IV_F === f ? "on" : ""}">${f === "Anio" ? "A\u00f1o" : f}</button>`).join("");
+  box.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { IV_F = b.dataset.f; pintarIniFiltros(); pintarIniChart(); }));
+}
+function pintarIniChart() {
+  const box = $("ini-chart"); if (!box) return;
+  const V = venVivas();
+  const hoy = hoyISO();
+  let labels = [], vals = [];
+  const suma = (f) => V.filter(f).reduce((a, v) => a + num(v[12]), 0);
+  if (IV_F === "Hoy") {
+    labels = ["12 AM", "03 AM", "06 AM", "09 AM", "12 PM", "03 PM", "06 PM", "09 PM"];
+    vals = labels.map((_, i) => suma((v) => esHoy(v[1]) && Math.floor(num(String(v[2] || "").slice(0, 2)) / 3) === i));
+  } else if (IV_F === "Semana") {
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const p = (x) => String(x).padStart(2, "0");
+      const iso = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
+      labels.push(`${p(d.getDate())}/${p(d.getMonth() + 1)}`);
+      vals.push(suma((v) => normFecha(v[1]) === iso));
+    }
+  } else if (IV_F === "Mes") {
+    labels = ["S1", "S2", "S3", "S4", "S5"];
+    const ym = hoy.replace(/-/g, "").slice(0, 6);
+    vals = [[1, 7], [8, 14], [15, 21], [22, 28], [29, 31]].map(([a, b]) => suma((v) => {
+      const n = normFecha(v[1]); if (!n || n.slice(0, 6) !== ym) return false;
+      const dd = Number(n.slice(6, 8)); return dd >= a && dd <= b;
+    }));
+  } else {
+    const yy = hoy.slice(0, 4);
+    labels = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    vals = labels.map((_, i) => suma((v) => normFecha(v[1]).slice(0, 6) === yy + String(i + 1).padStart(2, "0")));
+  }
+  const max = Math.max(1, ...vals);
+  box.innerHTML = `<div class="ibars">` + vals.map((t, i) => `<div class="ibarcol"><div class="ibar" style="height:${Math.max(3, Math.round(t / max * 100))}%" title="${fmtCorto(t)}"></div><span class="ibarx">${labels[i]}</span></div>`).join("") + `</div>`;
+  const ym2 = hoy.replace(/-/g, "").slice(0, 6);
+  const totMes = suma((v) => normFecha(v[1]).slice(0, 6) === ym2);
+  const diaMes = new Date().getDate();
+  const meta = diaMes > 0 ? totMes / diaMes : 0;
+  const totHoy = suma((v) => esHoy(v[1]));
+  const pct = meta > 0.5 ? Math.min(100, Math.round(totHoy / meta * 100)) : 0;
+  const C = 2 * Math.PI * 52;
+  const mb = $("ini-meta");
+  if (mb) mb.innerHTML = `<svg width="140" height="140" viewBox="0 0 140 140"><defs><linearGradient id="metag" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c5cf0"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><circle cx="70" cy="70" r="52" fill="none" stroke="#e9e7f5" stroke-width="16"/><circle cx="70" cy="70" r="52" fill="none" stroke="url(#metag)" stroke-width="16" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C - C * pct / 100}" transform="rotate(-90 70 70)"/><text x="70" y="78" text-anchor="middle" font-size="24" font-weight="800" fill="#0F172A">${pct}%</text></svg><b>Meta del dia</b><small>${fmtCorto(totHoy)} / ${fmtCorto(meta)}</small>`;
+}
+function pintarIniPagos() {
+  const box = $("ini-pagos"); if (!box) return;
+  const ym = hoyISO().replace(/-/g, "").slice(0, 6);
+  let ef = 0, tr = 0;
+  venVivas().forEach((v) => { if (normFecha(v[1]).slice(0, 6) !== ym) return; ef += num(v[11]); tr += num(v[10]); });
+  const tot = ef + tr, pe = tot > 0 ? Math.round(ef / tot * 100) : 0;
+  const C = 2 * Math.PI * 52;
+  box.innerHTML = `<h3>Distribucion de Pagos</h3><div class="donutwrap"><svg width="140" height="140" viewBox="0 0 140 140"><circle cx="70" cy="70" r="52" fill="none" stroke="#e9e7f5" stroke-width="18"/><circle cx="70" cy="70" r="52" fill="none" stroke="#7c5cf0" stroke-width="18" stroke-dasharray="${C}" stroke-dashoffset="${C - C * pe / 100}" transform="rotate(-90 70 70)" stroke-linecap="round"/><circle cx="70" cy="70" r="52" fill="none" stroke="#fbbf24" stroke-width="18" stroke-dasharray="${C * (100 - pe) / 100} ${C}" stroke-dashoffset="${-C * pe / 100}" transform="rotate(-90 70 70)" stroke-linecap="round"/><text x="70" y="78" text-anchor="middle" font-size="24" font-weight="800" fill="#0F172A">${pe}%</text></svg><div class="donutleg"><span class="lr"><span class="ld" style="background:#7c5cf0"></span>Efectivo<span class="lp">${pe}%</span></span><span class="lr"><span class="ld" style="background:#fbbf24"></span>Transferencia<span class="lp">${100 - pe}%</span></span></div></div>`;
 }
 async function pintarPerfil() {
   const box = $("perfil");
