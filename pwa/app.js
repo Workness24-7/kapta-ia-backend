@@ -155,7 +155,7 @@ function armarDock(sec) {
   $("dock").innerHTML = "";
   tabs.forEach(([k, txt], i) => {
     const b = document.createElement("button");
-    b.dataset.tab = k; if (!i) b.classList.add("on");
+    b.dataset.tab = k; b.dataset.dock = "nav." + k; if (!i) b.classList.add("on");
     b.title = txt;
     b.innerHTML = `<img src="img/pos/dock/${DOCK_ICONS[k]}?v=2" alt="${txt}"><span class="dock-txt">${txt}</span>`;
     b.addEventListener("click", () => { if (k === "inicio") vrCerrar(); tab(k); });
@@ -772,8 +772,41 @@ function conectarVrGrip(gr) {
   }, () => { laySet("vrw", null); $("vr-grid").style.removeProperty("--vrw"); });
 }
 // ---------- permisos (mismo esquema JSON que Android) ----------
-const FULL = () => ({ resumen: ["ventas", "gastos", "deudores", "clientes"], acciones: ["venta", "gasto", "agregar", "deudores"], alertas: true, ventasResumen: ["hoy", "semana", "mes"], ventasRanking: true, ventasVerMas: true, ventasVerInventario: true, finPdf: true, finFiltros: ["dia", "mes", "rango"], finVentas: true, finGastos: true, finRegistrar: true, invCarga: true, invMovimientos: true, invCrear: true, invEditar: true, invEliminar: true, invGuardar: true, invHacer: true, invLectura: false, _dockVentas: true, _dockFinanzas: true, _dockInventario: true, _tabDeudores: true });
+const FULL = () => ({ resumen: ["ventas", "gastos", "deudores", "clientes"], acciones: ["venta", "gasto", "agregar", "deudores"], alertas: true, inicioProductos: true, inicioChart: true, inicioEstado: true, inicioPagos: true, inicioPerfil: true, ventasResumen: ["hoy", "semana", "mes"], ventasRanking: true, ventasVerMas: true, ventasVerInventario: true, finPdf: true, finFiltros: ["dia", "mes", "rango"], finVentas: true, finGastos: true, finRegistrar: true, invCarga: true, invMovimientos: true, invCrear: true, invEditar: true, invEliminar: true, invGuardar: true, invHacer: true, invLectura: false, _dockVentas: true, _dockFinanzas: true, _dockInventario: true, _tabDeudores: true });
 const esCajeroLike = (rol) => /cajero|empleado|mesero|barman/i.test(rol || "") && !/admin|supervisor/i.test(rol || "");
+// ---------- docks de Inicio por referencia (acceso dock por dock al crear usuario) ----------
+const DOCKS_INICIO = [
+  { ref: "resumen.ventas", nombre: "Resumen: Ventas del dia", sec: ["resumen", "ventas"] },
+  { ref: "resumen.gastos", nombre: "Resumen: Gastos del mes", sec: ["resumen", "gastos"] },
+  { ref: "resumen.deudores", nombre: "Resumen: Deudores", sec: ["resumen", "deudores"] },
+  { ref: "resumen.clientes", nombre: "Resumen: Clientes activos", sec: ["resumen", "clientes"] },
+  { ref: "acciones.venta", nombre: "Accion: Venta", sec: ["acciones", "venta"] },
+  { ref: "acciones.gasto", nombre: "Accion: Gasto", sec: ["acciones", "gasto"] },
+  { ref: "acciones.agregar", nombre: "Accion: Agregar stock", sec: ["acciones", "agregar"] },
+  { ref: "acciones.deudores", nombre: "Accion: Deudores", sec: ["acciones", "deudores"] },
+  { ref: "inicio.alertas", nombre: "Panel: Alertas", sec: ["alertas", null] },
+  { ref: "inicio.productos", nombre: "Panel: Productos y Movimientos", sec: ["inicioProductos", null] },
+  { ref: "inicio.chart", nombre: "Panel: Resumen de ventas + meta", sec: ["inicioChart", null] },
+  { ref: "inicio.estado", nombre: "Panel: Estado del negocio", sec: ["inicioEstado", null] },
+  { ref: "inicio.pagos", nombre: "Panel: Distribucion de pagos", sec: ["inicioPagos", null] },
+  { ref: "inicio.perfil", nombre: "Panel: Resumen de perfil", sec: ["inicioPerfil", null] },
+];
+function dockOn(sec, ref) {
+  const d = DOCKS_INICIO.find((x) => x.ref === ref);
+  if (!d || !sec) return true;
+  const k = d.sec[0], v = d.sec[1];
+  if (v === null) return sec[k] !== false;
+  return (sec[k] || []).includes(v);
+}
+function setDock(sec, ref, on) {
+  const d = DOCKS_INICIO.find((x) => x.ref === ref);
+  if (!d || !sec) return;
+  const k = d.sec[0], v = d.sec[1];
+  if (v === null) { sec[k] = !!on; return; }
+  const arr = new Set(sec[k] || []);
+  on ? arr.add(v) : arr.delete(v);
+  sec[k] = [...arr];
+}
 
 function resolverSec() {
   const admin = /admin|supervisor/i.test(SES.rol || "");
@@ -1278,8 +1311,8 @@ function pintarResumen() {
     ["clientes", "k-cian", "cliente_Activos.png", "Clientes Activos", `${cliAct} <span class="pers">Personas</span>`, "En el establecimiento", ""],
   ].filter(([k]) => s.resumen.includes(k));
   const box = $("resumen");
-  box.innerHTML = cards.length ? cards.map(([, cls, icon, titulo, numHtml, sub, go]) =>
-    `<div class="kcard ${cls}"${go ? ` data-ir="${go}"` : ""}><span class="kico"><img src="img/pos/resumen/${icon}?v=2" alt=""></span><h4>${titulo}</h4><div class="knum">${numHtml}</div><div class="ksub">${sub}</div></div>`
+  box.innerHTML = cards.length ? cards.map(([k, cls, icon, titulo, numHtml, sub, go]) =>
+    `<div class="kcard ${cls}" data-dock="resumen.${k}"${go ? ` data-ir="${go}"` : ""}><span class="kico"><img src="img/pos/resumen/${icon}?v=2" alt=""></span><h4>${titulo}</h4><div class="knum">${numHtml}</div><div class="ksub">${sub}</div></div>`
   ).join("") : '<div class="card">Sin tarjetas activas.</div>';
   box.querySelectorAll("[data-ir]").forEach((d) => d.addEventListener("click", () => tab(d.dataset.ir)));
   const accs = [["venta", "acc-venta", "Venta.png", "Venta", "venta"], ["gasto", "acc-gasto", "Gasto.png", "Gasto", "finanzas"], ["agregar", "acc-agregar", "Agregar.png", "Agregar", "inventario"], ["deudores", "acc-deudores", "Deudores.png", "Deudores", "deudores"]]
@@ -1288,7 +1321,7 @@ function pintarResumen() {
   $("acciones").innerHTML = "";
   accs.forEach(([k, cls, icon, txt, go]) => {
     const b = document.createElement("button");
-    b.className = "accb " + cls; b.innerHTML = `<img src="img/pos/acciones/${icon}?v=1" alt=""><span>${txt}</span>`;
+    b.className = "accb " + cls; b.dataset.dock = "acciones." + k; b.innerHTML = `<img src="img/pos/acciones/${icon}?v=1" alt=""><span>${txt}</span>`;
     b.addEventListener("click", () => {
       if (k === "venta") { vrAbierta() ? vrCerrar() : vrAbrir(); return; }
       if (k === "agregar") { agToggle(); return; }
@@ -1300,6 +1333,11 @@ function pintarResumen() {
     $("acciones").appendChild(b);
   });
   $("bloque-alertas").classList.toggle("oculto", !s.alertas);
+  $("ini-ventas").classList.toggle("oculto", !dockOn(s, "inicio.chart"));
+  $("ini-estado").classList.toggle("oculto", !dockOn(s, "inicio.estado"));
+  $("ini-pagos").classList.toggle("oculto", !dockOn(s, "inicio.pagos"));
+  $("ini-productos").classList.toggle("oculto", !dockOn(s, "inicio.productos"));
+  $("bloque-perfil").classList.toggle("oculto", !dockOn(s, "inicio.perfil"));
   if (s.alertas) dockDerRender();
   else {
     NOTIF_N = 0;
@@ -1433,7 +1471,12 @@ function pintarIniChart() {
     vals = labels.map((_, i) => suma((v) => normFecha(v[1]).slice(0, 6) === yy + String(i + 1).padStart(2, "0")));
   }
   const max = Math.max(1, ...vals);
+  const totPeriodo = vals.reduce((a, t) => a + t, 0);
+  if (!(totPeriodo > 0)) {
+    box.innerHTML = '<div class="card">Sin ventas en este periodo.</div>';
+  } else {
   box.innerHTML = `<div class="ibars">` + vals.map((t, i) => `<div class="ibarcol"><div class="ibar" style="height:${Math.max(3, Math.round(t / max * 100))}%" title="${fmtCorto(t)}"></div><span class="ibarx">${labels[i]}</span></div>`).join("") + `</div>`;
+  }
   const ym2 = hoy.replace(/-/g, "").slice(0, 6);
   const totMes = suma((v) => normFecha(v[1]).slice(0, 6) === ym2);
   const diaMes = new Date().getDate();
@@ -2756,6 +2799,7 @@ function formUsuario(u) {
   let mods = Object.fromEntries(MODULOS.map((m) => [m, true]));
   let rol = u ? (u[4] || "Cajero") : "Cajero";
   let codes = new Set();
+  let dockSel = new Set(DOCKS_INICIO.map((d) => d.ref));
   if (u) {
     const raw = u[22] || "";
     if (raw.trim().startsWith("{")) {
@@ -2765,6 +2809,7 @@ function formUsuario(u) {
         else if (o && o.secciones) codes = new Set(codesFromSec(Object.assign(FULL(), o.secciones)));
         if (o && o.dock) dock = Object.assign(dock, o.dock);
         if (o && o.modulos) mods = Object.assign(mods, o.modulos);
+        if (o && o.docks) dockSel = new Set(DOCKS_INICIO.map((d) => d.ref).filter((r) => o.docks[r] !== false));
       } catch { codes = new Set(presetCods(rol)); }
     } else {
       String(raw).split("-").map((x) => x.trim().toUpperCase()).filter((x) => /^\d+$/.test(x) || /^BAR\d+$/.test(x)).forEach((c) => codes.add(c));
@@ -2788,6 +2833,8 @@ function formUsuario(u) {
     <div id="u-cods">${FUNC_GRUPOS.map((g) => `<b style="font-size:12px">${esc(g)}</b>` + FUNC_CATALOG.filter((f) => f.g === g).map((f) => `<label class="check"><input type="checkbox" data-cod="${f.c}"${codes.has(f.c) ? " checked" : ""}> ${f.c} · ${esc(f.n)}</label>`).join("")).join("")}</div>
     <h3>Funciones avanzadas</h3>
     <div id="u-mods">${MODULOS.map((m) => `<label class="check"><input type="checkbox" data-mod="${esc(m)}" ${mods[m] ? "checked" : ""}> ${esc(m)}</label>`).join("")}</div>
+    <h3>Docks de Inicio (acceso por tarjeta)</h3>
+    <div id="u-docks">${DOCKS_INICIO.map((d) => `<label class="check"><input type="checkbox" data-dockref="${d.ref}"${dockSel.has(d.ref) ? " checked" : ""}> ${esc(d.nombre)} <small class="muted">${d.ref}</small></label>`).join("")}</div>
     <p id="u-err" class="error"></p>
     <button class="btn exito" id="u-guardar">Guardar Usuario y Permisos</button>
     <button class="btn link" id="u-cancelar">Cancelar</button>`);
@@ -2798,6 +2845,13 @@ function formUsuario(u) {
   pintarCods();
   document.querySelectorAll("#u-cods [data-cod]").forEach((c) => c.addEventListener("change", () => {
     c.checked ? codes.add(c.dataset.cod) : codes.delete(c.dataset.cod);
+  }));
+  const pintarDocks = () => {
+    document.querySelectorAll("#u-docks [data-dockref]").forEach((c) => { c.checked = dockSel.has(c.dataset.dockref); });
+  };
+  pintarDocks();
+  document.querySelectorAll("#u-docks [data-dockref]").forEach((c) => c.addEventListener("change", () => {
+    c.checked ? dockSel.add(c.dataset.dockref) : dockSel.delete(c.dataset.dockref);
   }));
 
   const checarPin = () => {
@@ -2841,11 +2895,12 @@ function formUsuario(u) {
     ["Inicio", "Ventas", "Finanzas", "Inventario"].forEach((v) => { dock[v] = true; });
     document.querySelectorAll("[data-mod]").forEach((c) => { mods[c.dataset.mod] = c.checked; });
     const sec = secFromCodes(codes);
+    DOCKS_INICIO.forEach((d) => setDock(sec, d.ref, dockSel.has(d.ref)));
     if (sec.invLectura) ["invCarga", "invMovimientos", "invCrear", "invEditar", "invEliminar", "invGuardar", "invHacer"].forEach((k) => (sec[k] = false));
     if (!codes.size && !confirm("Este usuario no tendrá ninguna función. ¿Guardar de todos modos?")) return;
     const dc = dockCapsFromCodes(codes);
     Object.assign(dock, dc.dock);
-    const payload = { compact: [...codes].join(" - "), dock, functions: [], caps: dc.caps, modulos: mods, secciones: sec };
+    const payload = { compact: [...codes].join(" - "), dock, functions: [], caps: dc.caps, modulos: mods, secciones: sec, docks: Object.fromEntries(DOCKS_INICIO.map((d) => [d.ref, dockSel.has(d.ref)])) };
     const motivo = u ? ((prompt(`Motivo del cambio a ${nombre}:`, "") || "").trim()) : "Creación de usuario";
     if (u && !motivo) { toast("Escribe el motivo del cambio"); return; }
     const ahora = fmtFechaHora(new Date());
