@@ -1320,7 +1320,7 @@ function pintarResumen() {
   $("acciones").innerHTML = "";
   accs.forEach(([k, cls, icon, txt, go]) => {
     const b = document.createElement("button");
-    b.className = "accb " + cls; b.dataset.dock = "acciones." + k; b.innerHTML = `<img src="img/pos/acciones/${icon}?v=1" alt=""><span>${txt}</span>`;
+    b.className = "accb " + cls; b.dataset.dock = "acciones." + k; b.innerHTML = `<span class="accc"><img src="img/pos/acciones/${icon}?v=2" alt=""></span><span>${txt}</span>`;
     b.addEventListener("click", () => {
       if (k === "venta") { vrAbierta() ? vrCerrar() : vrAbrir(); return; }
       if (k === "agregar") { agToggle(); return; }
@@ -3166,10 +3166,16 @@ async function entrarVistaOSesion(R) {
   // del enlace pertenece al mismo usuario -> POS completo, no vista aislada.
   try {
     if (SES && SES.code === R.code && SES.correo) {
+      const sup = sessionStorage.getItem("kapta_super"), tok = sessionStorage.getItem("kapta_super_tok");
+      if (sup && tok && SES.super) {
+        SUPER = { correo: sup, token: tok };
+        MI_TOKEN = null;
+        await entrar();
+        return;
+      }
       const r = await api({ action: "validar_acceso", token: R.token, vista: R.vista });
       const u = r && r.status === "success" && r.data && r.data.usuario;
       if (u && (u.correo || "").toLowerCase() === String(SES.correo || "").toLowerCase()) {
-        const sup = sessionStorage.getItem("kapta_super"), tok = sessionStorage.getItem("kapta_super_tok");
         if (sup && tok) SUPER = { correo: sup, token: tok };
         MI_TOKEN = null;
         await entrar();

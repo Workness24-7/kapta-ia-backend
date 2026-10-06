@@ -87,7 +87,9 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
   /* En inicio: la página scrollea si los paneles exceden la altura */
   #p-pos:has(> #t-inicio:not(.oculto)) { min-height: 100dvh; }
   #p-pos .tab { padding: 20px 28px 0 116px; }
-  #t-inicio.tab { min-height: calc(100dvh - 90px); display: grid; grid-template-columns: minmax(0,1.08fr) 10px minmax(0,.92fr); gap: 2px 12px; align-items: start; padding-bottom: 24px; }
+  #t-inicio.tab { min-height: calc(100dvh - 90px); display: grid; grid-template-columns: minmax(0,1.55fr) 10px minmax(0,1fr); gap: 2px 12px; align-items: start; padding-bottom: 24px; }
+  #resumen.kpi-resumen { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+  #acciones.acc-grid { grid-template-columns: 1fr 1fr; }
   #col-izq, #col-der, #bloque-acciones, #bloque-alertas, #alerta-box, #resumen, .kcard { min-width: 0; }
   #col-izq { grid-column: 1; grid-row: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
   #col-izq > h2 { margin-bottom: 6px; font-weight: 400; color: #000; }
@@ -181,8 +183,13 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .delta-up { color: #00aa5d; font-weight: 700; }
 .delta-down { color: #e10000; font-weight: 700; }
 .accb { flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px; padding: 16px; border-radius: 36px; }
-.accb img { width: 64px; height: 64px; }
-.accb span { font-size: 15px; font-weight: 800; }
+.accc { width: 72px; height: 72px; border-radius: 50%; overflow: hidden; flex-shrink: 0; }
+.accc img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.accb span:last-child { font-size: 15px; font-weight: 800; }
+.accb.acc-venta { background: linear-gradient(#dcd7fa,#dcd7fa) padding-box, linear-gradient(135deg, #ffffff, #7c5cf0) border-box; color: #2d2a9e; }
+.accb.acc-gasto { background: linear-gradient(#f9d2d2,#f9d2d2) padding-box, linear-gradient(135deg, #ffffff, #f04444) border-box; color: #b91c1c; }
+.accb.acc-agregar { background: linear-gradient(#c9ecd4,#c9ecd4) padding-box, linear-gradient(135deg, #ffffff, #34d399) border-box; color: #059669; }
+.accb.acc-deudores { background: linear-gradient(#cfdcf7,#cfdcf7) padding-box, linear-gradient(135deg, #ffffff, #6b9bf5) border-box; color: #4f46e5; }
 .ini-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; border-radius: 50%; background: #ff3b30; color: #fff; font-size: 13px; font-weight: 800; padding: 0 6px; margin-left: 8px; vertical-align: middle; }
 .ini-ph { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .ini-ph h3 { margin: 0; }
@@ -781,7 +788,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=40"></script>
+<script src="app.js?v=41"></script>
 </body>
 </html>
 
