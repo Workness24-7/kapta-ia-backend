@@ -789,7 +789,6 @@ const DOCKS_INICIO = [
   { ref: "inicio.chart", nombre: "Panel: Resumen de ventas + meta", sec: ["inicioChart", null] },
   { ref: "inicio.estado", nombre: "Panel: Estado del negocio", sec: ["inicioEstado", null] },
   { ref: "inicio.pagos", nombre: "Panel: Distribucion de pagos", sec: ["inicioPagos", null] },
-  { ref: "inicio.perfil", nombre: "Panel: Resumen de perfil", sec: ["inicioPerfil", null] },
 ];
 function dockOn(sec, ref) {
   const d = DOCKS_INICIO.find((x) => x.ref === ref);
@@ -1337,7 +1336,6 @@ function pintarResumen() {
   $("ini-estado").classList.toggle("oculto", !dockOn(s, "inicio.estado"));
   $("ini-pagos").classList.toggle("oculto", !dockOn(s, "inicio.pagos"));
   $("ini-productos").classList.toggle("oculto", !dockOn(s, "inicio.productos"));
-  $("bloque-perfil").classList.toggle("oculto", !dockOn(s, "inicio.perfil"));
   if (s.alertas) dockDerRender();
   else {
     NOTIF_N = 0;

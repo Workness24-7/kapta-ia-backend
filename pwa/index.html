@@ -84,10 +84,10 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 @media (min-width: 901px) {
   #p-pos { padding-bottom: 0; }
   #p-pos.aislado .tab { padding: 20px 28px 0; }
-  /* En inicio: la página nunca scrollea; solo la lista de alertas (y solo si desborda) */
-  #p-pos:has(> #t-inicio:not(.oculto)) { height: 100dvh; overflow: hidden; }
+  /* En inicio: la página scrollea si los paneles exceden la altura */
+  #p-pos:has(> #t-inicio:not(.oculto)) { min-height: 100dvh; }
   #p-pos .tab { padding: 20px 28px 0 116px; }
-  #t-inicio.tab { height: calc(100dvh - 90px); overflow: hidden; display: grid; grid-template-columns: minmax(0,1.08fr) 10px minmax(0,.92fr); grid-template-rows: minmax(0,1fr); gap: 2px 12px; align-items: stretch; padding-bottom: 0; }
+  #t-inicio.tab { min-height: calc(100dvh - 90px); display: grid; grid-template-columns: minmax(0,1.08fr) 10px minmax(0,.92fr); gap: 2px 12px; align-items: start; padding-bottom: 24px; }
   #col-izq, #col-der, #bloque-acciones, #bloque-alertas, #alerta-box, #resumen, .kcard { min-width: 0; }
   #col-izq { grid-column: 1; grid-row: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
   #col-izq > h2 { margin-bottom: 6px; font-weight: 400; color: #000; }
@@ -110,7 +110,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
   #t-inicio #bloque-acciones .sec-t { margin: 0 0 10px; }
   #bloque-alertas { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   #alerta-box { flex: 1; min-height: 0; display: flex; }
-  #alertas { flex: 1; min-height: 0; max-height: none; }
+  #alertas { flex: 1; min-height: 0; max-height: 560px; overflow-y: auto; }
   #t-inicio .sec-t { margin: 16px 0 10px; }
   .alerta-head .sec-t, .vista-dock { margin: 16px 0 10px; }
   .kcard { padding: 16px 20px; }
@@ -639,7 +639,6 @@ canvas.bc39 { max-width: 100%; height: 56px; }
       <p class="ini-sub">Bienvenido de nuevo. ¿Listo para empezar un gran dia?</p>
       <div id="resumen" class="kpi-resumen"></div>
       <div id="split-hl" class="split h" title="Arrastra para ajustar Resumen / Perfil (doble clic restablece)"></div>
-      <div id="bloque-perfil" data-dock="inicio.perfil"><h3 class="sec-t">Resumen de perfil</h3><div id="perfil"></div></div>
       <div id="ini-ventas" class="inipanel" data-dock="inicio.chart"><div class="ini-ph"><h3>Resumen de ventas</h3><div class="seg" id="ini-filtros"></div></div><div class="ini-chartwrap"><div id="ini-chart"></div><div id="ini-meta"></div></div></div>
       <div class="ini-duo"><div id="ini-estado" class="inipanel" data-dock="inicio.estado"></div><div id="ini-pagos" class="inipanel" data-dock="inicio.pagos"></div></div>
       </div>
@@ -782,7 +781,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=39"></script>
+<script src="app.js?v=40"></script>
 </body>
 </html>
 
