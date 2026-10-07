@@ -1,5 +1,5 @@
 /* Service Worker: CSS dentro del HTML; formas individuales + shell offline, API a red, HTML fresco. */
-const CACHE = "kapta-pwa-v49";
+const CACHE = "kapta-pwa-v50";
 const SHELL = ["./app.js?v=45", "./manifest.webmanifest", "./img/logo-app.png?v=2", "./img/logo-slogan.png?v=9",
   "./img/formas/morada-tl.png?v=10", "./img/formas/nube.png?v=10",
   "./img/formas/destellos.png?v=10", "./img/formas/cian-bl.png?v=10",
@@ -45,9 +45,10 @@ self.addEventListener("fetch", (e) => {
     return;
   }
   // El HTML siempre fresco de la red (evita mezclar versiones vieja/nueva).
+  // cache:reload burla la cache HTTP del navegador: con internet, siempre lo nuevo.
   if (e.request.mode === "navigate" || url.pathname.endsWith(".html")) {
     e.respondWith(
-      fetch(e.request).then((res) => {
+      fetch(e.request.url, { cache: "reload" }).then((res) => {
         const copia = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copia));
         return res;
