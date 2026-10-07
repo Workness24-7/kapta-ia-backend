@@ -1320,7 +1320,7 @@ function pintarResumen() {
   $("acciones").innerHTML = "";
   accs.forEach(([k, cls, icon, txt, go]) => {
     const b = document.createElement("button");
-    b.className = "accb " + cls; b.dataset.dock = "acciones." + k; b.innerHTML = `<span class="accc"><img src="img/pos/acciones/${icon}?v=2" alt=""></span><span>${txt}</span>`;
+    b.className = "accb " + cls; b.dataset.dock = "acciones." + k; b.innerHTML = `<img class="accimg" src="img/pos/acciones/${icon}?v=2" alt=""><span>${txt}</span>`;
     b.addEventListener("click", () => {
       if (k === "venta") { vrAbierta() ? vrCerrar() : vrAbrir(); return; }
       if (k === "agregar") { agToggle(); return; }
