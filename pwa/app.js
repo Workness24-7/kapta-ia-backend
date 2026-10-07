@@ -1439,52 +1439,129 @@ function pintarIniFiltros() {
   box.innerHTML = ["Hoy", "Semana", "Mes", "Anio"].map((f) => `<button data-f="${f}" class="${IV_F === f ? "on" : ""}">${f === "Anio" ? "A\u00f1o" : f}</button>`).join("");
   box.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { IV_F = b.dataset.f; pintarIniFiltros(); pintarIniChart(); }));
 }
+function metasIni() {
+  const def = { Hoy: 3000000, Semana: 15000000, Mes: 60000000, Anio: 720000000 };
+  try {
+    const code = (SES && SES.code) || "GEN";
+    const o = JSON.parse(localStorage.getItem("kapta_metas_" + code) || "{}");
+    Object.keys(def).forEach((k) => { if (num(o[k]) > 0) def[k] = num(o[k]); });
+  } catch {}
+  return def;
+}
+function guardarMetaIni(k, v) {
+  try {
+    const code = (SES && SES.code) || "GEN";
+    const o = JSON.parse(localStorage.getItem("kapta_metas_" + code) || "{}");
+    o[k] = v;
+    localStorage.setItem("kapta_metas_" + code, JSON.stringify(o));
+  } catch {}
+}
+// Jornada del negocio para el eje de "Hoy". Si el negocio la configura se guarda
+// en kapta_horario_<CODE> {ini:"15:00",fin:"23:00"}; sin configuracion, dia completo.
+function horarioIni() {
+  let ini = "00:00", fin = "23:30";
+  try {
+    const code = (SES && SES.code) || "GEN";
+    const o = JSON.parse(localStorage.getItem("kapta_horario_" + code) || "{}");
+    if (/^\d{2}:\d{2}$/.test(o.ini || "")) ini = o.ini;
+    if (/^\d{2}:\d{2}$/.test(o.fin || "")) fin = o.fin;
+  } catch {}
+  const m = (s) => { const p = s.split(":"); return num(p[0]) * 60 + num(p[1]); };
+  return { iniM: m(ini), finM: m(fin), ini, fin };
+}
+const META_NOMBRE = { Hoy: "Meta del dia", Semana: "Meta semanal", Mes: "Meta mensual", Anio: "Meta anual" };
+const fmtYM = (n) => n <= 0 ? "$ 0" : "$ " + (Math.round(n / 100000) / 10) + " M";
+const niceCeilM = (n) => n <= 0 ? 1000000 : (n <= 5000000 ? Math.ceil(n / 500000) * 500000 : Math.ceil(n / 1000000) * 1000000);
+let META_CLICKS = 0, META_T = null;
+function metaClick() {
+  META_CLICKS++;
+  clearTimeout(META_T);
+  if (META_CLICKS >= 4) {
+    META_CLICKS = 0;
+    editarMetaIni();
+    return;
+  }
+  META_T = setTimeout(() => { META_CLICKS = 0; }, 1800);
+}
+function editarMetaIni() {
+  const metas = metasIni();
+  const cur = metas[IV_F];
+  const v = prompt(`Nueva ${META_NOMBRE[IV_F]} ($)`, String(Math.round(cur)));
+  if (v === null) return;
+  const n = num(String(v).replace(/[^0-9.]/g, ""));
+  if (!(n > 0)) { toast("Meta invalida"); return; }
+  guardarMetaIni(IV_F, n);
+  pintarIniChart();
+  toast("Meta actualizada");
+}
 function pintarIniChart() {
   const box = $("ini-chart"); if (!box) return;
   const V = venVivas();
-  const hoy = hoyISO();
-  let labels = [], vals = [];
+  const metas = metasIni();
+  const meta = metas[IV_F] || 1000000;
   const suma = (f) => V.filter(f).reduce((a, v) => a + num(v[12]), 0);
+  let labels = [], vals = [], fh = [];
   if (IV_F === "Hoy") {
-    labels = ["12 AM", "03 AM", "06 AM", "09 AM", "12 PM", "03 PM", "06 PM", "09 PM"];
-    vals = labels.map((_, i) => suma((v) => esHoy(v[1]) && Math.floor(num(String(v[2] || "").slice(0, 2)) / 3) === i));
-  } else if (IV_F === "Semana") {
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i);
-      const p = (x) => String(x).padStart(2, "0");
-      const iso = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
-      labels.push(`${p(d.getDate())}/${p(d.getMonth() + 1)}`);
-      vals.push(suma((v) => normFecha(v[1]) === iso));
+    const h = horarioIni();
+    const s0 = Math.floor(h.iniM / 30), s1 = Math.floor(h.finM / 30);
+    for (let s = s0; s <= s1 && s < 48; s++) {
+      const hh = String(Math.floor(s * 30 / 60)).padStart(2, "0");
+      labels.push(s % 2 ? "" : hh + ":00");
+      vals.push(0); fh.push(false);
     }
+    let fuera = 0;
+    V.forEach((v) => {
+      if (!esHoy(v[1])) return;
+      const hp = String(v[2] || "").split(":");
+      const mins = num(hp[0]) * 60 + num(hp[1]);
+      const t = num(v[12]);
+      const s = Math.floor(mins / 30);
+      if (s >= s0 && s <= s1) vals[s - s0] += t;
+      else fuera += t;
+    });
+    if (fuera > 0.5) { labels.push("F.H."); vals.push(fuera); fh.push(true); }
+  } else if (IV_F === "Semana") {
+    labels = ["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"];
+    const d0 = new Date(); d0.setDate(d0.getDate() - d0.getDay());
+    const p = (x) => String(x).padStart(2, "0");
+    vals = labels.map((_, i) => {
+      const d = new Date(d0); d.setDate(d0.getDate() + i);
+      const iso = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
+      return suma((v) => normFecha(v[1]) === iso);
+    });
+    fh = vals.map(() => false);
   } else if (IV_F === "Mes") {
-    labels = ["S1", "S2", "S3", "S4", "S5"];
-    const ym = hoy.replace(/-/g, "").slice(0, 6);
-    vals = [[1, 7], [8, 14], [15, 21], [22, 28], [29, 31]].map(([a, b]) => suma((v) => {
-      const n = normFecha(v[1]); if (!n || n.slice(0, 6) !== ym) return false;
-      const dd = Number(n.slice(6, 8)); return dd >= a && dd <= b;
-    }));
+    const now = new Date(), nd = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const ym = hoyISO().replace(/-/g, "").slice(0, 6);
+    for (let d = 1; d <= nd; d++) {
+      labels.push(String(d));
+      const needle = ym + String(d).padStart(2, "0");
+      vals.push(suma((v) => normFecha(v[1]) === needle));
+      fh.push(false);
+    }
   } else {
-    const yy = hoy.slice(0, 4);
+    const yy = hoyISO().slice(0, 4);
     labels = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
     vals = labels.map((_, i) => suma((v) => normFecha(v[1]).slice(0, 6) === yy + String(i + 1).padStart(2, "0")));
+    fh = vals.map(() => false);
   }
-  const max = Math.max(1, ...vals);
-  const totPeriodo = vals.reduce((a, t) => a + t, 0);
-  if (!(totPeriodo > 0)) {
-    box.innerHTML = '<div class="card">Sin ventas en este periodo.</div>';
-  } else {
-  box.innerHTML = `<div class="ibars">` + vals.map((t, i) => `<div class="ibarcol"><div class="ibar" style="height:${Math.max(3, Math.round(t / max * 100))}%" title="${fmtCorto(t)}"></div><span class="ibarx">${labels[i]}</span></div>`).join("") + `</div>`;
-  }
-  const ym2 = hoy.replace(/-/g, "").slice(0, 6);
-  const totMes = suma((v) => normFecha(v[1]).slice(0, 6) === ym2);
-  const diaMes = new Date().getDate();
-  const meta = diaMes > 0 ? totMes / diaMes : 0;
-  const totHoy = suma((v) => esHoy(v[1]));
-  const pct = meta > 0.5 ? Math.min(100, Math.round(totHoy / meta * 100)) : 0;
+  const maxBar = Math.max(0, ...vals);
+  const ymax = niceCeilM(Math.max(meta, maxBar));
+  const ticks = [ymax, ymax * 0.75, ymax * 0.5, ymax * 0.25, 0];
+  box.innerHTML = `<div class="ichart"><div class="iyaxis">` + ticks.map((t) => `<span>${fmtYM(t)}</span>`).join("") + `</div><div class="iplotwrap"><div class="iplot"><div class="igrid">` + ticks.map(() => `<span></span>`).join("") + `</div><div class="ibars2">` + vals.map((t, i) => `<div class="ibcol">${t > 0 ? `<div class="ibv${fh[i] ? " fh" : ""}" style="height:${Math.max(2, Math.round(t / ymax * 100))}%" title="${fmtCorto(t)}"></div>` : ""}</div>`).join("") + `</div></div><div class="ixaxis">` + labels.map((l) => `<span>${l}</span>`).join("") + `</div></div></div>` + (IV_F === "Hoy" ? `<div class="ilegend"><span><i style="background:#7c5cf0"></i>En jornada</span><span><i style="background:#94a3b8"></i>Fuera de horario</span></div>` : "");
+  let tot = 0;
+  if (IV_F === "Hoy") tot = suma((v) => esHoy(v[1]));
+  else if (IV_F === "Semana") { const d0 = new Date(); d0.setDate(d0.getDate() - d0.getDay()); const p = (x) => String(x).padStart(2, "0"); const a = `${d0.getFullYear()}${p(d0.getMonth() + 1)}${p(d0.getDate())}`; const d1 = new Date(d0); d1.setDate(d0.getDate() + 6); const b = `${d1.getFullYear()}${p(d1.getMonth() + 1)}${p(d1.getDate())}`; tot = suma((v) => { const n = normFecha(v[1]); return n >= a && n <= b; }); }
+  else if (IV_F === "Mes") { const ym = hoyISO().replace(/-/g, "").slice(0, 6); tot = suma((v) => normFecha(v[1]).slice(0, 6) === ym); }
+  else { const yy = hoyISO().slice(0, 4); tot = suma((v) => normFecha(v[1]).slice(0, 4) === yy); }
+  const pct = meta > 0 ? Math.round(tot / meta * 100) : 0;
   const C = 2 * Math.PI * 52;
   const mb = $("ini-meta");
-  if (mb) mb.innerHTML = `<svg width="140" height="140" viewBox="0 0 140 140"><defs><linearGradient id="metag" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c5cf0"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><circle cx="70" cy="70" r="52" fill="none" stroke="#e9e7f5" stroke-width="16"/><circle cx="70" cy="70" r="52" fill="none" stroke="url(#metag)" stroke-width="16" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C - C * pct / 100}" transform="rotate(-90 70 70)"/><text x="70" y="78" text-anchor="middle" font-size="24" font-weight="800" fill="#0F172A">${pct}%</text></svg><b>Meta del dia</b><small>${fmtCorto(totHoy)} / ${fmtCorto(meta)}</small>`;
+  if (mb) mb.innerHTML = `<svg id="ini-ring" width="140" height="140" viewBox="0 0 140 140" style="cursor:pointer"><title>4 clics para editar la meta</title><defs><linearGradient id="metag" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c5cf0"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><circle cx="70" cy="70" r="52" fill="none" stroke="#e9e7f5" stroke-width="16"/><circle cx="70" cy="70" r="52" fill="none" stroke="url(#metag)" stroke-width="16" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C - C * Math.min(100, pct) / 100}" transform="rotate(-90 70 70)"/><text x="70" y="78" text-anchor="middle" font-size="24" font-weight="800" fill="#0F172A">${pct}%</text></svg><b>${META_NOMBRE[IV_F]}</b><small>$ ${Math.round(tot).toLocaleString("es-CO")} / $ ${Math.round(meta).toLocaleString("es-CO")}</small>`;
+  const ring = $("ini-ring");
+  if (ring) ring.addEventListener("click", metaClick);
 }
+
 function pintarIniPagos() {
   const box = $("ini-pagos"); if (!box) return;
   const ym = hoyISO().replace(/-/g, "").slice(0, 6);
