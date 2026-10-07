@@ -59,9 +59,9 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 #avatar-ia { position: absolute; right: -7px; bottom: -7px; border: 2px solid transparent; border-radius: 7px; font-size: 9px; font-weight: 800; padding: 1px 4px; line-height: 1.2; background: linear-gradient(#ffffff,#ffffff) padding-box, linear-gradient(135deg, #5ce1e6, #8c52ff) border-box; }
 #avatar-ia i { font-style: normal; background: linear-gradient(135deg, #5ce1e6, #8c52ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
 /* Sección 2: dock vertical de funciones (diseño Canva: vidrio + pill #1400FF) */
-#wp-a, #wp-b { position: fixed; inset: -45px; background-size: cover; background-position: center; filter: blur(22px); -webkit-filter: blur(22px); z-index: -2; opacity: 0; transition: opacity .7s ease; pointer-events: none; }
-#wp-velo { position: fixed; inset: 0; background: rgba(242,242,247,.45); z-index: -1; pointer-events: none; }
-#dock { position: fixed; left: 16px; top: 112px; z-index: 25; width: 76px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 10px; border: 1.5px solid transparent; border-radius: 36px; background: linear-gradient(135deg, rgba(255,255,255,.5), rgba(255,255,255,.25)) padding-box, linear-gradient(135deg, rgba(255,255,255,.67), rgba(166,166,166,.67)) border-box; box-shadow: 0 8px 24px rgba(0,0,0,.06); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); transition: width .25s ease; overflow: hidden; }
+#wp-a, #wp-b { position: fixed; inset: -45px; background-size: cover; background-position: center; filter: blur(12px); -webkit-filter: blur(12px); z-index: -2; opacity: 0; transition: opacity .7s ease; pointer-events: none; }
+#wp-velo { position: fixed; inset: 0; background: rgba(242,242,247,.22); z-index: -1; pointer-events: none; }
+#dock { position: fixed; left: 16px; top: 112px; z-index: 25; width: 76px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 10px; border: 1.5px solid transparent; border-radius: 36px; background: linear-gradient(135deg, rgba(255,255,255,.38), rgba(255,255,255,.18)) padding-box, linear-gradient(135deg, rgba(255,255,255,.67), rgba(166,166,166,.67)) border-box; box-shadow: 0 8px 24px rgba(0,0,0,.06); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); transition: width .25s ease; overflow: hidden; }
 #dock:hover, #dock:focus-within { width: 220px; }
 #dock button { position: relative; width: 56px; height: 56px; border: 0; background: none; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0; }
 #dock:hover button, #dock:focus-within button { width: 100%; justify-content: flex-start; padding: 0 12px; border-radius: 36px; }
@@ -174,22 +174,24 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .ini-sub { font-size: 14px; color: #000; margin: 0 0 14px; }
 .inipanel { border: 1.5px solid transparent; border-radius: 36px; background: linear-gradient(135deg, rgba(255,255,255,.5), rgba(255,255,255,.25)) padding-box, linear-gradient(135deg, rgba(255,255,255,.67), #a6a6a6) border-box; box-shadow: 0 10px 26px rgba(0,0,0,.05); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 20px 22px; margin-top: 14px; }
 .inipanel h3 { margin: 0 0 12px; font-size: 20px; font-weight: 700; color: #010101; }
-#resumen.kpi-resumen { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
-.kcard { border-radius: 36px; --kico: 56px; min-width: 0; }
+#resumen.kpi-resumen { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.kcard { border-radius: 36px; --kico: 56px; min-width: 0; background: linear-gradient(135deg, rgba(255,255,255,.5), rgba(255,255,255,.25)) padding-box, linear-gradient(135deg, #ffffff, var(--gb2, #a6a6a6)) border-box; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.kcard .kico { left: 18px; right: auto; }
+.kcard h4 { padding-right: 0; }
 .kcard .kico { border: 0; background: none; top: 18px; }
 .kcard .kico img { width: 100%; height: 100%; }
 .kcard h4 { font-size: 13px; font-weight: 500; }
 .kcard .knum { font-size: clamp(22px, 20cqi, 34px); }
 .delta-up { color: #00aa5d; font-weight: 700; }
 .delta-down { color: #e10000; font-weight: 700; }
-.accb { flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px; padding: 16px; border-radius: 36px; }
+.accb { flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px; padding: 16px; border-radius: 36px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 .accc { width: 72px; height: 72px; border-radius: 50%; overflow: hidden; flex-shrink: 0; }
 .accc img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .accb span:last-child { font-size: 15px; font-weight: 800; }
-.accb.acc-venta { background: linear-gradient(#dcd7fa,#dcd7fa) padding-box, linear-gradient(135deg, #ffffff, #7c5cf0) border-box; color: #2d2a9e; }
-.accb.acc-gasto { background: linear-gradient(#f9d2d2,#f9d2d2) padding-box, linear-gradient(135deg, #ffffff, #f04444) border-box; color: #b91c1c; }
-.accb.acc-agregar { background: linear-gradient(#c9ecd4,#c9ecd4) padding-box, linear-gradient(135deg, #ffffff, #34d399) border-box; color: #059669; }
-.accb.acc-deudores { background: linear-gradient(#cfdcf7,#cfdcf7) padding-box, linear-gradient(135deg, #ffffff, #6b9bf5) border-box; color: #4f46e5; }
+.accb.acc-venta { background: linear-gradient(rgba(205,195,250,.55),rgba(205,195,250,.55)) padding-box, linear-gradient(135deg, #ffffff, #7c5cf0) border-box; color: #2d2a9e; }
+.accb.acc-gasto { background: linear-gradient(rgba(249,194,194,.55),rgba(249,194,194,.55)) padding-box, linear-gradient(135deg, #ffffff, #f04444) border-box; color: #b91c1c; }
+.accb.acc-agregar { background: linear-gradient(rgba(185,230,200,.55),rgba(185,230,200,.55)) padding-box, linear-gradient(135deg, #ffffff, #34d399) border-box; color: #059669; }
+.accb.acc-deudores { background: linear-gradient(rgba(185,205,245,.55),rgba(185,205,245,.55)) padding-box, linear-gradient(135deg, #ffffff, #6b9bf5) border-box; color: #4f46e5; }
 .ini-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; border-radius: 50%; background: #ff3b30; color: #fff; font-size: 13px; font-weight: 800; padding: 0 6px; margin-left: 8px; vertical-align: middle; }
 .ini-ph { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .ini-ph h3 { margin: 0; }
@@ -337,7 +339,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
   .kcard .knum { font-size: clamp(22px, 18cqi, 54px); }
   .kcard .ksub { font-size: 10px; }
   #resumen.kpi-resumen { gap: 12px; }
-  #acciones.acc-grid { grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 10px; }
+  #acciones.acc-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
   .accb { padding: 14px 4px 12px; font-size: 10px; }
   .accb img { width: 72px; height: 72px; }
   .vr-busca { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 8px; }
@@ -788,7 +790,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=41"></script>
+<script src="app.js?v=42"></script>
 </body>
 </html>
 
