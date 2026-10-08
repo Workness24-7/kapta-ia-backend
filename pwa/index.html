@@ -88,7 +88,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
   #p-pos:has(> #t-inicio:not(.oculto)) { min-height: 100dvh; }
   #p-pos .tab { padding: 20px 28px 0 116px; width: 100%; max-width: none; margin-left: 0; margin-right: 0; }
   #t-inicio.tab { min-height: calc(100dvh - 90px); display: grid; grid-template-columns: minmax(0, 1fr) 10px minmax(260px, 280px); gap: 2px 10px; align-items: start; padding-bottom: 24px; }
-  #resumen.kpi-resumen { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; max-width: 1080px; }
+  #t-inicio #resumen.kpi-resumen { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; max-width: 1080px; }
   #acciones.acc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #col-izq, #col-der, #bloque-acciones, #bloque-alertas, #alerta-box, #resumen, .kcard { min-width: 0; }
   #col-izq { grid-column: 1; grid-row: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
@@ -173,6 +173,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .ini-sub { font-size: 14px; color: #000; margin: 0 0 14px; }
 .inipanel { border: 1px solid rgba(255,255,255,.5); border-radius: 36px; background: linear-gradient(135deg, rgba(255,255,255,.32), rgba(255,255,255,.22)); backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3); box-shadow: 0 8px 32px rgba(31,38,135,.12), inset 0 1px 0 rgba(255,255,255,.55); padding: 16px 18px; margin-top: 12px; }
 .inipanel h3 { margin: 0 0 12px; font-size: 20px; font-weight: 700; color: #010101; }
+#ini-ventas { margin-top: 14px; }
 #ini-resumen-panel h2 { font-size: 20px; font-weight: 700; color: #0F172A; margin: 0 0 4px; }
 #bloque-acciones.inipanel .sec-t, #bloque-alertas.inipanel .alerta-head .sec-t { margin: 0; }
 #bloque-alertas.inipanel .alerta-head { margin-bottom: 12px; }
@@ -664,9 +665,9 @@ canvas.bc39 { max-width: 100%; height: 56px; }
       <div id="col-izq">
       <div id="ini-resumen-panel" class="inipanel"><h2>Resumen General</h2>
       <p class="ini-sub">Bienvenido de nuevo. ¿Listo para empezar un gran dia?</p>
-      <div id="resumen" class="kpi-resumen"></div></div>
+      <div id="resumen" class="kpi-resumen"></div>
+      <div id="ini-ventas" data-dock="inicio.chart"><div class="ini-ph"><h3>Resumen de ventas</h3><div class="seg ivseg" id="ini-filtros"></div></div><div class="ini-chartwrap"><div id="ini-chart" class="ivdock"></div><div id="ini-meta" class="ivdock"></div></div></div></div>
       <div id="split-hl" class="split h" title="Arrastra para ajustar Resumen / Perfil (doble clic restablece)"></div>
-      <div id="ini-ventas" class="inipanel" data-dock="inicio.chart"><div class="ini-ph"><h3>Resumen de ventas</h3><div class="seg ivseg" id="ini-filtros"></div></div><div class="ini-chartwrap"><div id="ini-chart" class="ivdock"></div><div id="ini-meta" class="ivdock"></div></div></div>
       <div class="ini-duo"><div id="ini-estado" class="inipanel" data-dock="inicio.estado"></div><div id="ini-pagos" class="inipanel" data-dock="inicio.pagos"></div></div>
       </div>
       <div id="split-v" class="split v" title="Arrastra para ajustar columnas (doble clic restablece)"></div>
