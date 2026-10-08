@@ -1469,7 +1469,7 @@ function horarioIni() {
   const m = (s) => { const p = s.split(":"); return num(p[0]) * 60 + num(p[1]); };
   return { iniM: m(ini), finM: m(fin), ini, fin };
 }
-const META_NOMBRE = { Hoy: "Meta del dia", Semana: "Meta semanal", Mes: "Meta mensual", Anio: "Meta anual" };
+const META_NOMBRE = { Hoy: "Meta del dia", Semana: "Meta semanal", Mes: "Meta mensual", Anio: "Meta del a\u00f1o" };
 const fmtYM = (n) => n <= 0 ? "$ 0" : "$ " + (Math.round(n / 100000) / 10) + " M";
 const niceCeilM = (n) => n <= 0 ? 1000000 : (n <= 5000000 ? Math.ceil(n / 500000) * 500000 : Math.ceil(n / 1000000) * 1000000);
 let META_CLICKS = 0, META_T = null;
@@ -1503,12 +1503,15 @@ function pintarIniChart() {
   let labels = [], vals = [], fh = [];
   if (IV_F === "Hoy") {
     const h = horarioIni();
-    const s0 = Math.floor(h.iniM / 30), s1 = Math.floor(h.finM / 30);
-    for (let s = s0; s <= s1 && s < 48; s++) {
+    const enJornada = (s) => h.finM >= h.iniM ? (s >= Math.floor(h.iniM / 30) && s <= Math.floor(h.finM / 30)) : (s >= Math.floor(h.iniM / 30) || s <= Math.floor(h.finM / 30));
+    const orden = [];
+    if (h.finM >= h.iniM) { for (let s = Math.floor(h.iniM / 30); s <= Math.floor(h.finM / 30) && s < 48; s++) orden.push(s); }
+    else { for (let s = Math.floor(h.iniM / 30); s < 48; s++) orden.push(s); for (let s = 0; s <= Math.floor(h.finM / 30); s++) orden.push(s); }
+    orden.forEach((s) => {
       const hh = String(Math.floor(s * 30 / 60)).padStart(2, "0");
       labels.push(s % 2 ? "" : hh + ":00");
       vals.push(0); fh.push(false);
-    }
+    });
     let fuera = 0;
     V.forEach((v) => {
       if (!esHoy(v[1])) return;
@@ -1516,7 +1519,8 @@ function pintarIniChart() {
       const mins = num(hp[0]) * 60 + num(hp[1]);
       const t = num(v[12]);
       const s = Math.floor(mins / 30);
-      if (s >= s0 && s <= s1) vals[s - s0] += t;
+      const idx = orden.indexOf(s);
+      if (idx >= 0) vals[idx] += t;
       else fuera += t;
     });
     if (fuera > 0.5) { labels.push("F.H."); vals.push(fuera); fh.push(true); }
@@ -1533,11 +1537,16 @@ function pintarIniChart() {
   } else if (IV_F === "Mes") {
     const now = new Date(), nd = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const ym = hoyISO().replace(/-/g, "").slice(0, 6);
-    for (let d = 1; d <= nd; d++) {
-      labels.push(String(d));
-      const needle = ym + String(d).padStart(2, "0");
-      vals.push(suma((v) => normFecha(v[1]) === needle));
-      fh.push(false);
+    const nSem = nd > 28 ? 5 : 4;
+    for (let w = 1; w <= nSem; w++) {
+      labels.push("Semana " + w);
+      const a = (w - 1) * 7 + 1, b = Math.min(w * 7, nd);
+      let t = 0;
+      for (let d = a; d <= b; d++) {
+        const needle = ym + String(d).padStart(2, "0");
+        t += suma((v) => normFecha(v[1]) === needle);
+      }
+      vals.push(t); fh.push(false);
     }
   } else {
     const yy = hoyISO().slice(0, 4);
@@ -3144,8 +3153,28 @@ $("btn-tel").addEventListener("click", async () => {
   toast(r.status === "success" ? "Teléfono actualizado" : (r.message || "No se pudo actualizar"));
 });
 
-async function pintarEnlaces() {
-  const box = $("enlaces-lista");
+function pintarJornada() {
+  try {
+    const h = horarioIni();
+    const a = $("jor-ini"), b = $("jor-fin");
+    if (a) a.value = h.ini;
+    if (b) b.value = h.fin;
+    if (a && !a.dataset.w) {
+      a.dataset.w = "1"; b.dataset.w = "1";
+      $("btn-jornada").addEventListener("click", () => {
+        const ini = a.value, fin = b.value;
+        if (!/^\d{2}:\d{2}$/.test(ini) || !/^\d{2}:\d{2}$/.test(fin)) { toast("Horas invalidas"); return; }
+        try {
+          const code = (SES && SES.code) || "GEN";
+          localStorage.setItem("kapta_horario_" + code, JSON.stringify({ ini, fin }));
+        } catch {}
+        toast("Jornada guardada");
+        pintarIniChart();
+      });
+    }
+  } catch {}
+}
+async function pintarEnlaces() {  const box = $("enlaces-lista");
   if (!box || !SES || !ME || !ME.sec) return;
   const vistas = [["inicio", "Inicio"]];
   if (ME.sec._dockVentas) vistas.push(["venta", "Venta"]);
@@ -3339,6 +3368,7 @@ async function entrarDirecto(code) {
   // precarga teléfono del negocio al abrir cuenta
   const obs = new MutationObserver(() => {
     if (!$("t-cuenta").classList.contains("oculto") && EMPRESA && !tel.value) tel.value = EMPRESA.celular1 || "";
+    try { pintarJornada(); } catch {}
   });
   obs.observe($("t-cuenta"), { attributes: true, attributeFilter: ["class"] });
 })();

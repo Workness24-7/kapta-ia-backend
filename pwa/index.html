@@ -202,6 +202,10 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .ini-ph h3 { margin: 0; }
 .ini-ph .seg { margin: 0; }
 .ini-chartwrap { display: grid; grid-template-columns: minmax(0,1fr) minmax(220px,30%); gap: 14px; align-items: stretch; }
+.ivdock { border: 1px solid rgba(255,255,255,.5); border-radius: 28px; background: linear-gradient(135deg, rgba(255,255,255,.30), rgba(255,255,255,.20)); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); box-shadow: 0 8px 32px rgba(31,38,135,.10), inset 0 1px 0 rgba(255,255,255,.5); padding: 16px; min-width: 0; }
+#ini-filtros.ivseg { background: rgba(255,255,255,.35); border: 1px solid rgba(255,255,255,.5); border-radius: 999px; padding: 4px; gap: 4px; margin: 0; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 4px 16px rgba(31,38,135,.08); }
+#ini-filtros.ivseg button { border-radius: 999px; padding: 7px 14px; background: transparent; color: #3f3f46; font-weight: 600; transition: background .25s ease, color .25s ease; flex: 1; white-space: nowrap; border: 0; }
+#ini-filtros.ivseg button.on { background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: #fff; }
 .ichart { display: flex; gap: 8px; }
 .iyaxis { display: flex; flex-direction: column; justify-content: space-between; height: 190px; font-size: 10px; color: #3f3f46; text-align: right; flex-shrink: 0; min-width: 46px; }
 .iplotwrap { flex: 1; min-width: 0; }
@@ -662,7 +666,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
       <p class="ini-sub">Bienvenido de nuevo. ¿Listo para empezar un gran dia?</p>
       <div id="resumen" class="kpi-resumen"></div></div>
       <div id="split-hl" class="split h" title="Arrastra para ajustar Resumen / Perfil (doble clic restablece)"></div>
-      <div id="ini-ventas" class="inipanel" data-dock="inicio.chart"><div class="ini-ph"><h3>Resumen de ventas</h3><div class="seg" id="ini-filtros"></div></div><div class="ini-chartwrap"><div id="ini-chart"></div><div id="ini-meta"></div></div></div>
+      <div id="ini-ventas" class="inipanel" data-dock="inicio.chart"><div class="ini-ph"><h3>Resumen de ventas</h3><div class="seg ivseg" id="ini-filtros"></div></div><div class="ini-chartwrap"><div id="ini-chart" class="ivdock"></div><div id="ini-meta" class="ivdock"></div></div></div>
       <div class="ini-duo"><div id="ini-estado" class="inipanel" data-dock="inicio.estado"></div><div id="ini-pagos" class="inipanel" data-dock="inicio.pagos"></div></div>
       </div>
       <div id="split-v" class="split v" title="Arrastra para ajustar columnas (doble clic restablece)"></div>
@@ -779,6 +783,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
         <b>Teléfono del negocio</b>
         <div class="fila"><input id="cuenta-tel" inputmode="tel" placeholder="+57 ..."><button class="btn-mini" id="btn-tel">Guardar</button></div>
       </div>
+      <div class="card" id="cuenta-jornada"><b>Jornada laboral</b><div class="fila"><input id="jor-ini" type="time" value="00:00" title="Hora de entrada"><input id="jor-fin" type="time" value="23:30" title="Hora de salida"><button class="btn-mini" id="btn-jornada">Guardar</button></div><small class="muted">Eje del grafico de hoy. Acepta turno nocturno (ej. 15:00 a 03:00).</small></div>
       <div class="card oculto" id="cuenta-fact">
         <b>Datos de facturación</b>
         <div class="fila"><input id="cf-nit" placeholder="NIT"><input id="cf-ciudad" placeholder="Ciudad"></div>
@@ -804,7 +809,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
 <div id="modal" class="oculto"><div id="modal-card"></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
-<script src="app.js?v=47"></script>
+<script src="app.js?v=48"></script>
 </body>
 </html>
 
