@@ -173,7 +173,7 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .ini-sub { font-size: 14px; color: #000; margin: 0 0 14px; }
 .inipanel { border: 1px solid rgba(255,255,255,.5); border-radius: 36px; background: linear-gradient(135deg, rgba(255,255,255,.32), rgba(255,255,255,.22)); backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3); box-shadow: 0 8px 32px rgba(31,38,135,.12), inset 0 1px 0 rgba(255,255,255,.55); padding: 16px 18px; margin-top: 12px; }
 .inipanel h3 { margin: 0 0 12px; font-size: 20px; font-weight: 700; color: #010101; }
-#ini-ventas { margin-top: 14px; }
+#ini-ventas.inipanel { margin-top: 14px; overflow: hidden; }
 #ini-resumen-panel h2 { font-size: 20px; font-weight: 700; color: #0F172A; margin: 0 0 4px; }
 #bloque-acciones.inipanel .sec-t, #bloque-alertas.inipanel .alerta-head .sec-t { margin: 0; }
 #bloque-alertas.inipanel .alerta-head { margin-bottom: 12px; }
@@ -199,12 +199,12 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .accb.acc-agregar { background: linear-gradient(315deg, rgba(60,210,170,.40), rgba(255,255,255,.25)); color: #009e6c; }
 .accb.acc-deudores { background: linear-gradient(315deg, rgba(90,140,255,.40), rgba(255,255,255,.25)); color: #3b5bff; }
 .ini-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; border-radius: 50%; background: #ff3b30; color: #fff; font-size: 13px; font-weight: 800; padding: 0 6px; margin-left: 8px; vertical-align: middle; }
-.ini-ph { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.ini-ph { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; row-gap: 8px; }
 .ini-ph h3 { margin: 0; }
 .ini-ph .seg { margin: 0; }
-.ini-chartwrap { display: grid; grid-template-columns: minmax(0,1fr) minmax(220px,30%); gap: 14px; align-items: stretch; }
-.ivdock { border: 1px solid rgba(255,255,255,.5); border-radius: 28px; background: linear-gradient(135deg, rgba(255,255,255,.30), rgba(255,255,255,.20)); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); box-shadow: 0 8px 32px rgba(31,38,135,.10), inset 0 1px 0 rgba(255,255,255,.5); padding: 16px; min-width: 0; }
-#ini-filtros.ivseg { background: rgba(255,255,255,.35); border: 1px solid rgba(255,255,255,.5); border-radius: 999px; padding: 4px; gap: 4px; margin: 0; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 4px 16px rgba(31,38,135,.08); }
+.ini-chartwrap { display: grid; grid-template-columns: minmax(0,1fr) minmax(220px,30%); gap: 14px; align-items: stretch; margin-top: 12px; }
+.ivdock { border: 1px solid rgba(255,255,255,.5); border-radius: 28px; background: linear-gradient(to top, rgba(255,255,255,.32), rgba(255,255,255,.04)); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); box-shadow: 0 8px 32px rgba(31,38,135,.10), inset 0 1px 0 rgba(255,255,255,.5); padding: 16px; min-width: 0; }
+#ini-filtros.ivseg { max-width: 100%; background: rgba(255,255,255,.35); border: 1px solid rgba(255,255,255,.5); border-radius: 999px; padding: 4px; gap: 4px; margin: 0; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 4px 16px rgba(31,38,135,.08); }
 #ini-filtros.ivseg button { border-radius: 999px; padding: 7px 14px; background: transparent; color: #3f3f46; font-weight: 600; transition: background .25s ease, color .25s ease; flex: 1; white-space: nowrap; border: 0; }
 #ini-filtros.ivseg button.on { background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: #fff; }
 .ichart { display: flex; gap: 8px; }
@@ -219,8 +219,6 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .ibv.fh { background: linear-gradient(180deg, #cbd5e1, #94a3b8); }
 .ixaxis { display: flex; gap: 4px; margin-top: 6px; }
 .ixaxis span { flex: 1; text-align: center; font-size: 10px; color: #3f3f46; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ilegend { display: flex; gap: 14px; font-size: 11px; color: #3f3f46; margin-top: 8px; }
-.ilegend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
 #ini-meta { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; }
 #ini-meta b { font-size: 14px; color: #010101; }
 #ini-meta small { font-size: 12px; color: #3f3f46; }
