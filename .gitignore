@@ -23,3 +23,5 @@ patch_vm_ui.py
 test.js
 verify-scorecard.html
 verify-scorecard.html.artifact.json
+.neon
+.env.local

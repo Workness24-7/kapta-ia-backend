@@ -1,0 +1,13 @@
+# Render Blueprint: API FastAPI + PWA servida en /app/ desde la misma imagen.
+# DATABASE_URL se pega en el panel al aplicar (Neon production branch).
+services:
+  - type: web
+    name: kapta-ia-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false
