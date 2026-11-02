@@ -1,6 +1,6 @@
-/* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra backend Railway. */
-const VERSION_PWA = "PWA-2026-09-24";
-const BASE = "https://kapta-ia-backend-production.up.railway.app/exec";
+/* Kapta IA POS — PWA v2 paridad Android. Vanilla JS contra el backend de KAPTA_API (index.html). */
+const VERSION_PWA = "PWA-2026-11-01";
+const BASE = ((window.KAPTA_API || location.origin).replace(/\/+$/, "")) + "/exec";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
 const fmtM = (n) => "$ " + Math.round(Number(n) || 0).toLocaleString("es-CO");
