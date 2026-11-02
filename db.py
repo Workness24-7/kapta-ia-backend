@@ -7,8 +7,157 @@ import unicodedata
 import uuid
 from urllib.parse import urlparse
 
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import sqlite3
+
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+except ImportError:  # despliegue sin Postgres
+    psycopg2 = None
+
+    class RealDictCursor:  # solo marca: "devuelve filas como dict"
+        pass
+
+
+# ===================================================
+# PORTABILIDAD DE MOTOR: PostgreSQL (por defecto) · MySQL/MariaDB · SQLite
+# DATABASE_URL decide el motor. Todo el SQL de este módulo pasa por _sql()/_ddl(),
+# que ajustan comillas, marcadores, tipos y ON CONFLICT según el motor.
+# La interfaz pública no cambia: main.py no sabe qué base hay debajo.
+# ===================================================
+def _dialecto():
+    url = (os.getenv("DATABASE_URL") or "").strip().lower()
+    if url.startswith(("mysql", "mariadb")):
+        return "mysql"
+    if url.startswith("sqlite"):
+        return "sqlite"
+    return "postgres"
+
+
+_UPSERT = re.compile(
+    r"ON\s+CONFLICT\s*\([^)]*\)\s*DO\s+UPDATE\s+SET\s+(.+)$", re.I | re.S
+)
+
+
+def _sql(sql):
+    d = _dialecto()
+    if d == "mysql":
+        sql = _UPSERT.sub(
+            lambda m: "ON DUPLICATE KEY UPDATE " + re.sub(
+                r'EXCLUDED\.("?)(\w+)\1', r'VALUES("\2")', m.group(1)
+            ),
+            sql,
+        )
+        sql = sql.replace("NOW()::text", "NOW()")
+        # ponytail: MySQL usa backticks; en este módulo las comillas dobles solo
+        # delimitan nombres (los literales usan comillas simples).
+        sql = sql.replace('"', "`")
+    elif d == "sqlite":
+        sql = sql.replace("NOW()::text", "CURRENT_TIMESTAMP")
+        sql = sql.replace("%s", "?")
+    return sql
+
+
+def _ddl(sql):
+    d = _dialecto()
+    if d == "mysql":
+        # MySQL no admite DEFAULT en TEXT ni TEXT como clave: se acota a VARCHAR.
+        sql = re.sub(r"\bTEXT(\s+NOT NULL)?\s+DEFAULT\s+'[^']*'", r"TEXT\1", sql)
+        sql = sql.replace("TEXT PRIMARY KEY", "VARCHAR(191) PRIMARY KEY")
+        sql = sql.replace("TEXT UNIQUE", "VARCHAR(191) UNIQUE")
+        sql = sql.replace("SERIAL PRIMARY KEY", "INT AUTO_INCREMENT PRIMARY KEY")
+        sql = sql.replace("TIMESTAMP DEFAULT NOW()", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    elif d == "sqlite":
+        sql = sql.replace("SERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+        sql = sql.replace("TIMESTAMP DEFAULT NOW()", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    return _sql(sql)
+
+
+def _tipo_texto():
+    """Tipo de columna de texto (MySQL no admite DEFAULT en TEXT)."""
+    return "TEXT" if _dialecto() == "mysql" else "TEXT DEFAULT ''"
+
+
+def _tipo_texto_pk():
+    return ("VARCHAR(191) NOT NULL DEFAULT ''" if _dialecto() == "mysql"
+            else "TEXT DEFAULT ''")
+
+
+def _tipo_largo():
+    """Texto sin límite práctico (fotos en base64)."""
+    return "LONGTEXT" if _dialecto() == "mysql" else "TEXT"
+
+
+class _Cur:
+    def __init__(self, raw, dicc=False):
+        self._raw = raw
+        self._dicc = dicc
+
+    def execute(self, sql, params=None):
+        arriba = sql.lstrip()[:6].upper()
+        sql = _ddl(sql) if arriba in ("CREATE", "ALTER ", "DROP T") else _sql(sql)
+        if params is None:
+            return self._raw.execute(sql)
+        return self._raw.execute(sql, tuple(params))
+
+    def _fila(self, row):
+        if row is None or not self._dicc:
+            return row
+        return dict(zip([c[0] for c in (self._raw.description or [])], row))
+
+    def fetchone(self):
+        return self._fila(self._raw.fetchone())
+
+    def fetchall(self):
+        return [self._fila(r) for r in self._raw.fetchall()]
+
+    @property
+    def rowcount(self):
+        return self._raw.rowcount
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self._raw.close()
+        return False
+
+
+class _Conn:
+    """Envoltorio mínimo: misma semántica que `with psycopg2.connect()`."""
+
+    def __init__(self, raw):
+        self._raw = raw
+
+    def cursor(self, cursor_factory=None, **kw):
+        return _Cur(self._raw.cursor(**kw), dicc=cursor_factory is RealDictCursor)
+
+    def commit(self):
+        self._raw.commit()
+
+    def rollback(self):
+        self._raw.rollback()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, tipo, valor, traza):
+        try:
+            if tipo:
+                self._raw.rollback()
+            else:
+                self._raw.commit()
+        finally:
+            self._raw.close()
+        return False
+
+
+def _ruta_sqlite(url):
+    ruta = url.split("://", 1)[1] if "://" in url else url
+    ruta = ruta.lstrip("/")
+    if ruta in ("", ":memory:") or ruta.endswith("/:memory:"):
+        return ":memory:"
+    return ruta
 
 # Espejo de CABECERAS de main.py (claves en minúsculas)
 # Tablas POR NEGOCIO: datos sensibles a cruces, una tabla física por empresa.
@@ -163,8 +312,25 @@ def _connect():
     url = os.getenv('DATABASE_URL')
     if not url:
         raise RuntimeError('DATABASE_URL no está configurada')
+    d = _dialecto()
+    if d == "sqlite":
+        return _Conn(sqlite3.connect(_ruta_sqlite(url), timeout=30))
     result = urlparse(url)
-    conn = psycopg2.connect(
+    if d == "mysql":
+        import pymysql
+        raw = pymysql.connect(
+            host=result.hostname or "localhost",
+            port=result.port or 3306,
+            user=result.username or "",
+            password=result.password or "",
+            database=(result.path or "/").lstrip("/"),
+            charset="utf8mb4",
+            autocommit=False,
+        )
+        return _Conn(raw)
+    if psycopg2 is None:
+        raise RuntimeError("psycopg2 no está instalado (DATABASE_URL es Postgres)")
+    raw = psycopg2.connect(
         dbname=result.path.lstrip('/'),
         user=result.username,
         password=result.password,
@@ -172,8 +338,69 @@ def _connect():
         port=result.port,
         client_encoding='UTF8',
     )
-    conn.autocommit = False
-    return conn
+    raw.autocommit = False
+    return _Conn(raw)
+
+
+# --- Catálogo: cada motor lo expone distinto (information_schema vs sqlite_master)
+def _columnas(cur, tabla):
+    """Columnas existentes de una tabla, en minúsculas. Vacío si no existe."""
+    d = _dialecto()
+    if d == "postgres":
+        cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name=%s", (tabla,))
+    elif d == "mysql":
+        cur.execute("SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema=DATABASE() AND table_name=%s", (tabla,))
+    else:
+        cur.execute("SELECT name FROM pragma_table_info(%s)", (tabla,))
+    return {str(r[0]).lower() for r in cur.fetchall()}
+
+
+def _columnas_ordenadas(cur, tabla):
+    d = _dialecto()
+    if d == "postgres":
+        cur.execute("SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name=%s ORDER BY ordinal_position", (tabla,))
+    elif d == "mysql":
+        cur.execute("SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema=DATABASE() AND table_name=%s "
+                    "ORDER BY ordinal_position", (tabla,))
+    else:
+        cur.execute("SELECT name FROM pragma_table_info(%s)", (tabla,))
+    return [str(r[0]) for r in cur.fetchall()]
+
+
+def _tabla_existe(cur, tabla):
+    d = _dialecto()
+    if d == "postgres":
+        cur.execute("SELECT 1 FROM information_schema.tables WHERE table_name=%s", (tabla,))
+    elif d == "mysql":
+        cur.execute("SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema=DATABASE() AND table_name=%s", (tabla,))
+    else:
+        cur.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=%s", (tabla,))
+    return cur.fetchone() is not None
+
+
+def _tablas_como(cur, patron):
+    d = _dialecto()
+    if d == "postgres":
+        cur.execute("SELECT table_name FROM information_schema.tables "
+                    "WHERE table_name LIKE %s", (patron,))
+    elif d == "mysql":
+        cur.execute("SELECT table_name FROM information_schema.tables "
+                    "WHERE table_schema=DATABASE() AND table_name LIKE %s", (patron,))
+    else:
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE %s", (patron,))
+    return [str(r[0]) for r in cur.fetchall()]
+
+
+def _agregar_columna(cur, tabla, columna, tipo=None):
+    """Equivalente portable de ADD COLUMN IF NOT EXISTS."""
+    if columna.lower() in _columnas(cur, tabla):
+        return False
+    cur.execute(f'ALTER TABLE "{tabla}" ADD COLUMN "{columna}" {tipo or _tipo_texto()}')
+    return True
 
 
 def _col(nombre):
@@ -202,7 +429,7 @@ def _tabname(codigo, tabla):
 def _crear_tabla(cur, codigo, tabla):
     tbl = _tabname(codigo, tabla)
     cols = COLUMNS[tabla]
-    defs = ", ".join(f'"{c}" TEXT DEFAULT \'\'' for c in cols)
+    defs = ", ".join(f'"{c}" {_tipo_texto()}' for c in cols)
     cur.execute(f'CREATE TABLE IF NOT EXISTS "{tbl}" (fila INTEGER PRIMARY KEY, {defs})')
     return tbl
 
@@ -223,14 +450,10 @@ def _asegurar_columnas(empresa, tabla):
     try:
         with _connect() as conn:
             with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT column_name FROM information_schema.columns WHERE table_name=%s",
-                    (tbl,),
-                )
-                existentes = {str(r[0]).lower() for r in cur.fetchall()}
+                existentes = _columnas(cur, tbl)
                 faltan = [c for c in cols if c.lower() not in existentes]
                 for c in faltan:
-                    cur.execute(f'ALTER TABLE "{tbl}" ADD COLUMN "{c}" TEXT DEFAULT \'\'')
+                    cur.execute(f'ALTER TABLE "{tbl}" ADD COLUMN "{c}" {_tipo_texto()}')
                 if faltan:
                     conn.commit()
     except Exception as e:
@@ -259,7 +482,8 @@ def dedup_inventario(empresa):
                     else:
                         visto[clave] = fila
                 if borrar:
-                    cur.execute(f'DELETE FROM "{tbl}" WHERE fila IN %s', (tuple(borrar),))
+                    marcas = ", ".join(["%s"] * len(borrar))
+                    cur.execute(f'DELETE FROM "{tbl}" WHERE fila IN ({marcas})', tuple(borrar))
                     conn.commit()
                 return (len(borrar), None)
     except Exception as e:
@@ -270,7 +494,8 @@ def dedup_inventario(empresa):
 def _crear_tabla_global(cur, tabla):
     """Global: PK compuesta (codigo_empresa, fila); primera col = codigo_empresa."""
     cols = COLUMNS_GLOBALES[tabla]
-    defs = ", ".join(f'"{c}" TEXT DEFAULT \'\'' for c in cols)
+    defs = ", ".join([f'"{cols[0]}" {_tipo_texto_pk()}'] +
+                     [f'"{c}" {_tipo_texto()}' for c in cols[1:]])
     cur.execute(
         f'CREATE TABLE IF NOT EXISTS "{tabla}" '
         f'(fila INTEGER NOT NULL, {defs}, PRIMARY KEY ("{cols[0]}", fila))'
@@ -286,8 +511,7 @@ def _migrar_legacy(cur, codigo):
                         ("config_negocio", "config_negocio"),
                         ("auditoria_gastos", "auditoria_gastos")):
         vieja = f"{slug}_{legacy}"
-        cur.execute("SELECT 1 FROM information_schema.tables WHERE table_name=%s", (vieja,))
-        if cur.fetchone() is None:
+        if not _tabla_existe(cur, vieja):
             continue
         cols_viejas = [_col(h) for h in LEGACY_CABECERAS[legacy]]
         cols_nuevas = COLUMNS_GLOBALES[glo]
@@ -321,12 +545,7 @@ def _reordenar_usuarios(cur):
     """Pone las columnas de usuarios en el orden canónico (auditoría al final).
     Solo si difiere; con respaldo y verificación de conteo."""
     cols = COLUMNS_GLOBALES["usuarios"]
-    cur.execute(
-        "SELECT column_name FROM information_schema.columns "
-        "WHERE table_name='usuarios' AND column_name NOT IN ('fila') "
-        "ORDER BY ordinal_position"
-    )
-    actuales = [str(r[0]) for r in cur.fetchall()]
+    actuales = [c for c in _columnas_ordenadas(cur, "usuarios") if c != "fila"]
     if actuales == list(cols):
         return
     if not actuales:
@@ -351,11 +570,7 @@ def _reordenar_usuarios(cur):
 def _limpiar_tablas_backup(cur):
     """Elimina las tablas *_backup_2026_08 de la migración legacy.
     Solo si la tabla global unificada ya contiene filas (dato migrado)."""
-    cur.execute(
-        "SELECT table_name FROM information_schema.tables "
-        "WHERE table_name LIKE '%_backup_2026_08'"
-    )
-    for (b,) in cur.fetchall():
+    for b in _tablas_como(cur, "%_backup_2026_08"):
         tipo = b[: -len("_backup_2026_08")]
         if "_" not in tipo:
             continue
@@ -403,17 +618,12 @@ def init_db():
             cur.execute(SCHEMA_FUNCIONES)
             cur.execute(SCHEMA_CLAVES_DINAMICAS)
             # Migración en caliente de columnas nuevas en empresas.
-            cur.execute(
-                "SELECT column_name FROM information_schema.columns WHERE table_name='empresas'",
-            )
-            existentes = {str(r[0]).lower() for r in cur.fetchall()}
-            for col, default in (
-                ("logo_url", ""), ("list_icon_url", ""), ("color_primario", ""),
-                ("color_secundario", ""), ("color_terciario", ""), ("color_neutro", ""),
-                ("tipo_fuente", ""), ("funciones", ""),
-            ):
+            existentes = _columnas(cur, "empresas")
+            for col in ("logo_url", "list_icon_url", "color_primario",
+                        "color_secundario", "color_terciario", "color_neutro",
+                        "tipo_fuente", "funciones"):
                 if col not in existentes:
-                    cur.execute(f'ALTER TABLE empresas ADD COLUMN "{col}" TEXT DEFAULT %s', (default,))
+                    _agregar_columna(cur, "empresas", col)
             for tabla_global in CABECERAS_GLOBALES:
                 _crear_tabla_global(cur, tabla_global)
             cur.execute("SELECT codigo FROM empresas WHERE codigo IS NOT NULL AND codigo <> ''")
@@ -479,8 +689,7 @@ def hoja_existe(codigo):
     tbl = _tabname(codigo, "inventario")
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM information_schema.tables WHERE table_name=%s", (tbl,))
-            return cur.fetchone() is not None
+            return _tabla_existe(cur, tbl)
 
 
 def leer_tabla(empresa, tabla):
@@ -726,7 +935,7 @@ def marcar_empresa_eliminada(empresa_id, fecha):
     """Borrado suave: sale de la vista superadmin; la purga real ocurre a los 2 días."""
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute("ALTER TABLE empresas ADD COLUMN IF NOT EXISTS fecha_eliminacion TEXT DEFAULT ''")
+            _agregar_columna(cur, "empresas", "fecha_eliminacion")
             cur.execute(
                 "UPDATE empresas SET estado='ELIMINADO', fecha_eliminacion=%s WHERE id=%s",
                 (fecha, empresa_id),
@@ -744,7 +953,7 @@ def reactivar_empresa(codigo):
     """Recuperación: saca de ELIMINADO y conserva tablas/datos existentes."""
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute("ALTER TABLE empresas ADD COLUMN IF NOT EXISTS fecha_eliminacion TEXT DEFAULT ''")
+            _agregar_columna(cur, "empresas", "fecha_eliminacion")
             cur.execute(
                 "UPDATE empresas SET estado='Activo', fecha_eliminacion='' WHERE codigo=%s",
                 (codigo,),
@@ -759,10 +968,10 @@ def guardar_foto(datos_b64, empresa=""):
         with conn.cursor() as cur:
             cur.execute(
                 "CREATE TABLE IF NOT EXISTS fotos ("
-                "id TEXT PRIMARY KEY, contenido TEXT, empresa TEXT DEFAULT '', "
-                "creado TIMESTAMP DEFAULT NOW())"
+                f"id TEXT PRIMARY KEY, contenido {_tipo_largo()}, "
+                "empresa TEXT DEFAULT '', creado TIMESTAMP DEFAULT NOW())"
             )
-            cur.execute("ALTER TABLE fotos ADD COLUMN IF NOT EXISTS empresa TEXT DEFAULT ''")
+            _agregar_columna(cur, "fotos", "empresa")
             foto_id = uuid.uuid4().hex[:12]
             cur.execute(
                 "INSERT INTO fotos (id, contenido, empresa) VALUES (%s, %s, %s)",
@@ -774,7 +983,9 @@ def guardar_foto(datos_b64, empresa=""):
 
 def listar_fotos(empresa=""):
     """Superadmin: id, empresa y fecha de cada imagen (para saber de quién es cada foto)."""
-    sql = "SELECT id, empresa, creado, octet_length(contenido) FROM fotos"
+    # ponytail: SQLite no tiene octet_length; length() basta para texto UTF-8.
+    largo = "length(contenido)" if _dialecto() == "sqlite" else "octet_length(contenido)"
+    sql = f"SELECT id, empresa, creado, {largo} FROM fotos"
     valores = ()
     if empresa:
         sql += " WHERE empresa=%s"
@@ -815,11 +1026,7 @@ def _tabla_bloqueos(cur):
     )
     # ponytail: si la tabla preexiste con esquema viejo (sin columna correo),
     # recrearla. Pierde bloqueos previos (datos efímeros, aceptable).
-    cur.execute(
-        "SELECT 1 FROM information_schema.columns "
-        "WHERE table_name='bloqueos_login' AND column_name='correo'"
-    )
-    if not cur.fetchone():
+    if "correo" not in _columnas(cur, "bloqueos_login"):
         cur.execute("DROP TABLE IF EXISTS bloqueos_login")
         cur.execute(
             "CREATE TABLE bloqueos_login ("
@@ -870,7 +1077,7 @@ def registrar_fallo_login(empresa, correo):
             clave = _clave_bloqueo(empresa, correo)
             cur.execute(
                 "INSERT INTO bloqueos_login (correo, intentos, nivel) VALUES (%s, 1, 0) "
-                "ON CONFLICT (correo) DO UPDATE SET intentos = bloqueos_login.intentos + 1",
+                "ON CONFLICT (correo) DO UPDATE SET intentos = intentos + 1",
                 (clave,),
             )
             cur.execute(
@@ -923,8 +1130,8 @@ def reset_fallos_login(empresa, correo):
 def actualizar_contrasena(empresa_codigo, correo, hash_nuevo):
     """Migra contraseñas legadas en texto plano a hash."""
     cols = COLUMNS_GLOBALES["usuarios"]
-    col_correo = cols[2]   # Correo
-    col_clave = cols[3]   # Contrasena
+    col_correo = cols[_col_idx(cols, "Correo")]
+    col_clave = cols[_col_idx(cols, "Contrasena")]
     with _connect() as conn:
         with conn.cursor() as cur:
             _crear_tabla_global(cur, "usuarios")
@@ -939,7 +1146,7 @@ def actualizar_contrasena(empresa_codigo, correo, hash_nuevo):
 def actualizar_ultimo_acceso(empresa_codigo, correo, fecha):
     """Tabla global de usuarios: un UPDATE indexado por codigo+correo."""
     cols = COLUMNS_GLOBALES["usuarios"]
-    col_correo = cols[2]   # Correo
+    col_correo = cols[_col_idx(cols, "Correo")]
     col_ultimo = cols[_col_idx(cols, "Ultimo_Acceso")]   # Ultimo_Acceso
     with _connect() as conn:
         with conn.cursor() as cur:
