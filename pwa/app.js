@@ -1471,6 +1471,8 @@ function horarioIni() {
 }
 const META_NOMBRE = { Hoy: "Meta del dia", Semana: "Meta semanal", Mes: "Meta mensual", Anio: "Meta del a\u00f1o" };
 const fmtYM = (n) => n <= 0 ? "$ 0" : "$ " + (Math.round(n / 100000) / 10) + " M";
+// Minutos del dia → "3 pm", "12 am", "12 pm" (etiqueta de hora del eje "Hoy").
+const hora12 = (m) => { const h = Math.floor(m / 60) % 24; return (h % 12 || 12) + (h < 12 ? " am" : " pm"); };
 const niceCeilM = (n) => n <= 0 ? 1000000 : (n <= 5000000 ? Math.ceil(n / 500000) * 500000 : Math.ceil(n / 1000000) * 1000000);
 let META_CLICKS = 0, META_T = null;
 function metaClick() {
@@ -1503,13 +1505,16 @@ function pintarIniChart() {
   let labels = [], vals = [], fh = [];
   if (IV_F === "Hoy") {
     const h = horarioIni();
-    const enJornada = (s) => h.finM >= h.iniM ? (s >= Math.floor(h.iniM / 30) && s <= Math.floor(h.finM / 30)) : (s >= Math.floor(h.iniM / 30) || s <= Math.floor(h.finM / 30));
-    const orden = [];
-    if (h.finM >= h.iniM) { for (let s = Math.floor(h.iniM / 30); s <= Math.floor(h.finM / 30) && s < 48; s++) orden.push(s); }
-    else { for (let s = Math.floor(h.iniM / 30); s < 48; s++) orden.push(s); for (let s = 0; s <= Math.floor(h.finM / 30); s++) orden.push(s); }
-    orden.forEach((s) => {
-      const hh = String(Math.floor(s * 30 / 60)).padStart(2, "0");
-      labels.push(s % 2 ? "" : hh + ":00");
+    const ini = Math.floor(h.iniM / 30) * 30;
+    const fin = Math.floor(h.finM / 30) * 30;
+    // Recorre la jornada en tramos de 30 min, dando la vuelta a medianoche (15:00 → 03:00).
+    const span = (((fin - ini) % 1440) + 1440) % 1440;
+    const slots = [];
+    for (let k = 0; k <= span; k += 30) slots.push((ini + k) % 1440);
+    // Etiqueta cada hora, o cada 2 si la jornada pasa de 14 h. Los tramos :30 quedan sin etiqueta.
+    const salto = slots.length > 29 ? 120 : 60;
+    slots.forEach((mins, i) => {
+      labels.push((mins - ini) % salto === 0 ? hora12(mins) : "");
       vals.push(0); fh.push(false);
     });
     let fuera = 0;
@@ -1517,11 +1522,11 @@ function pintarIniChart() {
       if (!esHoy(v[1])) return;
       const hp = String(v[2] || "").split(":");
       const mins = num(hp[0]) * 60 + num(hp[1]);
-      const t = num(v[12]);
-      const s = Math.floor(mins / 30);
-      const idx = orden.indexOf(s);
-      if (idx >= 0) vals[idx] += t;
-      else fuera += t;
+      const resto = mins % 60;
+      // 3:00–3:30 cuenta como "3"; 3:31–3:59 como "3:30" (mitad entre 3 y 4).
+      const idx = slots.indexOf(mins - resto + (resto > 30 ? 30 : 0));
+      if (idx >= 0) vals[idx] += num(v[12]);
+      else fuera += num(v[12]);
     });
     if (fuera > 0.5) { labels.push("F.H."); vals.push(fuera); fh.push(true); }
   } else if (IV_F === "Semana") {
@@ -1557,7 +1562,7 @@ function pintarIniChart() {
   const maxBar = Math.max(0, ...vals);
   const ymax = niceCeilM(Math.max(meta, maxBar));
   const ticks = [ymax, ymax * 0.75, ymax * 0.5, ymax * 0.25, 0];
-  box.innerHTML = `<div class="ichart"><div class="iyaxis">` + ticks.map((t) => `<span>${fmtYM(t)}</span>`).join("") + `</div><div class="iplotwrap"><div class="iplot"><div class="igrid">` + ticks.map(() => `<span></span>`).join("") + `</div><div class="ibars2">` + vals.map((t, i) => `<div class="ibcol">${t > 0 ? `<div class="ibv${fh[i] ? " fh" : ""}" style="height:${Math.max(2, Math.round(t / ymax * 100))}%" title="${fmtCorto(t)}"></div>` : ""}</div>`).join("") + `</div></div><div class="ixaxis">` + labels.map((l) => `<span>${l}</span>`).join("") + `</div></div></div>`;
+  box.innerHTML = `<div class="ichart"><div class="iyaxis">` + ticks.map((t) => `<span>${fmtYM(t)}</span>`).join("") + `</div><div class="iplotwrap"><div class="iplot"><div class="igrid">` + ticks.map(() => `<span></span>`).join("") + `</div><div class="ibars2">` + vals.map((t, i) => `<div class="ibcol">${t > 0 ? `<div class="ibv${fh[i] ? " fh" : ""}" style="height:${Math.max(2, Math.round(t / ymax * 100))}%" title="${fmtCorto(t)}"></div>` : ""}</div>`).join("") + `</div></div><div class="ixaxis${IV_F === "Hoy" ? " horas" : ""}">` + labels.map((l) => `<span>${l}</span>`).join("") + `</div></div></div>`;
   let tot = 0;
   if (IV_F === "Hoy") tot = suma((v) => esHoy(v[1]));
   else if (IV_F === "Semana") { const d0 = new Date(); d0.setDate(d0.getDate() - d0.getDay()); const p = (x) => String(x).padStart(2, "0"); const a = `${d0.getFullYear()}${p(d0.getMonth() + 1)}${p(d0.getDate())}`; const d1 = new Date(d0); d1.setDate(d0.getDate() + 6); const b = `${d1.getFullYear()}${p(d1.getMonth() + 1)}${p(d1.getDate())}`; tot = suma((v) => { const n = normFecha(v[1]); return n >= a && n <= b; }); }
