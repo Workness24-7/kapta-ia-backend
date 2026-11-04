@@ -223,13 +223,15 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 #ini-meta { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; }
 #ini-meta b { font-size: 14px; color: #010101; }
 #ini-meta small { font-size: 12px; color: #3f3f46; }
-.ini-duo { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 14px; }
+.ini-duo { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 14px; margin-top: 18px; }
+/* Estado del negocio y Distribucion de pagos viven dentro del dock principal: sin tarjeta propia. */
+#ini-resumen-panel #ini-estado, #ini-resumen-panel #ini-pagos { background: none; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 0; margin-top: 0; }
 .estmini { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
 .estmini .est { border: 1px solid #e4e4e7; border-radius: 18px; padding: 12px 8px; text-align: left; background: rgba(255,255,255,.55); }
-.estmini .est img { width: 44px; height: 44px; }
-.estmini .est b { display: block; font-size: 13px; margin-top: 8px; color: #010101; }
-.estmini .est .n { font-size: 26px; font-weight: 800; color: #010101; }
-.estmini .est small { font-size: 10px; color: #3f3f46; }
+.estmini .est img { display: block; width: 58px; height: auto; }
+.estmini .est b { display: block; font-size: 14px; margin-top: 10px; color: #010101; }
+.estmini .est .n { display: block; font-size: 34px; line-height: 1.05; font-weight: 800; color: #010101; margin: 2px 0 4px; }
+.estmini .est small { display: block; font-size: 11px; color: #3f3f46; }
 .prow { display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,.5); border-radius: 36px; background: linear-gradient(135deg, rgba(255,255,255,.35), rgba(255,255,255,.22)); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 4px 16px rgba(31,38,135,.08); padding: 10px 12px; margin-bottom: 10px; cursor: pointer; }
 .prow:last-child { margin-bottom: 0; }
 .prow .pthumb { width: 52px; height: 52px; border-radius: 16px; background: #edf0f2; border: 1.5px solid #e4e4e7; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
@@ -665,9 +667,8 @@ canvas.bc39 { max-width: 100%; height: 56px; }
       <div id="ini-resumen-panel" class="inipanel"><h2>Resumen General</h2>
       <p class="ini-sub">Bienvenido de nuevo. ¿Listo para empezar un gran dia?</p>
       <div id="resumen" class="kpi-resumen"></div>
-      <div id="ini-ventas" class="inipanel" data-dock="inicio.chart"><div class="ini-ph"><h3>Resumen de ventas</h3><div class="seg ivseg" id="ini-filtros"></div></div><div class="ini-chartwrap"><div id="ini-chart" class="ivdock"></div><div id="ini-meta" class="ivdock"></div></div></div></div>
-      <div id="split-hl" class="split h" title="Arrastra para ajustar Resumen / Perfil (doble clic restablece)"></div>
-      <div class="ini-duo"><div id="ini-estado" class="inipanel" data-dock="inicio.estado"></div><div id="ini-pagos" class="inipanel" data-dock="inicio.pagos"></div></div>
+      <div id="ini-ventas" class="inipanel" data-dock="inicio.chart"><div class="ini-ph"><h3>Resumen de ventas</h3><div class="seg ivseg" id="ini-filtros"></div></div><div class="ini-chartwrap"><div id="ini-chart" class="ivdock"></div><div id="ini-meta" class="ivdock"></div></div></div>
+      <div class="ini-duo"><div id="ini-estado" class="inipanel" data-dock="inicio.estado"></div><div id="ini-pagos" class="inipanel" data-dock="inicio.pagos"></div></div></div>
       </div>
       <div id="split-v" class="split v" title="Arrastra para ajustar columnas (doble clic restablece)"></div>
       <div id="col-der">
@@ -814,7 +815,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
   // Vacío = mismo dominio que sirve esta página (ej. backend en /app/).
   window.KAPTA_API = "https://kapta-ia-api-8amd.onrender.com";
 </script>
-<script src="app.js?v=51"></script>
+<script src="app.js?v=52"></script>
 </body>
 </html>
 

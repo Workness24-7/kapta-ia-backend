@@ -696,8 +696,6 @@ function aplicarLayout() {
     const ti = $("t-inicio");
     const l = layGet("col");
     if (l && ti) ti.style.gridTemplateColumns = `minmax(0,${l}px) 10px minmax(0,1fr)`;
-    const rh = layGet("res"), res = $("resumen");
-    if (rh && res) { res.style.flex = "0 0 " + rh + "px"; res.style.overflow = "hidden"; }
     const ah = layGet("acc"), acc = $("bloque-acciones");
     if (ah && acc) { acc.style.flex = "0 0 " + ah + "px"; acc.style.overflow = "hidden"; }
     const vw = layGet("vrw"), g = $("vr-grid");
@@ -738,16 +736,6 @@ function activarSplits() {
     ti.style.gridTemplateColumns = `minmax(0,${Math.round(w)}px) 10px minmax(0,1fr)`;
     laySet("col", Math.round(w));
   }, () => { laySet("col", null); ti.style.gridTemplateColumns = ""; });
-  dragSplit($("split-hl"), (e) => {
-    const s = $("split-hl");
-    s._y = e.clientY; s._h = $("resumen").getBoundingClientRect().height;
-    s._min = 180; s._max = Math.max(200, $("col-izq").getBoundingClientRect().height - 170);
-  }, (e) => {
-    const s = $("split-hl"), r = $("resumen");
-    const h = Math.min(Math.max(s._h + e.clientY - s._y, s._min), s._max);
-    r.style.flex = "0 0 " + Math.round(h) + "px"; r.style.overflow = "hidden";
-    laySet("res", Math.round(h));
-  }, () => { laySet("res", null); const r = $("resumen"); r.style.flex = ""; r.style.overflow = ""; });
   dragSplit($("split-ha"), (e) => {
     const s = $("split-ha");
     s._y = e.clientY; s._h = $("bloque-acciones").getBoundingClientRect().height;
@@ -1407,11 +1395,11 @@ function pintarIniEstado() {
   const box = $("ini-estado"); if (!box) return;
   const deud = agruparDeudores();
   const nAlert = invRows().map((p) => alertaDe(p)).filter((n) => n > 0).length;
-  const est = (icon, bg, titulo, n, sub, go) => `<div class="est"${go ? ` data-go="${go}" style="cursor:pointer"` : ""}><span style="display:flex;width:56px;height:56px;border-radius:50%;background:${bg};align-items:center;justify-content:center"><img src="img/pos/${icon}" alt="" style="width:44px;height:44px"></span><b>${titulo}</b><span class="n">${n}</span><small>${sub}</small></div>`;
+  const est = (icon, titulo, n, sub, go) => `<div class="est"${go ? ` data-go="${go}" style="cursor:pointer"` : ""}><img src="img/pos/estado/${icon}?v=1" alt=""><b>${titulo}</b><span class="n">${n}</span><small>${sub}</small></div>`;
   box.innerHTML = `<h3>Estado del negocio</h3><div class="estmini">` +
-    est("resumen/cliente_Activos.png?v=2", "#e0e7ff", "Clientes", iniCliAct(), "Activos", "") +
-    est("resumen/Deudores.png?v=2", "#fef3c7", "Pendientes", deud.length, "Cuentas por Cobrar", "deudores") +
-    est("notificacion.png?v=1", "#fee2e2", "Alertas", nAlert, "Requieren atencion", "") +
+    est("Clientes.png", "Clientes", iniCliAct(), "Activos", "") +
+    est("Pendientes.png", "Pendientes", deud.length, "Cuentas por Cobrar", "deudores") +
+    est("Alertas.png", "Alertas", nAlert, "Requieren atencion", "") +
     `</div>`;
   box.querySelectorAll("[data-go]").forEach((d) => d.addEventListener("click", () => tab(d.dataset.go)));
 }
