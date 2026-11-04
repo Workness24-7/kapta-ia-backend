@@ -3315,7 +3315,9 @@ async function entrarDirecto(code) {
   } catch { ver("negocio"); }
 }
 (function init() {
-  if ("serviceWorker" in navigator) {
+  // En local (python -m http.server) no se registra el SW: sus cachés tapan los cambios.
+  const esLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
+  if ("serviceWorker" in navigator && !esLocal) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
     // Fuerza la última versión del worker en cada arranque.
     navigator.serviceWorker.ready.then((r) => { try { r.update(); } catch { /* noop */ } }).catch(() => {});
