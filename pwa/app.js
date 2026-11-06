@@ -280,11 +280,18 @@ document.addEventListener("pointerdown", (e) => {
   if (e.target.closest("#dock-search") || e.target.closest("#gs-res")) return;
   gsCerrar();
 });
-if ($("vista-dock")) $("vista-dock").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
-  AG_VISTA = b.dataset.v === "recuadro" ? "recuadro" : "lista";
-  $("vista-dock").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
-  if (AG_ABIERTO) agRender(); else if (!DEU_ABIERTO && !GTO_ABIERTO) pintarAlertas();
-}));
+// Los tres puntos del dock de alertas: pliega/despliega la lista completa.
+let ALERTAS_ANCHA = false;
+function alertasExpandir(on) {
+  ALERTAS_ANCHA = on === undefined ? !ALERTAS_ANCHA : !!on;
+  const bloque = $("bloque-alertas");
+  if (ALERTAS_ANCHA) bloque.style.minHeight = bloque.offsetHeight + "px";
+  else bloque.style.minHeight = "";
+  bloque.classList.toggle("abierta", ALERTAS_ANCHA);
+  const b = $("alertas-mas");
+  if (b) b.setAttribute("aria-expanded", String(ALERTAS_ANCHA));
+}
+if ($("alertas-mas")) $("alertas-mas").addEventListener("click", () => alertasExpandir());
 // ---------- agregar stock (dock sobre alerta de stock, vistas lista/recuadro) ----------
 let AG_VISTA = "lista", AG_ABIERTO = false, AG_SEL = {}, AG_Q = "";
 let DEU_ABIERTO = false, DEU_VISTA = "lista", DEU_MET = "Efectivo";
@@ -292,10 +299,11 @@ let GTO_ABIERTO = false, GTO_TIPO = "Administrativo", GTO_FOTO = "";
 const agAbierta = () => AG_ABIERTO;
 function dockDerRender() {
   const h = document.querySelector(".alerta-head .sec-t");
+  if (AG_ABIERTO || DEU_ABIERTO || GTO_ABIERTO) alertasExpandir(false);
   if (AG_ABIERTO) { if (h) h.textContent = "Agregar Stock y Mercancia"; agRender(); }
   else if (DEU_ABIERTO) { if (h) h.textContent = "Deudores"; deuRender(); }
   else if (GTO_ABIERTO) { if (h) h.textContent = "Gasto"; gtoRender(); }
-  else { if (h) h.textContent = "Alerta de Stock"; pintarAlertas(); }
+  else { pintarAlertas(); }
 }
 function agAbrir() {
   AG_ABIERTO = true; AG_Q = "";
@@ -1434,36 +1442,30 @@ function pintarAlertas() {
   NOTIF_N = items.length;
   const dot = $("notif-dot");
   if (dot) dot.style.display = NOTIF_N ? "" : "none";
+  const head0 = document.querySelector("#bloque-alertas .sec-t");
+  if (head0) head0.innerHTML = `Alertas${items.length ? ` <span class="ini-badge">${items.length}</span>` : ""}`;
   const abox = $("alertas");
-  if (!items.length) {
+  const deud0 = agruparDeudores();
+  if (!items.length && !deud0.length) {
     abox.innerHTML = '<div class="card">¡Todo en orden! Stock suficiente.</div>';
-  } else {
-    abox.innerHTML = items.map(([p]) => {
-        const idx = (TODO.inventario || []).indexOf(p);
-        const n = alertaDe(p);
-        const img = p[12] ? `<img src="${esc(p[12])}" alt="" loading="lazy">` : "";
-        const nulo = num(p[4]) === 0;
-        return `<div class="acard"><span class="athumb">${img}</span><span class="ainfo"><b>${esc(p[2])}</b><small>Quedan ${p[4]} und</small></span><span class="abadge ${nulo ? "anulo" : n === 2 ? "abajo" : "amedio"}">${nulo ? "Stock Nulo" : n === 2 ? "Stock Bajo" : "Stock Medio"}</span><button class="aplus" data-i="${idx}" title="Agregar stock"><img src="img/pos/alerta/agregar2.png?v=1" alt="+"></button></div>`;
-    }).join("");
-    const deud0 = agruparDeudores();
-    if (deud0.length) {
-      const tot0 = deud0.reduce((a, x) => a + (x.pendiente || 0), 0);
-      abox.insertAdjacentHTML("afterbegin", `<div class="prow" data-go="deudores"><span class="pthumb"></span><span class="pinfo"><b><span class="pdot" style="background:#eab308;display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px"></span>Caja Pendiente</b><small>Deben ${deud0.length} personas &bull; Total $ ${Math.round(tot0).toLocaleString("es-CO")}</small></span><button class="pgo" title="Ver">&rarr;</button></div>`);
-    }
-    const head0 = document.querySelector("#bloque-alertas .sec-t");
-    if (head0) head0.innerHTML = `Alertas <span class="ini-badge">${items.length}</span>`;
-    abox.querySelectorAll("[data-go]").forEach((d) => d.addEventListener("click", () => tab(d.dataset.go)));
-    abox.querySelectorAll(".aplus").forEach((b) => b.addEventListener("click", async () => {      const p = TODO.inventario[Number(b.dataset.i)];
-      if (!p) return;
-      const c = prompt("¿Cuántas unidades ingresan de " + p[2] + "?", "10");
-      const n = parseInt(c || "", 10);
-      if (!n || n <= 0) return;
-      const ant = num(p[4]), nvo = ant + n;
-      await actualizarStock(p, nvo);
-      await logMov(p, "Entrada", n, ant, nvo, "Ingreso de stock");
-      toast("Stock actualizado"); await recargar();
-    }));
+    return;
   }
+  const irInv = (p) => { alertasExpandir(false); tab("inventario"); const i = $("inv-buscar"); if (i) { i.value = p[2]; pintarInventario(); } };
+  let h = items.map(([p, n]) => {
+    const idx = (TODO.inventario || []).indexOf(p);
+    const img = p[12] ? `<img src="${esc(p[12])}" alt="" loading="lazy">` : "";
+    return `<div class="acard"><span class="athumb">${img}</span><span class="ainfo"><b><span class="adot ${n === 2 ? "rojo" : "amarillo"}"></span>${esc(p[2])}</b><small>Solo quedan ${p[4]}</small></span><button class="ago" data-i="${idx}" title="Ver en Inventario"><img src="img/pos/alerta/siguiente.png?v=1" alt=""></button></div>`;
+  }).join("");
+  if (deud0.length) {
+    const tot0 = deud0.reduce((a, x) => a + (x.pendiente || 0), 0);
+    h += `<div class="acard"><span class="athumb"><img class="ico" src="img/pos/alerta/caja_pendiente.png?v=1" alt=""></span><span class="ainfo"><b><span class="adot amarillo"></span>Caja Pendiente</b><small>Deben ${deud0.length} personas &bull; Total $ ${Math.round(tot0).toLocaleString("es-CO")}</small></span><button class="ago" data-caja="1" title="Ver deudores"><img src="img/pos/alerta/siguiente.png?v=1" alt=""></button></div>`;
+  }
+  abox.innerHTML = h;
+  abox.querySelectorAll(".ago").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.caja) { alertasExpandir(false); tab("deudores"); return; }
+    const p = TODO.inventario[Number(b.dataset.i)];
+    if (p) irInv(p);
+  }));
 }
 // 0 sin alerta · 1 stock medio (<= 1.5x mínimo) · 2 stock bajo (<= mínimo)
 function alertaDe(p) {

@@ -122,11 +122,10 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
   .split:hover::after, .split.on::after { opacity: 1; }
   #bloque-acciones .sec-t { margin-top: 0; }
   #t-inicio #bloque-acciones .sec-t { margin: 0 0 10px; }
-  #bloque-alertas { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  #bloque-alertas { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
   #alerta-box { flex: 1; min-height: 0; display: flex; }
-  #alertas { flex: 1; min-height: 0; max-height: 560px; overflow-y: auto; }
   #t-inicio .sec-t { margin: 16px 0 10px; }
-  .alerta-head .sec-t, .vista-dock { margin: 16px 0 10px; }
+  .alerta-head .sec-t { margin: 16px 0 10px; }
   .kcard { padding: 16px 20px; }
   .acard { padding: 8px 12px; }
   .acard .athumb { width: 56px; height: 56px; }
@@ -174,14 +173,19 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .accb.acc-agregar { background: linear-gradient(#f6fff9,#f6fff9) padding-box, linear-gradient(135deg, #ffffff, #008451) border-box; color: #00aa5d; }
 .accb.acc-deudores { background: linear-gradient(#fffef3,#fffef3) padding-box, linear-gradient(135deg, #ffffff, #847b00) border-box; color: #847b00; }
 /* Alerta de stock */
-.vista-dock { display: flex; align-items: center; gap: 2px; border: 1.5px solid transparent; border-radius: 999px; background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 4px; margin: 26px 0 14px; }
-.vista-dock button { border: 0; background: none; border-radius: 999px; width: 52px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-.vista-dock button img { width: 24px; height: 24px; opacity: .5; }
-.vista-dock button.on { background: #a3a3a3; }
-.vista-dock button.on img { opacity: 1; filter: brightness(0) invert(1); }
-#alerta-box { border: 0; border-radius: 0; background: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 2px; }
-#alertas { display: flex; flex-direction: column; gap: 12px; max-height: 430px; overflow-y: auto; padding: 2px; }
+#bloque-alertas { position: relative; }
+#alertas-mas { border: 0; background: none; padding: 6px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+#alertas-mas:hover { background: rgba(0,0,0,.06); }
+#alertas-mas img { width: 26px; height: 26px; display: block; }
+#alerta-box { position: relative; border: 0; border-radius: 0; background: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 2px; }
+#alertas { display: flex; flex-direction: column; gap: 12px; max-height: 46vh; overflow-y: auto; padding: 2px; }
 #alertas > * { flex-shrink: 0; }
+/* Los tres puntos despliegan la lista sobre Productos y Movimientos, sin mover el dashboard. */
+#bloque-alertas.abierta { z-index: 6; }
+#bloque-alertas.abierta #alertas { position: absolute; inset: 0 auto auto 0; width: 100%; height: min(62vh, 520px); max-height: min(62vh, 520px); overflow-y: auto; padding: 10px; border-radius: 26px; z-index: 30; background: linear-gradient(135deg, rgba(255,255,255,.97), rgba(255,255,255,.92)); box-shadow: 0 18px 50px rgba(31,38,135,.22), inset 0 1px 0 rgba(255,255,255,.6); }
+@media (min-width: 901px) {
+  #alertas { max-height: 240px; }
+}
 /* Inicio glass (diseno Canva) */
 .ini-sub { font-size: 14px; color: #000; margin: 0 0 14px; }
 .inipanel { border: 1px solid rgba(255,255,255,.5); border-radius: 36px; background: linear-gradient(135deg, rgba(255,255,255,.32), rgba(255,255,255,.22)); backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3); box-shadow: 0 8px 32px rgba(31,38,135,.12), inset 0 1px 0 rgba(255,255,255,.55); padding: 16px 18px; margin-top: 12px; }
@@ -262,14 +266,15 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .acard { display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,.5); border-radius: 36px; background: linear-gradient(135deg, rgba(255,255,255,.35), rgba(255,255,255,.22)); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 4px 16px rgba(31,38,135,.08); padding: 10px 12px; }
 .acard .athumb { width: 52px; height: 52px; border-radius: 16px; border: 1.5px solid transparent; background: linear-gradient(#edf0f2,#edf0f2) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .acard .athumb img { width: 100%; height: 100%; object-fit: cover; }
+.acard .athumb img.ico { width: 62%; height: 62%; object-fit: contain; }
 .acard .ainfo { flex: 1; min-width: 0; }
 .acard .ainfo b { font-size: 10.9px; font-weight: 700; color: #010101; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .acard .ainfo small { font-size: 10.9px; color: #3f3f46; }
-.abadge { border: 2px solid transparent; border-radius: 999px; padding: 5px 12px; font-size: 10px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
-.abadge.abajo { background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #e10000) border-box; color: #ab0101; }
-.abadge.amedio { background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #847b00) border-box; color: #847b00; }
-.aplus { width: 40px; height: 40px; border: 0; background: none; cursor: pointer; padding: 0; flex-shrink: 0; }
-.aplus img { width: 40px; height: 40px; display: block; }
+.adot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
+.adot.rojo { background: #ff3b30; }
+.adot.amarillo { background: #eab308; }
+.ago { width: 34px; height: 34px; border: 0; background: none; cursor: pointer; padding: 0; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.ago img { width: 26px; height: 26px; display: block; }
 /* Agregar Stock y Mercancia (dock sobre alerta de stock) */
 .ag-buscar { width: 100%; border: 1.5px solid transparent; border-radius: 13px; background: linear-gradient(#ffffff,#ffffff) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 14px 20px; font-size: 13.9px; font-family: inherit; color: #010101; outline: none; margin: 0 0 10px; }
 .ag-buscar::placeholder { color: #a6a6a6; }
@@ -303,7 +308,6 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .dbtn-abono { flex: 1; border: 1.5px solid transparent; border-radius: 20px; background: linear-gradient(#ffeee2,#ffeee2) padding-box, linear-gradient(135deg, #ffffff, #ff8a00) border-box; color: #ff8a00; font-weight: 800; padding: 10px; cursor: pointer; font-family: inherit; font-size: 13px; }
 .rx { color: #e10000; }
 .deu-it { cursor: pointer; }
-.abadge.anulo { background: linear-gradient(#f1f1f1,#f1f1f1) padding-box, linear-gradient(135deg, #ffffff, #8c52ff) border-box; color: #7c3aed; }
 .ag-area { width: 100%; min-height: 130px; border: 1.5px solid transparent; border-radius: 13px; background: linear-gradient(#ffffff,#ffffff) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; padding: 14px 16px; font-family: inherit; font-size: 13.9px; color: #010101; outline: none; resize: vertical; margin: 0 0 10px; }
 .ag-area::placeholder { color: #a6a6a6; }
 .gto-fila { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
@@ -367,7 +371,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
   #col-izq > h2, #venta-rapida > h2 { font-size: clamp(16px, 2.2vw, 22px); }
   #t-inicio .sec-t { font-size: clamp(15px, 2vw, 20px); margin: 12px 0 8px; }
   .alerta-head { flex-wrap: wrap; gap: 4px 8px; }
-  .alerta-head .sec-t, .vista-dock { margin: 12px 0 8px; }
+  .alerta-head .sec-t { margin: 12px 0 8px; }
   .kcard { padding: 12px 14px; }
   .kcard .knum { font-size: clamp(15px, 16cqi, 24px); }
   .kcard .ksub { font-size: 10px; }
@@ -388,9 +392,8 @@ canvas.bc39 { max-width: 100%; height: 56px; }
   .acard .athumb { width: 44px; height: 44px; border-radius: 13px; }
   .acard .ainfo b { font-size: 10px; }
   .acard .ainfo small { font-size: 10px; }
-  .abadge { padding: 4px 10px; font-size: 9px; }
-  .aplus { width: 34px; height: 34px; }
-  .aplus img { width: 34px; height: 34px; }
+  .ago { width: 30px; height: 30px; }
+  .ago img { width: 22px; height: 22px; }
   .ag-lrow { gap: 8px; padding: 8px 10px; }
   .ag-nom.lg { font-size: 11px; }
   .ag-menmas img { width: 22px; height: 22px; }
@@ -409,7 +412,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
 @media (min-width: 901px) and (max-height: 720px) {
   #p-pos .tab { padding-top: 12px; }
   #t-inicio .sec-t { margin: 10px 0 8px; }
-  .alerta-head .sec-t, .vista-dock { margin: 10px 0 8px; }
+  .alerta-head .sec-t { margin: 10px 0 8px; }
   .kcard { padding: 12px 16px; --kico: 44px; }
   .accb { padding: 12px 4px 10px; gap: 8px; }
   #alertas { gap: 8px; }
@@ -694,7 +697,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
       <div id="col-der">
       <div id="bloque-acciones" class="inipanel"><h3 class="sec-t">Acciones rápidas</h3><div id="acciones" class="acc-grid"></div></div>
       <div id="split-ha" class="split h" title="Arrastra para ajustar Acciones / Alertas (doble clic restablece)"></div>
-      <div id="bloque-alertas" class="inipanel" data-dock="inicio.alertas"><div class="alerta-head"><h3 class="sec-t">Alerta de Stock</h3><div class="vista-dock" id="vista-dock"><button data-v="lista" class="on" title="Vista lista"><img src="img/pos/alerta/lista.png?v=1" alt=""></button><button data-v="recuadro" title="Vista recuadro"><img src="img/pos/alerta/recuadro.png?v=1" alt=""></button></div></div><div id="alerta-box"><div id="alertas"></div></div></div>
+      <div id="bloque-alertas" class="inipanel" data-dock="inicio.alertas"><div class="alerta-head"><h3 class="sec-t">Alertas</h3><button id="alertas-mas" title="Ver todas las alertas" aria-expanded="false"><img src="img/pos/alerta/tres_puntos.png?v=1" alt=""></button></div><div id="alerta-box"><div id="alertas"></div></div></div>
       <div id="ini-productos" class="inipanel" data-dock="inicio.productos"><h3>Productos y Movimientos</h3><div id="prod-rows"></div></div>
       </div>
       <div id="venta-rapida" class="oculto">
@@ -851,7 +854,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
   // Vacío = mismo dominio que sirve esta página (ej. backend en /app/).
   window.KAPTA_API = "https://kapta-ia-api-8amd.onrender.com";
 </script>
-<script src="app.js?v=57"></script>
+<script src="app.js?v=59"></script>
 </body>
 </html>
 
