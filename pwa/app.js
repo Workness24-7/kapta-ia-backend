@@ -1471,8 +1471,15 @@ function guardarMetaIni(k, v) {
 function horarioIni() {
   let ini = "00:00", fin = "23:30";
   try {
-    const code = (SES && SES.code) || "GEN";
-    const o = JSON.parse(localStorage.getItem("kapta_horario_" + code) || "{}");
+    // La jornada del negocio vive en config_negocio (vale en todos los equipos);
+    // localStorage queda como copia para arrancar sin conexión.
+    const cfg = (TODO && TODO.config_negocio) || [];
+    const cv = (p) => { const r = cfg.find((x) => String(x[0] || "").trim().toUpperCase() === p); return r ? String(r[1] || "") : ""; };
+    const o = { ini: cv("JORNADA_INI"), fin: cv("JORNADA_FIN") };
+    if (!o.ini && !o.fin) {
+      const code = (SES && SES.code) || "GEN";
+      Object.assign(o, JSON.parse(localStorage.getItem("kapta_horario_" + code) || "{}"));
+    }
     if (/^\d{2}:\d{2}$/.test(o.ini || "")) ini = o.ini;
     if (/^\d{2}:\d{2}$/.test(o.fin || "")) fin = o.fin;
   } catch {}
@@ -3176,15 +3183,24 @@ function pintarJornada() {
     if (b) b.value = h.fin;
     if (a && !a.dataset.w) {
       a.dataset.w = "1"; b.dataset.w = "1";
-      $("btn-jornada").addEventListener("click", () => {
+      $("btn-jornada").addEventListener("click", async () => {
         const ini = a.value, fin = b.value;
         if (!/^\d{2}:\d{2}$/.test(ini) || !/^\d{2}:\d{2}$/.test(fin)) { toast("Horas invalidas"); return; }
         try {
           const code = (SES && SES.code) || "GEN";
           localStorage.setItem("kapta_horario_" + code, JSON.stringify({ ini, fin }));
         } catch {}
+        try {
+          const cfg = TODO ? (TODO.config_negocio = TODO.config_negocio || []) : [];
+          for (const [p, v] of [["JORNADA_INI", ini], ["JORNADA_FIN", fin]]) {
+            const it = cfg.find((x) => String(x[0] || "").trim().toUpperCase() === p);
+            if (it) it[1] = v; else cfg.push([p, v]);
+          }
+        } catch {}
         toast("Jornada guardada");
         pintarIniChart();
+        await guardarConfig("JORNADA_INI", ini);
+        await guardarConfig("JORNADA_FIN", fin);
       });
     }
   } catch {}
