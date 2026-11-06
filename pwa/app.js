@@ -161,7 +161,7 @@ function armarDock(sec) {
     b.dataset.tab = k; b.dataset.dock = "nav." + k; if (!i) b.classList.add("on");
     b.title = txt;
     b.innerHTML = `<img src="img/pos/dock/${DOCK_ICONS[k]}?v=2" alt="${txt}"><span class="dock-txt">${txt}</span>`;
-    b.addEventListener("click", () => { if (k === "inicio") vrCerrar(); tab(k); });
+    b.addEventListener("click", (e) => { if (e.detail) b.blur(); if (k === "inicio") vrCerrar(); tab(k); });
     $("dock").appendChild(b);
   });
   const an = document.createElement("div");
@@ -201,10 +201,84 @@ if ($("btn-notif")) $("btn-notif").addEventListener("click", () => {
   tab("inicio");
   toast(NOTIF_N > 0 ? `${NOTIF_N} producto(s) con stock bajo` : "Sin alertas de stock");
 });
-if ($("dock-search")) $("dock-search").addEventListener("click", () => {
-  if (!$("t-venta").classList.contains("oculto") && $("venta-buscar")) { $("venta-buscar").focus(); return; }
-  if (!$("t-inventario").classList.contains("oculto") && $("inv-buscar")) { $("inv-buscar").focus(); return; }
-  toast("Busca desde Venta o Inventario");
+// ---------- busqueda global: todo lo que el usuario puede ver del negocio ----------
+let GS_ON = false, GS_RES = [];
+function gsCerrar() {
+  GS_ON = false;
+  const b = $("dock-search"); if (b) b.classList.remove("gs-on");
+  const r = $("gs-res"); if (r) { r.classList.add("oculto"); r.innerHTML = ""; }
+  GS_RES = [];
+  const q = $("gs-q"); if (q) { q.value = ""; q.blur(); }
+}
+function gsAbrir() {
+  GS_ON = true;
+  $("dock-search").classList.add("gs-on");
+  $("gs-q").focus();
+  if ($("gs-q").value) gsRender();
+}
+function gsBuscar(q) {
+  if (!TODO || !ME) return [];
+  const t = q.toLowerCase();
+  const has = (...v) => v.some((x) => String(x || "").toLowerCase().includes(t));
+  const P = vistasPermitidas(), out = [], lim = (a) => a.slice(0, 8);
+  const add = (tipo, titulo, sub, ir) => out.push({ tipo, titulo, sub, ir });
+  const irVenta = () => tab(P.includes("finanzas") ? "finanzas" : "venta");
+  if (P.includes("inventario")) {
+    lim(invRows().filter((p) => has(p[2], p[3], p[1]))).forEach((p) => add("Producto", p[2],
+      `${p[3] || "General"} • ${p[4]} und • ${fmt(p[6])}`,
+      () => { tab("inventario"); const i = $("inv-buscar"); if (i) { i.value = p[2]; pintarInventario(); } }));
+    lim(movRows().filter((m) => has(m[3], m[4], m[8], m[9])).slice(-6).reverse()).forEach((m) => add("Movimiento", m[3],
+      `${m[1]} • ${m[4] || ""} ${m[5] || ""} • ${m[8] || ""}`, () => tab("inventario")));
+  }
+  if (P.includes("deudores")) {
+    const deud = agruparDeudores();
+    lim(clientesConocidos().filter((n) => has(n))).forEach((n) => {
+      const d = deud.find((x) => x.nombre === n);
+      add("Cliente", n, d ? `Debe ${fmt(d.pendiente)}` : "Sin deuda pendiente",
+        () => { tab("deudores"); if (d) verDeudor(d); });
+    });
+  }
+  if (P.includes("venta") || P.includes("finanzas")) {
+    lim(venVivas().filter((v) => has(v[0], v[3], v[5])).slice(-8).reverse()).forEach((v) => add("Venta", v[5] || v[3],
+      `${v[1]} ${v[2]} • ${v[3] || "Mostrador"} • ${fmt(v[12])}`, irVenta));
+  }
+  if (P.includes("finanzas")) {
+    lim(gasRows().filter((g) => has(g[3], g[4], g[5], g[6])).slice(-6).reverse()).forEach((g) => add("Gasto", g[4] || g[3],
+      `${g[1]} • ${g[6] || g[8] || ""} • ${fmt(g[7])}`, () => tab("finanzas")));
+  }
+  if (P.includes("usuarios")) {
+    lim(usuRows().filter((u) => has(u[1], u[2], u[4]))).forEach((u) => add("Usuario", u[1] || u[2],
+      `${u[4] || "Sin rol"} • ${u[5] || ""}`, () => tab("usuarios")));
+  }
+  return out;
+}
+function gsRender() {
+  const box = $("gs-res"), q = ($("gs-q").value || "").trim();
+  GS_RES = q ? gsBuscar(q) : [];
+  if (!q) { box.classList.add("oculto"); box.innerHTML = ""; return; }
+  box.innerHTML = GS_RES.length
+    ? GS_RES.map((x, i) => `<button class="gs-row" data-gs="${i}"><span class="gs-tipo">${x.tipo}</span><b>${esc(x.titulo)}</b><small>${esc(x.sub)}</small></button>`).join("")
+    : `<div class="gs-vacio">Sin resultados para «${esc(q)}»</div>`;
+  box.classList.remove("oculto");
+  box.querySelectorAll("[data-gs]").forEach((b) => b.addEventListener("click", () => {
+    const it = GS_RES[+b.dataset.gs];
+    gsCerrar();
+    if (it) it.ir();
+  }));
+}
+if ($("dock-search")) {
+  $("dock-search").addEventListener("click", () => { if (!GS_ON) gsAbrir(); });
+  $("gs-q").addEventListener("input", gsRender);
+  $("gs-q").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") gsCerrar();
+    if (e.key === "Enter" && GS_RES[0]) { const it = GS_RES[0]; gsCerrar(); it.ir(); }
+  });
+}
+// Un clic fuera del buscador o de sus resultados lo cierra.
+document.addEventListener("pointerdown", (e) => {
+  if (!GS_ON) return;
+  if (e.target.closest("#dock-search") || e.target.closest("#gs-res")) return;
+  gsCerrar();
 });
 if ($("vista-dock")) $("vista-dock").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
   AG_VISTA = b.dataset.v === "recuadro" ? "recuadro" : "lista";
