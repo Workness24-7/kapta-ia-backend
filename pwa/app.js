@@ -104,6 +104,7 @@ function tab(nombre) {
   $("t-" + nombre).classList.remove("oculto");
   document.querySelectorAll("#dock button").forEach((b) => b.classList.toggle("on", b.dataset.tab === nombre));
   if (nombre === "cuenta") pintarCuenta();
+  if (nombre === "config") pintarConfig();
   syncHash();
 }
 function vistasPermitidas() {
@@ -116,10 +117,11 @@ function vistasPermitidas() {
   if (ME.admin || s._dockFinanzas) out.push("dashboard");
   if (s._tabDeudores) out.push("deudores");
   out.push("cuenta");
+  out.push("config");
   return out;
 }
 function vistaActual() {
-  const mapa = { "t-inicio": "inicio", "t-venta": "venta", "t-inventario": "inventario", "t-usuarios": "usuarios", "t-finanzas": "finanzas", "t-dashboard": "dashboard", "t-deudores": "deudores", "t-cuenta": "cuenta" };
+  const mapa = { "t-inicio": "inicio", "t-venta": "venta", "t-inventario": "inventario", "t-usuarios": "usuarios", "t-finanzas": "finanzas", "t-dashboard": "dashboard", "t-deudores": "deudores", "t-cuenta": "cuenta", "t-config": "config" };
   for (const id in mapa) {
     const el = $(id);
     if (el && !el.classList.contains("oculto")) return mapa[id];
@@ -130,7 +132,7 @@ function syncHash() {
   try {
     if (!SES || !SES.code || !MI_TOKEN) return;
     const v = vistaActual();
-    const nom = { dashboard: "Panel" }[v] || v[0].toUpperCase() + v.slice(1);
+    const nom = { dashboard: "Panel", config: "Configuracion" }[v] || v[0].toUpperCase() + v.slice(1);
     const h = `#/${SES.code}/${nom}/${MI_TOKEN}`;
     if (location.hash !== h) history.replaceState(null, "", h);
   } catch {}
@@ -152,6 +154,7 @@ function armarDock(sec) {
   if (sec._dockFinanzas) tabs.push(["finanzas", "Finanzas"]);
   if (ME.admin || sec._dockFinanzas) tabs.push(["dashboard", "Panel"]);
   if (sec._tabDeudores) tabs.push(["deudores", "Deudores"]);
+  tabs.push(["config", "Configuración"]);
   $("dock").innerHTML = "";
   tabs.forEach(([k, txt], i) => {
     const b = document.createElement("button");
@@ -166,19 +169,28 @@ function armarDock(sec) {
   an.textContent = "anuncio prox.";
   $("dock").appendChild(an);
 }
-const DOCK_ICONS = { inicio: "Inicio.png", venta: "Venta.png", inventario: "Inventario.png", usuarios: "Admin.png", finanzas: "Finanzas.png", deudores: "Deudores.png", dashboard: "Panel.png" };
+const DOCK_ICONS = { inicio: "Inicio.png", venta: "Venta.png", inventario: "Inventario.png", usuarios: "Admin.png", finanzas: "Finanzas.png", deudores: "Deudores.png", dashboard: "Panel.png", config: "Configuracion.png" };
 // Wallpaper del sistema (modo claro): se sortea en cada inicio de sesion.
 const WP_LIGHT = ["img/wallpaper/wallpaper_light_one.png?v=1", "img/wallpaper/wallpaper_light_two.jpg?v=1", "img/wallpaper/wallpaper_light_three.jpg?v=1"];
 function sortearWallpaper() { try { localStorage.setItem("kapta_wp", String(Math.floor(Math.random() * WP_LIGHT.length))); } catch {} }
 function aplicarWallpaper() {
   try {
-    let i = parseInt(localStorage.getItem("kapta_wp") || "-1", 10);
-    if (!(i >= 0 && i < WP_LIGHT.length)) { i = Math.floor(Math.random() * WP_LIGHT.length); localStorage.setItem("kapta_wp", String(i)); }
-    const url = WP_LIGHT[i];
     const a = $("wp-a"), b = $("wp-b");
     if (!a || !b) return;
+    let url, blur;
+    const propio = localStorage.getItem("kapta_bg_url");
+    if (propio) {
+      url = propio;
+      // La barra va de 0 a 100; inset -45px en #wp-a/#wp-b deja ver el borde.
+      blur = Math.min(45, Math.max(0, num(localStorage.getItem("kapta_bg_blur")) * 0.45));
+    } else {
+      let i = parseInt(localStorage.getItem("kapta_wp") || "-1", 10);
+      if (!(i >= 0 && i < WP_LIGHT.length)) { i = Math.floor(Math.random() * WP_LIGHT.length); localStorage.setItem("kapta_wp", String(i)); }
+      url = WP_LIGHT[i]; blur = 3;
+    }
     const show = a.style.opacity === "1" ? b : a, hide = show === a ? b : a;
     if (show.dataset.u !== url) { show.style.backgroundImage = `url("${url}")`; show.dataset.u = url; }
+    show.style.filter = `blur(${blur}px)`;
     show.style.opacity = "1"; hide.style.opacity = "0";
   } catch {}
 }
@@ -1223,6 +1235,8 @@ function salir() {
   SES = null; ME = null; MI_TOKEN = null; MODO_AISLADO = null;
   try { document.getElementById("p-pos").classList.remove("aislado"); } catch {}
   localStorage.removeItem("kapta_pwa"); sessionStorage.removeItem("kapta_pwa");
+  localStorage.removeItem("kapta_bg_url"); localStorage.removeItem("kapta_bg_blur");
+  aplicarWallpaper();
   aplicarIdentidad(null);
   location.hash = code ? `#/${code}/Login` : `#/Login`;
 }
@@ -1239,6 +1253,14 @@ async function recargar() {
     ]);
     if (t.status !== "success") { toast("No se pudo cargar"); return; }
     TODO = t.data;
+    try {
+      const cfg = TODO.config_negocio || [];
+      const val = (p) => { const r = cfg.find((x) => String(x[0] || "").trim().toUpperCase() === p); return r ? String(r[1] || "") : ""; };
+      const fondo = val("FONDO_FOTO");
+      if (fondo) localStorage.setItem("kapta_bg_url", fondo); else localStorage.removeItem("kapta_bg_url");
+      localStorage.setItem("kapta_bg_blur", val("FONDO_BLUR") || "0");
+      aplicarWallpaper();
+    } catch {}
     if (e && e.status === "success") {
       const emp = (e.data || {}).empresa || null;
       if (emp && (emp.codigo || "").toUpperCase() === SES.code) EMPRESA = emp;
@@ -3167,6 +3189,89 @@ function pintarJornada() {
     }
   } catch {}
 }
+
+// ---------- configuracion ----------
+async function guardarConfig(parametro, valor) {
+  try {
+    const r = await api({ action: "guardar_config", sheetName: SES.code, parametro, valor: String(valor), descripcion: "Personalizacion" });
+    if (r.status !== "success") toast(r.message || "No se pudo guardar");
+    return r;
+  } catch { toast("Sin conexión"); }
+}
+function pintarConfig() {
+  const row = (ME && ME.row) || [];
+  if ($("cfg-nombre")) $("cfg-nombre").value = row[1] || (SES && SES.nombre) || "";
+  if ($("cfg-correo")) $("cfg-correo").textContent = (SES && SES.correo) || "";
+  if ($("cfg-rol")) $("cfg-rol").textContent = (SES && SES.rol) || "";
+  pintarJornada();
+  const b = Math.min(100, Math.max(0, Math.round(num(localStorage.getItem("kapta_bg_blur")))));
+  if ($("cfg-blur")) $("cfg-blur").value = b;
+  if ($("cfg-blur-n")) $("cfg-blur-n").value = b;
+  if ($("cfg-quitar-fondo")) $("cfg-quitar-fondo").classList.toggle("oculto", !localStorage.getItem("kapta_bg_url"));
+}
+async function fotoFondo(file) {
+  let bmp;
+  try { bmp = await createImageBitmap(file, { imageOrientation: "from-image" }); }
+  catch { bmp = await createImageBitmap(file); }
+  // ponytail: 1920 px de ancho para que el fondo no pese en el celular.
+  const k = Math.min(1, 1920 / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement("canvas");
+  cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+  cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
+  return cv.toDataURL("image/jpeg", 0.85);
+}
+(function () {
+  const nom = $("cfg-nombre");
+  if (!nom || nom.dataset.w) return;
+  nom.dataset.w = "1";
+  const barra = $("cfg-blur"), caja = $("cfg-blur-n"), quitar = $("cfg-quitar-fondo");
+  const aplicar = (v) => {
+    v = Math.min(100, Math.max(0, Math.round(num(v))));
+    barra.value = v; caja.value = v;
+    try { localStorage.setItem("kapta_bg_blur", String(v)); } catch {}
+    aplicarWallpaper();
+  };
+  barra.addEventListener("input", () => aplicar(barra.value));
+  caja.addEventListener("input", () => aplicar(caja.value));
+  barra.addEventListener("change", () => guardarConfig("FONDO_BLUR", barra.value));
+  caja.addEventListener("change", () => guardarConfig("FONDO_BLUR", caja.value));
+  $("cfg-guardar-perfil").addEventListener("click", async () => {
+    const nombre = nom.value.trim();
+    if (!nombre) { toast("Escribe tu nombre"); return; }
+    if (!ME || !ME.row) { toast("Vuelve a iniciar sesión"); return; }
+    const data = ME.row.slice(0, 23).concat(Array(Math.max(0, 23 - ME.row.length)).fill(""));
+    data[1] = nombre;
+    try {
+      const r = await api({ action: "crear_usuario", sheetName: SES.code, tableName: "Usuarios", data });
+      if (r.status !== "success") { toast(r.message || "No se pudo guardar"); return; }
+      ME.row[1] = nombre; SES.nombre = nombre;
+      $("pos-usuario").textContent = nombre + " • " + SES.rol;
+      pintarCuentaInfo();
+      toast("Perfil actualizado");
+    } catch { toast("Error de conexión"); }
+  });
+  $("cfg-foto").addEventListener("change", async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    try {
+      toast("Subiendo imagen...");
+      const up = await api({ action: "subir_foto", datos: await fotoFondo(f), idEmpresa: SES.code });
+      if (up.status !== "success" || !up.data) { toast(up.message || "No se pudo subir"); return; }
+      const url = new URL(up.data.url, BASE).href;
+      localStorage.setItem("kapta_bg_url", url);
+      aplicarWallpaper(); pintarConfig();
+      await guardarConfig("FONDO_FOTO", url);
+      toast("Fondo actualizado");
+    } catch { toast("Imagen no compatible"); }
+  });
+  quitar.addEventListener("click", async () => {
+    localStorage.removeItem("kapta_bg_url");
+    aplicarWallpaper(); pintarConfig();
+    await guardarConfig("FONDO_FOTO", "");
+    toast("Fondo restablecido");
+  });
+})();
 async function pintarEnlaces() {  const box = $("enlaces-lista");
   if (!box || !SES || !ME || !ME.sec) return;
   const vistas = [["inicio", "Inicio"]];
@@ -3224,11 +3329,12 @@ function rutaInicial() {
 function normVista(v) {
   v = String(v || "").toLowerCase();
   if (v === "panel") return "dashboard";
-  if (["inicio", "venta", "inventario", "usuarios", "finanzas", "dashboard", "deudores"].includes(v)) return v;
+  if (v === "configuracion") return "config";
+  if (["inicio", "venta", "inventario", "usuarios", "finanzas", "dashboard", "deudores", "config"].includes(v)) return v;
   return v;
 }
 function nombreVista(v) {
-  return { dashboard: "Panel", inicio: "Inicio", venta: "Venta", inventario: "Inventario", usuarios: "Usuarios", finanzas: "Finanzas", deudores: "Deudores" }[v] || "Inicio";
+  return { dashboard: "Panel", config: "Configuracion", inicio: "Inicio", venta: "Venta", inventario: "Inventario", usuarios: "Usuarios", finanzas: "Finanzas", deudores: "Deudores" }[v] || "Inicio";
 }
 let MODO_AISLADO = null;
 let MI_TOKEN = null;

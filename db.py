@@ -964,6 +964,9 @@ def reactivar_empresa(codigo):
 def guardar_foto(datos_b64, empresa=""):
     """Logos/fotos de producto: se guardan en Postgres para acceso multi-dispositivo.
     empresa = codigo (ej KAMELOT): cada imagen queda asociada a su negocio."""
+    # La PWA manda data URL (data:image/jpeg;base64,...); la API solo sabe decodificar base64 puro.
+    if isinstance(datos_b64, str) and datos_b64.startswith("data:"):
+        datos_b64 = datos_b64.split(",", 1)[-1]
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
