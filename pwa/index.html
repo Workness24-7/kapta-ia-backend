@@ -88,7 +88,8 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
   #p-pos:has(> #t-inicio:not(.oculto)) { min-height: 100dvh; }
   #p-pos .tab { padding: 20px 28px 0 116px; width: 100%; max-width: none; margin-left: 0; margin-right: 0; }
   #t-inicio.tab { min-height: calc(100dvh - 90px); display: grid; grid-template-columns: minmax(0, 1fr) 10px minmax(260px, 280px); gap: 2px 10px; align-items: start; padding-bottom: 24px; }
-  #t-inicio #resumen.kpi-resumen { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; max-width: 1080px; }
+  #t-inicio #resumen.kpi-resumen { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+#ini-resumen-panel { container-type: inline-size; }
   #acciones.acc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #col-izq, #col-der, #bloque-acciones, #bloque-alertas, #alerta-box, #resumen, .kcard { min-width: 0; }
   #col-izq { grid-column: 1; grid-row: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
@@ -220,11 +221,13 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .ixaxis { display: flex; gap: 4px; margin-top: 6px; }
 .ixaxis span { flex: 1; text-align: center; font-size: 10px; color: #3f3f46; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ixaxis.horas span { overflow: visible; text-overflow: clip; }
-#ini-meta { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; }
-#ini-meta b { font-size: 14px; color: #010101; }
+#ini-meta { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; }
+#ini-meta svg { display: block; width: 100%; max-width: 150px; height: auto; }
+#ini-meta b { font-size: 15px; color: #010101; }
 #ini-meta small { font-size: 12px; color: #3f3f46; }
 .ini-duo { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 14px; }
-.estmini { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+.ini-duo > * { min-width: 0; }
+.estmini { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; }
 .estmini .est { border: 1px solid #e4e4e7; border-radius: 18px; padding: 12px 8px; text-align: left; background: rgba(255,255,255,.55); }
 .estmini .est img { display: block; width: 58px; height: auto; }
 .estmini .est b { display: block; font-size: 14px; margin-top: 10px; color: #010101; }
@@ -239,11 +242,11 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .prow .pinfo small { font-size: 11px; color: #3f3f46; display: block; }
 .prow .pdot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; display: inline-block; margin-right: 6px; }
 .prow .pgo { border: 0; background: none; font-size: 20px; cursor: pointer; padding: 4px 8px; color: #010101; }
-.donutwrap { display: flex; align-items: center; gap: 14px; }
-.donutleg { font-size: 12px; color: #010101; display: flex; flex-direction: column; gap: 8px; }
-.donutleg .lr { display: flex; align-items: center; gap: 8px; }
-.donutleg .ld { width: 12px; height: 12px; border-radius: 50%; }
-.donutleg .lp { margin-left: auto; font-weight: 800; padding-left: 12px; }
+.donutwrap { display: flex; align-items: center; justify-content: center; gap: 18px; flex-wrap: wrap; }
+.donutwrap svg { display: block; width: clamp(110px, 52%, 170px); height: auto; flex: 0 0 auto; }
+.donutleg { font-size: 13px; color: #010101; display: flex; flex-direction: column; gap: 10px; }
+.donutleg .lr { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.donutleg .ld { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
 .acard { display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,.5); border-radius: 36px; background: linear-gradient(135deg, rgba(255,255,255,.35), rgba(255,255,255,.22)); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 4px 16px rgba(31,38,135,.08); padding: 10px 12px; }
 .acard .athumb { width: 52px; height: 52px; border-radius: 16px; border: 1.5px solid transparent; background: linear-gradient(#edf0f2,#edf0f2) padding-box, linear-gradient(135deg, #ffffff, #a6a6a6) border-box; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .acard .athumb img { width: 100%; height: 100%; object-fit: cover; }
@@ -565,6 +568,11 @@ canvas.bc39 { max-width: 100%; height: 56px; }
 #modal-card { background: #fff; width: 100%; max-width: 520px; max-height: 88dvh; overflow-y: auto; border-radius: 20px 20px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
 #modal-card h2 { margin-top: 0; }
 #print-area { display: none; }
+/* El ancho real del dock manda (no el de la ventana): al arrastrar el divisor
+   las tarjetas de Resumen General se reacomodan en 4, 2 o 1 columna. */
+@container (max-width: 560px) { #t-inicio #resumen.kpi-resumen { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 340px) { #t-inicio #resumen.kpi-resumen { grid-template-columns: 1fr; } }
+@container (max-width: 560px) { .ini-duo, .ini-chartwrap { grid-template-columns: 1fr; } }
 @media print {
   #app, #toast, #modal { display: none !important; }
   #print-area { display: block; font-size: 12px; }
@@ -666,7 +674,6 @@ canvas.bc39 { max-width: 100%; height: 56px; }
       <div id="ini-resumen-panel" class="inipanel"><h2>Resumen General</h2>
       <p class="ini-sub">Bienvenido de nuevo. ¿Listo para empezar un gran dia?</p>
       <div id="resumen" class="kpi-resumen"></div>
-      </div>
       <div id="ini-ventas" class="inipanel" data-dock="inicio.chart"><div class="ini-ph"><h3>Resumen de ventas</h3><div class="seg ivseg" id="ini-filtros"></div></div><div class="ini-chartwrap"><div id="ini-chart" class="ivdock"></div><div id="ini-meta" class="ivdock"></div></div></div>
       <div class="ini-duo"><div id="ini-estado" class="inipanel" data-dock="inicio.estado"></div><div id="ini-pagos" class="inipanel" data-dock="inicio.pagos"></div></div>
       </div>
@@ -830,7 +837,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
   // Vacío = mismo dominio que sirve esta página (ej. backend en /app/).
   window.KAPTA_API = "https://kapta-ia-api-8amd.onrender.com";
 </script>
-<script src="app.js?v=55"></script>
+<script src="app.js?v=56"></script>
 </body>
 </html>
 

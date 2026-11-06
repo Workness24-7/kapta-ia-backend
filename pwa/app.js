@@ -1588,7 +1588,7 @@ function pintarIniChart() {
   const pct = meta > 0 ? Math.round(tot / meta * 100) : 0;
   const C = 2 * Math.PI * 52;
   const mb = $("ini-meta");
-  if (mb) mb.innerHTML = `<svg id="ini-ring" width="140" height="140" viewBox="0 0 140 140" style="cursor:pointer"><title>4 clics para editar la meta</title><defs><linearGradient id="metag" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c5cf0"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><circle cx="70" cy="70" r="52" fill="none" stroke="#e9e7f5" stroke-width="16"/><circle cx="70" cy="70" r="52" fill="none" stroke="url(#metag)" stroke-width="16" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C - C * Math.min(100, pct) / 100}" transform="rotate(-90 70 70)"/><text x="70" y="78" text-anchor="middle" font-size="24" font-weight="800" fill="#0F172A">${pct}%</text></svg><b>${META_NOMBRE[IV_F]}</b><small>$ ${Math.round(tot).toLocaleString("es-CO")} / $ ${Math.round(meta).toLocaleString("es-CO")}</small>`;
+  if (mb) mb.innerHTML = `<svg id="ini-ring" viewBox="0 0 140 140" role="img" aria-label="Meta: ${pct}%" style="cursor:pointer"><title>4 clics para editar la meta</title><defs><linearGradient id="metag" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#67e8f9"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs><circle cx="70" cy="70" r="52" fill="none" stroke="#e5e7eb" stroke-width="26"/><circle cx="70" cy="70" r="52" fill="none" stroke="url(#metag)" stroke-width="26" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C - C * Math.min(100, pct) / 100}" transform="rotate(-90 70 70)"/><text x="70" y="81" text-anchor="middle" font-size="30" font-weight="800" fill="#0F172A">${pct}%</text></svg><b>${META_NOMBRE[IV_F]}</b><small>$ ${Math.round(tot).toLocaleString("es-CO")} / $ ${Math.round(meta).toLocaleString("es-CO")}</small>`;
   const ring = $("ini-ring");
   if (ring) ring.addEventListener("click", metaClick);
 }
@@ -1598,9 +1598,13 @@ function pintarIniPagos() {
   const ym = hoyISO().replace(/-/g, "").slice(0, 6);
   let ef = 0, tr = 0;
   venVivas().forEach((v) => { if (normFecha(v[1]).slice(0, 6) !== ym) return; ef += num(v[11]); tr += num(v[10]); });
-  const tot = ef + tr, pe = tot > 0 ? Math.round(ef / tot * 100) : 0;
+  const tot = ef + tr, activo = tot > 0.5, pe = activo ? Math.round(ef / tot * 100) : 0;
   const C = 2 * Math.PI * 52;
-  box.innerHTML = `<h3>Distribucion de Pagos</h3><div class="donutwrap"><svg width="140" height="140" viewBox="0 0 140 140"><circle cx="70" cy="70" r="52" fill="none" stroke="#e9e7f5" stroke-width="18"/><circle cx="70" cy="70" r="52" fill="none" stroke="#7c5cf0" stroke-width="18" stroke-dasharray="${C}" stroke-dashoffset="${C - C * pe / 100}" transform="rotate(-90 70 70)" stroke-linecap="round"/><circle cx="70" cy="70" r="52" fill="none" stroke="#fbbf24" stroke-width="18" stroke-dasharray="${C * (100 - pe) / 100} ${C}" stroke-dashoffset="${-C * pe / 100}" transform="rotate(-90 70 70)" stroke-linecap="round"/><text x="70" y="78" text-anchor="middle" font-size="24" font-weight="800" fill="#0F172A">${pe}%</text></svg><div class="donutleg"><span class="lr"><span class="ld" style="background:#7c5cf0"></span>Efectivo<span class="lp">${pe}%</span></span><span class="lr"><span class="ld" style="background:#fbbf24"></span>Transferencia<span class="lp">${100 - pe}%</span></span></div></div>`;
+  const trazo = (color, dash, offset) => `<circle cx="70" cy="70" r="52" fill="none" stroke="${color}" stroke-width="26" stroke-dasharray="${dash}" stroke-dashoffset="${offset}" transform="rotate(-90 70 70)" stroke-linecap="round"/>`;
+  const arcos = activo
+    ? trazo("#fbbf24", C, C - C * pe / 100) + trazo("#7c5cf0", `${C * (100 - pe) / 100} ${C}`, -C * pe / 100)
+    : "";
+  box.innerHTML = `<h3>Distribucion de Pagos</h3><div class="donutwrap"><svg viewBox="0 0 140 140" role="img" aria-label="Distribucion de pagos: ${pe}% efectivo"><title>Efectivo ${pe}% · Transferencia ${100 - pe}%</title><circle cx="70" cy="70" r="52" fill="none" stroke="${activo ? "#f1f0f7" : "#d4d4d8"}" stroke-width="26"/>${arcos}<text x="70" y="81" text-anchor="middle" font-size="30" font-weight="800" fill="#0F172A">${pe}%</text></svg><div class="donutleg"><span class="lr"><span class="ld" style="background:#fbbf24"></span>Efectivo</span><span class="lr"><span class="ld" style="background:#7c5cf0"></span>Transferencia</span></div></div>`;
 }
 async function pintarPerfil() {
   const box = $("perfil");
