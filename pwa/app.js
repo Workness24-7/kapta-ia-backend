@@ -3272,7 +3272,7 @@ async function fotoFondo(file) {
     if (!f) return;
     try {
       toast("Subiendo imagen...");
-      const up = await api({ action: "subir_foto", datos: await fotoFondo(f), idEmpresa: SES.code });
+      const up = await api({ action: "subir_foto", datos: (await fotoFondo(f)).split(",")[1], idEmpresa: SES.code });
       if (up.status !== "success" || !up.data) { toast(up.message || "No se pudo subir"); return; }
       const url = new URL(up.data.url, BASE).href;
       localStorage.setItem("kapta_bg_url", url);
