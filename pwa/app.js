@@ -334,6 +334,8 @@ function alertasExpandir(on) {
 }
 if ($("alertas-mas")) $("alertas-mas").addEventListener("click", () => alertasExpandir());
 if ($("prod-mas")) $("prod-mas").addEventListener("click", () => { MOV_VER = true; tab("inventario"); pintarMovimientos(); });
+// El Inicio cambia de orden entre vertical y horizontal.
+window.addEventListener("resize", iniDockMovil);
 // Al cambiar el tamano de la ventana, el despliegue respeta el borde del dock de abajo.
 window.addEventListener("resize", () => {
   if (!ALERTAS_ANCHA) return;
@@ -1531,6 +1533,7 @@ function alertaDe(p) {
 let IV_F = "Hoy";
 const fmtCorto = (n) => n >= 1000000 ? "$" + (Math.round(n / 100000) / 10) + "M" : n >= 1000 ? "$" + Math.round(n / 1000) + "K" : "$" + Math.round(n);
 function pintarIniPaneles() {
+  iniDockMovil();
   pintarIniEstado(); pintarIniProductos(); pintarIniFiltros(); pintarIniChart(); pintarIniPagos();
 }
 function iniCliAct() {
@@ -1573,6 +1576,19 @@ function pintarIniProductos() {
   if (deud.length) h += `<div class="prow" data-go="deudores"><span class="pthumb amarillo"><img class="ico" src="img/pos/productos/cobros_pendientes.png?v=1" alt=""></span><span class="pinfo"><b><span class="pdot" style="background:#f2cf18"></span>Cobros pendientes</b><small>${deud.length} clientes</small><small>$ ${Math.round(totD).toLocaleString("es-CO")}</small></span><button class="pgo">${flecha}</button></div>`;
   box.innerHTML = h || '<div class="card">Sin movimientos todavia.</div>';
   box.querySelectorAll("[data-go]").forEach((d) => d.addEventListener("click", () => tab(d.dataset.go)));
+}
+// En vertical, los dos graficos circulares van juntos en una fila; en horizontal vuelven a su sitio.
+function iniDockMovil() {
+  const caja = $("ini-donas"), meta = $("ini-meta"), pagos = $("ini-pagos");
+  if (!caja || !meta || !pagos) return;
+  if (matchMedia("(max-width: 900px)").matches) {
+    if (meta.parentElement !== caja) caja.append(meta);
+    if (pagos.parentElement !== caja) caja.append(pagos);
+  } else {
+    const wrap = document.querySelector("#ini-ventas .ini-chartwrap"), duo = document.querySelector(".ini-duo");
+    if (wrap && meta.parentElement !== wrap) wrap.append(meta);
+    if (duo && pagos.parentElement !== duo) duo.append(pagos);
+  }
 }
 function pintarIniFiltros() {
   const box = $("ini-filtros"); if (!box) return;
