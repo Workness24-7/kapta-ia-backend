@@ -281,44 +281,68 @@ document.addEventListener("pointerdown", (e) => {
   gsCerrar();
 });
 // Los tres puntos del dock de alertas: pliega/despliega la lista completa.
-let ALERTAS_ANCHA = false, ALERTAS_TIMER = null;
+let ALERTAS_ANCHA = false, ALERTAS_TIMER = null, ALERTAS_COLAPSADA = 0, ALERTAS_LISTA_COLAPSADA = 0;
+function alertasLimite() {
+  const box = $("alerta-box"), prod = $("ini-productos");
+  const tope = box ? box.getBoundingClientRect().top : 0;
+  const limite = Math.min(prod ? prod.getBoundingClientRect().bottom : innerHeight, innerHeight - 12);
+  return { tope, limite };
+}
 function alertasExpandir(on) {
-  const bloque = $("bloque-alertas"), lista = $("alertas"), box = $("alerta-box"), prod = $("ini-productos");
+  const bloque = $("bloque-alertas"), lista = $("alertas");
+  if (!bloque || !lista) return;
   const abrir = on === undefined ? !ALERTAS_ANCHA : !!on;
   if (abrir === ALERTAS_ANCHA && !bloque.classList.contains("cerrando")) return;
   clearTimeout(ALERTAS_TIMER);
   const boton = $("alertas-mas");
   if (abrir) {
+    // Si todas las alertas ya caben en la vista previa, el dock no se expande.
+    if (lista.scrollHeight <= lista.clientHeight + 1) {
+      if (boton) boton.setAttribute("aria-expanded", "false");
+      return;
+    }
     ALERTAS_ANCHA = true;
     bloque.classList.remove("cerrando");
-    bloque.style.minHeight = bloque.offsetHeight + "px";
-    // El limite es el borde inferior del dock de Productos y Movimientos.
-    const tope = box ? box.getBoundingClientRect().top : bloque.getBoundingClientRect().top;
-    const limite = Math.min(prod ? prod.getBoundingClientRect().bottom : innerHeight, innerHeight - 12);
-    if (lista) lista.style.maxHeight = Math.max(140, Math.round(limite - tope - 6)) + "px";
+    ALERTAS_COLAPSADA = bloque.offsetHeight;
+    const colapsadaLista = lista.clientHeight;
+    ALERTAS_LISTA_COLAPSADA = colapsadaLista;
+    const { tope, limite } = alertasLimite();
+    const altoLista = Math.min(lista.scrollHeight, Math.max(140, Math.round(limite - tope - 8)));
+    const total = ALERTAS_COLAPSADA + (altoLista - colapsadaLista);
+    bloque.style.minHeight = ALERTAS_COLAPSADA + "px";
+    bloque.style.setProperty("--alto-dock", ALERTAS_COLAPSADA + "px");
+    lista.style.maxHeight = colapsadaLista + "px";
     bloque.classList.add("abierta");
+    void bloque.offsetHeight;
+    bloque.style.setProperty("--alto-dock", total + "px");
+    lista.style.maxHeight = altoLista + "px";
     if (boton) boton.setAttribute("aria-expanded", "true");
   } else {
     ALERTAS_ANCHA = false;
     if (!bloque.classList.contains("abierta")) return;
     bloque.classList.add("cerrando");
+    bloque.style.setProperty("--alto-dock", ALERTAS_COLAPSADA + "px");
+    lista.style.maxHeight = (ALERTAS_LISTA_COLAPSADA || 142) + "px";
     if (boton) boton.setAttribute("aria-expanded", "false");
     ALERTAS_TIMER = setTimeout(() => {
       bloque.classList.remove("abierta", "cerrando");
       bloque.style.minHeight = "";
-      if (lista) lista.style.maxHeight = "";
-    }, 190);
+      bloque.style.removeProperty("--alto-dock");
+      lista.style.maxHeight = "";
+    }, 240);
   }
 }
 if ($("alertas-mas")) $("alertas-mas").addEventListener("click", () => alertasExpandir());
 // Al cambiar el tamano de la ventana, el despliegue respeta el borde del dock de abajo.
 window.addEventListener("resize", () => {
   if (!ALERTAS_ANCHA) return;
-  const box = $("alerta-box"), prod = $("ini-productos"), lista = $("alertas");
-  if (!box || !lista) return;
-  const tope = box.getBoundingClientRect().top;
-  const limite = Math.min(prod ? prod.getBoundingClientRect().bottom : innerHeight, innerHeight - 12);
-  lista.style.maxHeight = Math.max(140, Math.round(limite - tope - 6)) + "px";
+  const bloque = $("bloque-alertas"), lista = $("alertas");
+  if (!bloque || !lista) return;
+  const { tope, limite } = alertasLimite();
+  const colapsadaLista = Math.min(lista.scrollHeight, 142);
+  const altoLista = Math.min(lista.scrollHeight, Math.max(140, Math.round(limite - tope - 8)));
+  lista.style.maxHeight = altoLista + "px";
+  bloque.style.setProperty("--alto-dock", (ALERTAS_COLAPSADA + (altoLista - colapsadaLista)) + "px");
 });
 // ---------- agregar stock (dock sobre alerta de stock, vistas lista/recuadro) ----------
 let AG_VISTA = "lista", AG_ABIERTO = false, AG_SEL = {}, AG_Q = "";
