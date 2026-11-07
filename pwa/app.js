@@ -333,6 +333,7 @@ function alertasExpandir(on) {
   }
 }
 if ($("alertas-mas")) $("alertas-mas").addEventListener("click", () => alertasExpandir());
+if ($("prod-mas")) $("prod-mas").addEventListener("click", () => { MOV_VER = true; tab("inventario"); pintarMovimientos(); });
 // Al cambiar el tamano de la ventana, el despliegue respeta el borde del dock de abajo.
 window.addEventListener("resize", () => {
   if (!ALERTAS_ANCHA) return;
@@ -1565,10 +1566,11 @@ function pintarIniProductos() {
   const bajo = invRows().map((p) => [p, alertaDe(p)]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1])[0];
   const deud = agruparDeudores();
   const totD = deud.reduce((a, x) => a + (x.pendiente || 0), 0);
+  const flecha = `<img src="img/pos/alerta/siguiente.png?v=1" alt="">`;
   let h = "";
-  if (top) h += `<div class="prow" data-go="venta"><span class="pthumb"></span><span class="pinfo"><b>Producto mas vendido</b><small>${esc(top[0])} &bull; ${top[1].cant} unidades</small></span><button class="pgo">&rarr;</button></div>`;
-  if (bajo) h += `<div class="prow" data-go="inventario"><span class="pthumb">${bajo[0][12] ? `<img src="${esc(bajo[0][12])}" alt="" loading="lazy">` : ""}</span><span class="pinfo"><b><span class="pdot" style="background:#ef4444"></span>Inventario bajo</b><small>${esc(bajo[0][2])} &bull; solo quedan ${bajo[0][4]}</small></span><button class="pgo">&rarr;</button></div>`;
-  if (deud.length) h += `<div class="prow" data-go="deudores"><span class="pthumb"></span><span class="pinfo"><b><span class="pdot" style="background:#22c55e"></span>Cobros pendientes</b><small>${deud.length} clientes &bull; $ ${Math.round(totD).toLocaleString("es-CO")}</small></span><button class="pgo">&rarr;</button></div>`;
+  if (top) h += `<div class="prow" data-go="venta"><span class="pthumb"></span><span class="pinfo"><b>Producto mas vendido</b><small>${esc(top[0])}</small><small>${top[1].cant} unidades</small></span><button class="pgo">${flecha}</button></div>`;
+  if (bajo) h += `<div class="prow" data-go="inventario"><span class="pthumb rojo"><img class="ico" src="img/pos/productos/Inventario_bajo.png?v=1" alt=""></span><span class="pinfo"><b><span class="pdot" style="background:#ff0000"></span>Inventario bajo</b><small>${esc(bajo[0][2])}</small><small>solo quedan ${bajo[0][4]}</small></span><button class="pgo">${flecha}</button></div>`;
+  if (deud.length) h += `<div class="prow" data-go="deudores"><span class="pthumb amarillo"><img class="ico" src="img/pos/productos/cobros_pendientes.png?v=1" alt=""></span><span class="pinfo"><b><span class="pdot" style="background:#f2cf18"></span>Cobros pendientes</b><small>${deud.length} clientes</small><small>$ ${Math.round(totD).toLocaleString("es-CO")}</small></span><button class="pgo">${flecha}</button></div>`;
   box.innerHTML = h || '<div class="card">Sin movimientos todavia.</div>';
   box.querySelectorAll("[data-go]").forEach((d) => d.addEventListener("click", () => tab(d.dataset.go)));
 }
