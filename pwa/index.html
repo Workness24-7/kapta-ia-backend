@@ -462,7 +462,12 @@ canvas.bc39 { max-width: 100%; height: 56px; }
   /* Inicio en vertical: un solo dock de vidrio (Resumen General) con los demas docks dentro. */
   #t-inicio.tab { display: flex; flex-direction: column; align-items: stretch; gap: 12px; margin: 12px 12px 0; padding: 14px; min-height: 0; container-type: inline-size; border: 1px solid rgba(255,255,255,.5); border-radius: 32px; background: linear-gradient(135deg, rgba(255,255,255,.32), rgba(255,255,255,.22)); backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3); box-shadow: 0 8px 32px rgba(31,38,135,.12), inset 0 1px 0 rgba(255,255,255,.55); }
   /* Los docks internos tienen su propio vidrio visible (un punto mas liviano que el de Resumen General). */
-  #t-inicio.tab .inipanel { background: linear-gradient(135deg, rgba(255,255,255,.24), rgba(255,255,255,.16)); box-shadow: 0 6px 20px rgba(31,38,135,.10), inset 0 1px 0 rgba(255,255,255,.45); backdrop-filter: blur(14px) saturate(1.25); -webkit-backdrop-filter: blur(14px) saturate(1.25); border-color: rgba(255,255,255,.5); }
+  #t-inicio.tab .inipanel { background: linear-gradient(135deg, rgba(255,255,255,.34), rgba(255,255,255,.26)); box-shadow: 0 6px 20px rgba(31,38,135,.10), inset 0 1px 0 rgba(255,255,255,.45); backdrop-filter: blur(14px) saturate(1.25); -webkit-backdrop-filter: blur(14px) saturate(1.25); border-color: rgba(255,255,255,.5); }
+  /* Las tarjetas de accion llevan el mismo tinte para que el fondo no se trasluzca en bandas. */
+  #t-inicio.tab .accb.acc-venta { background: linear-gradient(315deg, rgba(100,80,255,.42), rgba(255,255,255,.16)); }
+  #t-inicio.tab .accb.acc-gasto { background: linear-gradient(315deg, rgba(255,90,100,.42), rgba(255,255,255,.16)); }
+  #t-inicio.tab .accb.acc-agregar { background: linear-gradient(315deg, rgba(60,210,170,.42), rgba(255,255,255,.16)); }
+  #t-inicio.tab .accb.acc-deudores { background: linear-gradient(315deg, rgba(90,140,255,.42), rgba(255,255,255,.16)); }
   /* Titulos con el mismo aire que Alertas y Productos: 18px arriba y 12px abajo, en todos los docks. */
   #t-inicio.tab #bloque-acciones, #t-inicio.tab #ini-ventas, #t-inicio.tab #bloque-alertas, #t-inicio.tab #ini-productos, #t-inicio.tab #ini-estado, #t-inicio.tab #ini-pagos { padding: 18px; }
   #t-inicio.tab #bloque-acciones .sec-t { margin: 0 0 12px; }
