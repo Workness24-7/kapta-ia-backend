@@ -1726,6 +1726,20 @@ function pintarIniChart() {
   const ymax = niceCeilM(Math.max(meta, maxBar));
   const ticks = [ymax, ymax * 0.75, ymax * 0.5, ymax * 0.25, 0];
   box.innerHTML = `<div class="ichart"><div class="iyaxis">` + ticks.map((t) => `<span>${fmtYM(t)}</span>`).join("") + `</div><div class="iplotwrap"><div class="iplot"><div class="igrid">` + ticks.map(() => `<span></span>`).join("") + `</div><div class="ibars2">` + vals.map((t, i) => `<div class="ibcol">${t > 0 ? `<div class="ibv${fh[i] ? " fh" : ""}" style="height:${Math.max(2, Math.round(t / ymax * 100))}%" title="${fmtCorto(t)}"></div>` : ""}</div>`).join("") + `</div></div><div class="ixaxis${IV_F === "Hoy" ? " horas" : ""}">` + labels.map((l) => `<span>${l}</span>`).join("") + `</div></div></div>`;
+  // En "Hoy" cada etiqueta se ancla a su tramo y se muestran solo las que caben, sin recortarse.
+  const ix = box.querySelector(".ixaxis");
+  if (ix && IV_F === "Hoy") {
+    const n = labels.length, ancho = ix.getBoundingClientRect().width;
+    // Si el dock aun esta oculto no hay ancho: deja solo unas pocas etiquetas.
+    const paso = ancho > 0 ? Math.max(1, Math.ceil(32 * n / ancho)) : Math.max(1, Math.ceil(n / 8));
+    [...ix.children].map((s, i) => ({ s, i })).filter((o) => o.s.textContent.trim()).forEach((o, j) => {
+      if (j % paso) { o.s.style.display = "none"; return; }
+      const f = (o.i + 0.5) / n;
+      o.s.style.left = f * 100 + "%";
+      if (f < 0.07) o.s.classList.add("borde-i");
+      else if (f > 0.93) o.s.classList.add("borde-d");
+    });
+  }
   let tot = 0;
   if (IV_F === "Hoy") tot = suma((v) => esHoy(v[1]));
   else if (IV_F === "Semana") { const d0 = new Date(); d0.setDate(d0.getDate() - d0.getDay()); const p = (x) => String(x).padStart(2, "0"); const a = `${d0.getFullYear()}${p(d0.getMonth() + 1)}${p(d0.getDate())}`; const d1 = new Date(d0); d1.setDate(d0.getDate() + 6); const b = `${d1.getFullYear()}${p(d1.getMonth() + 1)}${p(d1.getDate())}`; tot = suma((v) => { const n = normFecha(v[1]); return n >= a && n <= b; }); }

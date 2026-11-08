@@ -118,8 +118,8 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
   #ini-ventas .ivdock { min-height: 0; overflow: hidden; }
   #ini-ventas .ichart, #ini-ventas .ichart > .iplotwrap { min-height: 0; }
   #ini-ventas .ichart { height: 100%; }
-  #ini-ventas .iplot { height: 100%; }
-  #ini-ventas .iyaxis { height: auto; }
+  #ini-ventas .iplot { flex: 1 1 auto; height: auto; min-height: 0; }
+  #ini-ventas .iyaxis { height: auto; margin-bottom: 18px; }
   #resumen { flex: 0 0 auto; min-height: 0; }
   .kcard { display: flex; flex-direction: column; justify-content: space-between; min-height: 0; overflow: hidden; }
   #bloque-perfil { flex: 0 0 auto; min-height: 0; }
@@ -243,13 +243,13 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .ini-ph h3 { margin: 0; }
 .ini-ph .seg { margin: 0; }
 .ini-chartwrap { display: grid; grid-template-columns: minmax(0,1fr) minmax(220px,30%); gap: 14px; align-items: stretch; margin-top: 12px; }
-.ivdock { border: 1px solid rgba(255,255,255,.5); border-radius: 28px; background: linear-gradient(to top, rgba(255,255,255,.10), rgba(255,255,255,.03)); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); box-shadow: 0 8px 32px rgba(31,38,135,.10), inset 0 1px 0 rgba(255,255,255,.5); padding: 16px; min-width: 0; }
+.ivdock { border: 1px solid rgba(255,255,255,.5); border-radius: 28px; background: linear-gradient(to top, rgba(255,255,255,.10), rgba(255,255,255,.03)); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); box-shadow: 0 8px 32px rgba(31,38,135,.10), inset 0 1px 0 rgba(255,255,255,.5); padding: 16px; min-width: 0; overflow: hidden; }
 #ini-filtros.ivseg { max-width: 100%; background: rgba(255,255,255,.35); border: 1px solid rgba(255,255,255,.5); border-radius: 999px; padding: 4px; gap: 4px; margin: 0; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 4px 16px rgba(31,38,135,.08); }
 #ini-filtros.ivseg button { border-radius: 999px; padding: 7px 14px; background: transparent; color: #3f3f46; font-weight: 600; transition: background .25s ease, color .25s ease; flex: 1; white-space: nowrap; border: 0; }
 #ini-filtros.ivseg button.on { background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: #fff; }
 .ichart { display: flex; gap: 8px; }
 .iyaxis { display: flex; flex-direction: column; justify-content: space-between; height: 190px; font-size: 10px; color: #3f3f46; text-align: right; flex-shrink: 0; min-width: 46px; }
-.iplotwrap { flex: 1; min-width: 0; }
+.iplotwrap { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
 .iplot { position: relative; height: 190px; }
 .igrid { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; }
 .igrid span { border-top: 1px dashed rgba(15,23,42,.14); }
@@ -257,9 +257,12 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
 .ibcol { flex: 1; display: flex; align-items: flex-end; justify-content: center; min-width: 0; }
 .ibv { width: 70%; max-width: 34px; border-radius: 8px 8px 4px 4px; background: linear-gradient(180deg, #a78bfa, #7c5cf0); }
 .ibv.fh { background: linear-gradient(180deg, #cbd5e1, #94a3b8); }
-.ixaxis { display: flex; gap: 4px; margin-top: 6px; }
-.ixaxis span { flex: 1; text-align: center; font-size: 10px; color: #3f3f46; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ixaxis.horas span { overflow: visible; text-overflow: clip; }
+.ixaxis { display: flex; gap: 4px; margin-top: 6px; flex: 0 0 auto; }
+.ixaxis span { flex: 1; text-align: center; font-size: 10px; color: #3f3f46; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ixaxis.horas { position: relative; height: 14px; }
+.ixaxis.horas span { position: absolute; top: 0; transform: translateX(-50%); overflow: visible; text-overflow: clip; }
+.ixaxis.horas span.borde-i { left: 0 !important; transform: none; }
+.ixaxis.horas span.borde-d { left: auto !important; right: 0; transform: none; }
 #ini-meta { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; }
 #ini-meta svg { display: block; width: 100%; max-width: 150px; height: auto; }
 #ini-meta b { font-size: 15px; color: #010101; }
@@ -922,7 +925,7 @@ canvas.bc39 { max-width: 100%; height: 56px; }
   // Vacío = mismo dominio que sirve esta página (ej. backend en /app/).
   window.KAPTA_API = "https://kapta-ia-api-8amd.onrender.com";
 </script>
-<script src="app.js?v=65"></script>
+<script src="app.js?v=66"></script>
 </body>
 </html>
 
