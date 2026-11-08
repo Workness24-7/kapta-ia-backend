@@ -189,7 +189,7 @@ function aplicarWallpaper() {
       url = WP_LIGHT[i]; blur = 3;
     }
     // En movil el fondo va mas difuso para que sus bandas no se marquen a traves del vidrio.
-    if (matchMedia("(max-width: 900px)").matches) blur = Math.max(blur, 14);
+    if (matchMedia("(max-width: 900px)").matches) blur = Math.max(blur, 28);
     const show = a.style.opacity === "1" ? b : a, hide = show === a ? b : a;
     if (show.dataset.u !== url) { show.style.backgroundImage = `url("${url}")`; show.dataset.u = url; }
     show.style.filter = `blur(${blur}px)`;
