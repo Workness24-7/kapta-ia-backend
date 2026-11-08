@@ -109,9 +109,17 @@ input, select { width: 100%; padding: 13px 14px; margin: 6px 0; border: 1px soli
   #col-izq { grid-column: 1; grid-row: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; overflow-y: auto; scrollbar-width: none; }
   #col-izq::-webkit-scrollbar { display: none; }
   #col-izq > h2 { margin-bottom: 6px; font-weight: 400; color: #000; }
-  /* El dock de Resumen General se estira hasta el mismo borde que la columna derecha, sin aplastar su contenido. */
-  #col-izq > #ini-resumen-panel { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; }
+  /* El dock de Resumen General se estira hasta el mismo borde que la columna derecha y encaja su contenido. */
+  #col-izq > #ini-resumen-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
   #ini-resumen-panel > * { flex: 0 0 auto; }
+  /* El alto que sobre o falte lo absorbe el grafico, no las tarjetas de abajo. */
+  #ini-resumen-panel > #ini-ventas { flex: 1 1 auto; min-height: 176px; max-height: 300px; display: flex; flex-direction: column; }
+  #ini-ventas .ini-chartwrap { flex: 1 1 auto; min-height: 0; }
+  #ini-ventas .ivdock { min-height: 0; overflow: hidden; }
+  #ini-ventas .ichart, #ini-ventas .ichart > .iplotwrap { min-height: 0; }
+  #ini-ventas .ichart { height: 100%; }
+  #ini-ventas .iplot { height: 100%; }
+  #ini-ventas .iyaxis { height: auto; }
   #resumen { flex: 0 0 auto; min-height: 0; }
   .kcard { display: flex; flex-direction: column; justify-content: space-between; min-height: 0; overflow: hidden; }
   #bloque-perfil { flex: 0 0 auto; min-height: 0; }
